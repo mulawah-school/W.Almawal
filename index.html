@@ -232,9 +232,13 @@ function showSection(id) {
 function updateSections(type) {
   const grade = document.getElementById('gradeSelect' + type).value;
   const sectionSelect = document.getElementById('sectionSelect' + type);
+
   sectionSelect.innerHTML = '<option value="">اختر</option>';
-  let count = 3;
-  if (grade === '10') count = 4; else if (grade === '11') count = 6; else if (grade === '12') count = 5;
+
+  // الصف الثاني = 6 شعب
+  // باقي الصفوف (1، 3، 4) = 5 شعب
+  let count = (grade === '2') ? 6 : 5;
+
   for (let i = 1; i <= count; i++) {
     const opt = document.createElement('option');
     opt.value = i;
