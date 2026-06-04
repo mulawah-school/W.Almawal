@@ -469,7 +469,7 @@
                                         <div class="flex items-center justify-between gap-2 mb-2">
                                             <div>
                                                 <span class="text-xs font-extrabold text-indigo-700 dark:text-indigo-300">اختيار سريع حسب الصف</span>
-                                                <p class="text-[11px] text-slate-500 mt-0.5">يمكن اختيار أكثر من صف، ثم الضغط على زر تحديد الصفوف المختارة.</p>
+                                                <p class="text-[11px] text-slate-500 mt-0.5">يمكن اختيار أكثر من صف، ويحسب البرنامج الشعب من إدارة الصفوف واللجان تلقائياً.</p>
                                             </div>
                                             <button type="button" @click="clearSelectedClasses()" class="text-[11px] font-bold text-red-600 hover:text-red-700">مسح الاختيار</button>
                                         </div>
@@ -479,7 +479,7 @@
                                                     :class="quickGradeSelection.includes(grade.key) ? 'ring-2 ring-indigo-500 bg-indigo-100 dark:bg-indigo-900/30' : ''">
                                                     <input type="checkbox" :value="grade.key" x-model="quickGradeSelection" class="rounded text-indigo-600 focus:ring-indigo-500">
                                                     <span x-text="grade.label"></span>
-                                                    <span class="font-mono" x-text="'(' + grade.count + ')' "></span>
+                                                    <span class="font-mono" x-text="'(' + grade.count + (grade.expected ? ' / ' + grade.expected : '') + ')' "></span>
                                                 </label>
                                             </template>
                                             <div x-show="getGradeGroups().length === 0" class="text-xs text-slate-400">أضف الصفوف واللجان أولاً حتى تظهر أزرار الاختيار السريع.</div>
@@ -1104,10 +1104,35 @@
                     { id: 10, name: 'ليلى بنت ناصر الوهيبية', speciality: 'اللغة العربية', phone: '+96891110000', inControl: false },
                 ],
                 schoolClasses: [
-                    { id: 1, className: 'الثاني عشر (أ)', committeeName: 'اللجنة 1' },
-                    { id: 2, className: 'الثاني عشر (ب)', committeeName: 'اللجنة 2' },
-                    { id: 3, className: 'الحادي عشر (أ)', committeeName: 'اللجنة 3' },
-                    { id: 4, className: 'الحادي عشر (ب)', committeeName: 'اللجنة 4' },
+                    { id: 1, className: '5/1', committeeName: 'اللجنة 1' },
+                    { id: 2, className: '5/2', committeeName: 'اللجنة 2' },
+                    { id: 3, className: '5/3', committeeName: 'اللجنة 3' },
+                    { id: 4, className: '6/1', committeeName: 'اللجنة 4' },
+                    { id: 5, className: '6/2', committeeName: 'اللجنة 5' },
+                    { id: 6, className: '6/3', committeeName: 'اللجنة 6' },
+                    { id: 7, className: '7/1', committeeName: 'اللجنة 7' },
+                    { id: 8, className: '7/2', committeeName: 'اللجنة 8' },
+                    { id: 9, className: '7/3', committeeName: 'اللجنة 9' },
+                    { id: 10, className: '8/1', committeeName: 'اللجنة 10' },
+                    { id: 11, className: '8/2', committeeName: 'اللجنة 11' },
+                    { id: 12, className: '8/3', committeeName: 'اللجنة 12' },
+                    { id: 13, className: '9/1', committeeName: 'اللجنة 13' },
+                    { id: 14, className: '9/2', committeeName: 'اللجنة 14' },
+                    { id: 15, className: '9/3', committeeName: 'اللجنة 15' },
+                    { id: 16, className: '9/4', committeeName: 'اللجنة 16' },
+                    { id: 17, className: '10/1', committeeName: 'اللجنة 17' },
+                    { id: 18, className: '10/2', committeeName: 'اللجنة 18' },
+                    { id: 19, className: '10/3', committeeName: 'اللجنة 19' },
+                    { id: 20, className: '10/4', committeeName: 'اللجنة 20' },
+                    { id: 21, className: '10/5', committeeName: 'اللجنة 21' },
+                    { id: 22, className: '11/1', committeeName: 'اللجنة 22' },
+                    { id: 23, className: '11/2', committeeName: 'اللجنة 23' },
+                    { id: 24, className: '11/3', committeeName: 'اللجنة 24' },
+                    { id: 25, className: '11/4', committeeName: 'اللجنة 25' },
+                    { id: 26, className: '11/5', committeeName: 'اللجنة 26' },
+                    { id: 27, className: '11/6', committeeName: 'اللجنة 27' },
+                    { id: 28, className: '11/7', committeeName: 'اللجنة 28' },
+                    { id: 29, className: '11/8', committeeName: 'اللجنة 29' },
                 ],
                 exams: [
                     { id: 101, date: '2026-06-07', period: '08:00 ص', subject: 'اللغة العربية', duration: 2.5, observersNeeded: 2, selectedClasses: [1, 2, 3] },
@@ -1466,20 +1491,30 @@
                     return cls ? cls.committeeName : 'غير محدد';
                 },
 
-                getGradeKeyFromClassName(className) {
-                    const text = String(className || '').trim();
-                    const normalized = text
+                normalizeArabicDigits(value) {
+                    return String(value || '')
                         .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
                         .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
-                        .replace(/\s+/g, ' ');
+                        .replace(/[\u0000-\u001F]/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                },
+                getGradeKeyFromClassName(className) {
+                    const text = this.normalizeArabicDigits(className);
+                    if (!text) return 'غير مصنف';
 
-                    // يدعم الصيغ مثل: 5/1، ٥/١، الصف الخامس، الخامس (1)، خامس 1
-                    const digitMatch = normalized.match(/(?:^|[^0-9])(10|11|12|[5-9])(?:\s*[\/\-\(]|\s|$)/);
-                    if (digitMatch) return digitMatch[1];
+                    // يعتمد أولاً على صيغة الصف/الشعبة مثل 5/1 أو ٦/٣ أو 10-2
+                    const slashMatch = text.match(/(?:^|[^0-9])(10|11|12|[5-9])\s*[\/\-]\s*\d+(?:[^0-9]|$)/);
+                    if (slashMatch) return slashMatch[1];
 
+                    // ثم يعتمد على وجود رقم الصف في بداية اسم الفصل مثل: 5، 5 أ، 10 ب
+                    const startNumberMatch = text.match(/^(10|11|12|[5-9])(?:\s|$|[^0-9])/);
+                    if (startNumberMatch) return startNumberMatch[1];
+
+                    // ثم يعتمد على الكلمات العربية للصفوف
                     const words = [
-                        ['12', ['الثاني عشر', 'ثاني عشر', 'الثاني  عشر']],
-                        ['11', ['الحادي عشر', 'حادي عشر', 'الحادي  عشر']],
+                        ['12', ['الثاني عشر', 'ثاني عشر']],
+                        ['11', ['الحادي عشر', 'حادي عشر']],
                         ['10', ['العاشر', 'عاشر']],
                         ['9', ['التاسع', 'تاسع']],
                         ['8', ['الثامن', 'ثامن']],
@@ -1488,9 +1523,27 @@
                         ['5', ['الخامس', 'خامس']]
                     ];
                     for (const [key, names] of words) {
-                        if (names.some(name => normalized.includes(name))) return key;
+                        if (names.some(name => text.includes(name))) return key;
                     }
-                    return text || 'غير مصنف';
+                    return 'غير مصنف';
+                },
+                getSectionNumberFromClassName(className) {
+                    const text = this.normalizeArabicDigits(className);
+                    const sectionMatch = text.match(/(?:^|[^0-9])(10|11|12|[5-9])\s*[\/\-]\s*(\d+)(?:[^0-9]|$)/);
+                    if (sectionMatch) return parseInt(sectionMatch[2], 10);
+                    const parenMatch = text.match(/[\(（]\s*(\d+)\s*[\)）]/);
+                    if (parenMatch) return parseInt(parenMatch[1], 10);
+                    const allNumbers = [...text.matchAll(/\d+/g)].map(m => parseInt(m[0], 10));
+                    return allNumbers.length ? allNumbers[allNumbers.length - 1] : 999;
+                },
+                getCommitteeNumber(committeeName) {
+                    const text = this.normalizeArabicDigits(committeeName);
+                    const match = text.match(/\d+/);
+                    return match ? parseInt(match[0], 10) : 999;
+                },
+                getExpectedGradeCount(key) {
+                    const expected = { '5': 3, '6': 3, '7': 3, '8': 3, '9': 4, '10': 5, '11': 8 };
+                    return expected[String(key)] || null;
                 },
                 getGradeLabel(key) {
                     const labels = {
@@ -1506,14 +1559,28 @@
                     };
                     return labels[key] || key;
                 },
+                getSortedClassesByGradeKey(gradeKey) {
+                    const key = String(gradeKey);
+                    return this.schoolClasses
+                        .filter(cls => this.getGradeKeyFromClassName(cls.className) === key)
+                        .sort((a, b) => {
+                            const sectionA = this.getSectionNumberFromClassName(a.className);
+                            const sectionB = this.getSectionNumberFromClassName(b.className);
+                            if (sectionA !== sectionB) return sectionA - sectionB;
+                            return this.getCommitteeNumber(a.committeeName) - this.getCommitteeNumber(b.committeeName);
+                        });
+                },
                 getGradeGroups() {
+                    const order = ['5','6','7','8','9','10','11','12','غير مصنف'];
                     const groups = {};
                     this.schoolClasses.forEach(cls => {
                         const key = this.getGradeKeyFromClassName(cls.className);
-                        if (!groups[key]) groups[key] = { key, label: this.getGradeLabel(key), count: 0 };
+                        if (!groups[key]) {
+                            const expected = this.getExpectedGradeCount(key);
+                            groups[key] = { key, label: this.getGradeLabel(key), count: 0, expected };
+                        }
                         groups[key].count += 1;
                     });
-                    const order = ['5','6','7','8','9','10','11','12','غير مصنف'];
                     return Object.values(groups).sort((a, b) => {
                         const ai = order.indexOf(a.key);
                         const bi = order.indexOf(b.key);
@@ -1523,9 +1590,12 @@
                 },
                 getClassIdsByGradeKeys(gradeKeys) {
                     const keys = Array.isArray(gradeKeys) ? gradeKeys.map(String) : [String(gradeKeys)];
-                    return this.schoolClasses
-                        .filter(cls => keys.includes(this.getGradeKeyFromClassName(cls.className)))
-                        .map(cls => cls.id);
+                    let ids = [];
+                    keys.forEach(key => {
+                        const classes = this.getSortedClassesByGradeKey(key);
+                        ids.push(...classes.map(cls => cls.id));
+                    });
+                    return ids;
                 },
                 selectGradeClasses(gradeKey) {
                     this.quickGradeSelection = Array.from(new Set([...(this.quickGradeSelection || []), String(gradeKey)]));
@@ -1537,9 +1607,17 @@
                         return;
                     }
                     const ids = this.getClassIdsByGradeKeys(this.quickGradeSelection);
+                    if (ids.length === 0) {
+                        this.showToast('لم يتم العثور على لجان للصفوف المختارة في إدارة الصفوف واللجان.', 'error');
+                        return;
+                    }
                     this.examForm.selectedClasses = Array.from(new Set([...(this.examForm.selectedClasses || []), ...ids]));
-                    const labels = this.quickGradeSelection.map(key => this.getGradeLabel(key)).join('، ');
-                    this.showToast('تم اختيار جميع لجان: ' + labels + '.');
+                    const labels = this.quickGradeSelection.map(key => {
+                        const actual = this.getSortedClassesByGradeKey(key).length;
+                        const expected = this.getExpectedGradeCount(key);
+                        return this.getGradeLabel(key) + ' (' + actual + (expected ? ' من المتوقع ' + expected : '') + ')';
+                    }).join('، ');
+                    this.showToast('تم اختيار جميع الشعب المسجلة في إدارة الصفوف واللجان: ' + labels + '.');
                 },
                 clearSelectedClasses() {
                     this.examForm.selectedClasses = [];
