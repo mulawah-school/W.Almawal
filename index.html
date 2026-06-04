@@ -463,6 +463,26 @@
                                 <!-- Class Selection Checklist -->
                                 <div>
                                     <label class="block text-xs font-bold text-slate-500 mb-2">اختر الفصول واللجان المشتركة في الاختبار:</label>
+
+                                    <!-- اختيار سريع حسب الصف الدراسي -->
+                                    <div class="mb-3 p-3 rounded-xl border border-indigo-100 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20">
+                                        <div class="flex items-center justify-between gap-2 mb-2">
+                                            <span class="text-xs font-extrabold text-indigo-700 dark:text-indigo-300">اختيار سريع حسب الصف</span>
+                                            <button type="button" @click="clearSelectedClasses()" class="text-[11px] font-bold text-red-600 hover:text-red-700">مسح الاختيار</button>
+                                        </div>
+                                        <div class="flex flex-wrap gap-2">
+                                            <template x-for="grade in getGradeGroups()" :key="grade.key">
+                                                <button type="button"
+                                                    @click="selectGradeClasses(grade.key)"
+                                                    class="px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-600 hover:text-white transition-all">
+                                                    <span x-text="grade.label"></span>
+                                                    <span class="font-mono" x-text="'(' + grade.count + ')' "></span>
+                                                </button>
+                                            </template>
+                                            <div x-show="getGradeGroups().length === 0" class="text-xs text-slate-400">أضف الصفوف واللجان أولاً حتى تظهر أزرار الاختيار السريع.</div>
+                                        </div>
+                                    </div>
+
                                     <div class="max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-950/40 space-y-2">
                                         <template x-for="cls in schoolClasses" :key="cls.id">
                                             <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
@@ -1432,6 +1452,67 @@
                 getCommitteeNameByClass(id) {
                     const cls = this.schoolClasses.find(c => c.id == id);
                     return cls ? cls.committeeName : 'غير محدد';
+                },
+
+                getGradeKeyFromClassName(className) {
+                    const text = String(className || '').trim();
+                    const normalized = text.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
+                    const digitMatch = normalized.match(/(?:^|[^0-9])([5-9]|10|11|12)(?:\s*[\/\-\(]|\s|$)/);
+                    if (digitMatch) return digitMatch[1];
+                    const words = [
+                        ['5', ['الخامس', 'خامس']],
+                        ['6', ['السادس', 'سادس']],
+                        ['7', ['السابع', 'سابع']],
+                        ['8', ['الثامن', 'ثامن']],
+                        ['9', ['التاسع', 'تاسع']],
+                        ['10', ['العاشر', 'عاشر']],
+                        ['11', ['الحادي عشر', 'حادي عشر']],
+                        ['12', ['الثاني عشر', 'ثاني عشر']]
+                    ];
+                    for (const [key, names] of words) {
+                        if (names.some(name => text.includes(name))) return key;
+                    }
+                    return text || 'غير مصنف';
+                },
+                getGradeLabel(key) {
+                    const labels = {
+                        '5': 'الصف الخامس',
+                        '6': 'الصف السادس',
+                        '7': 'الصف السابع',
+                        '8': 'الصف الثامن',
+                        '9': 'الصف التاسع',
+                        '10': 'الصف العاشر',
+                        '11': 'الصف الحادي عشر',
+                        '12': 'الصف الثاني عشر',
+                        'غير مصنف': 'غير مصنف'
+                    };
+                    return labels[key] || key;
+                },
+                getGradeGroups() {
+                    const groups = {};
+                    this.schoolClasses.forEach(cls => {
+                        const key = this.getGradeKeyFromClassName(cls.className);
+                        if (!groups[key]) groups[key] = { key, label: this.getGradeLabel(key), count: 0 };
+                        groups[key].count += 1;
+                    });
+                    const order = ['5','6','7','8','9','10','11','12','غير مصنف'];
+                    return Object.values(groups).sort((a, b) => {
+                        const ai = order.indexOf(a.key);
+                        const bi = order.indexOf(b.key);
+                        if (ai !== -1 || bi !== -1) return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+                        return String(a.label).localeCompare(String(b.label), 'ar');
+                    });
+                },
+                selectGradeClasses(gradeKey) {
+                    const ids = this.schoolClasses
+                        .filter(cls => this.getGradeKeyFromClassName(cls.className) === gradeKey)
+                        .map(cls => cls.id);
+                    this.examForm.selectedClasses = Array.from(new Set([...(this.examForm.selectedClasses || []), ...ids]));
+                    this.showToast('تم اختيار جميع لجان ' + this.getGradeLabel(gradeKey) + '.');
+                },
+                clearSelectedClasses() {
+                    this.examForm.selectedClasses = [];
+                    this.showToast('تم مسح اختيار الفصول واللجان.', 'error');
                 },
 
                 addExamDay() {
