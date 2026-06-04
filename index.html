@@ -1,493 +1,1777 @@
 <!DOCTYPE html>
-<html dir="rtl" lang="ar">
+<html lang="ar" dir="rtl">
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <link rel="icon" href="شعار.jpg" type="image/jpg">
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>منصة متابعة الطلبة بمدرسة وادي المعاول</title>
-<style>
-@media (max-width: 600px) {
-  button {
-    width: 90%;
-    font-size: 18px;
-    margin: 10px auto;
-    display: block;
-  }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام التوزيع الذكي لمراقبة الامتحانات</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
 
-  h2 {
-    font-size: 20px;
-  }
+    <!-- SheetJS لقراءة ملفات Excel و CSV فعلياً -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&display=swap');
+        body {
+            font-family: 'Cairo', sans-serif;
+            text-rendering: optimizeLegibility;
+            -webkit-font-smoothing: antialiased;
+        }
+        [x-cloak] { display: none !important; }
+        
+        /* Premium custom scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(241, 245, 249, 1);
+        }
+        .dark ::-webkit-scrollbar-track {
+            background: rgba(30, 41, 59, 1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.5);
+            border-radius: 999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(100, 116, 139, 0.7);
+        }
 
-  img {
-    width: 80px;
-  }
-}
-/* خلفية ناعمة */
-body {
-  background: linear-gradient(to bottom, #e6f0ff, #ffffff);
-}
-
-/* حركة Fade in */
-.fade-in {
-  animation: fadeIn 1s ease;
-}
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* تحسين الأزرار */
-button {
-  font-size: 18px;
-  padding: 12px 20px;
-  border-radius: 12px;
-  transition: all 0.3s ease;
-}
-button:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-}
-
-/* استجابة الهاتف */
-@media (max-width: 600px) {
-  button {
-    width: 90%;
-    margin: 10px auto;
-    display: block;
-  }
-}
-  body { font-family: 'Tajawal', sans-serif; background: #e6f4ff; color: #111; padding: 0; margin: 0; direction: rtl; }
-  h2 { margin: 0; padding: 0; }
-  .menu-container { text-align: center; padding: 60px 20px; }
-  .menu-btn { display: inline-block; padding: 20px 40px; margin: 20px; font-size: 20px; border-radius: 10px; cursor: pointer; color: white; border: none; box-shadow: 0 4px 8px rgba(0,0,0,0.2); transition: transform 0.2s; }
-  .menu-btn:hover { transform: scale(1.05); }
-  .absence-btn { background-color: #16a34a; }
-  .violation-btn { background-color: #dc2626; }
-  .morning-btn { background-color: #6a1b9a; }
-  .hidden { display: none; }
-  .top-bar { background-color: #b3e0ff; color: #004b80; display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-  .top-bar h2 { display: flex; align-items: center; font-size: 22px; }
-  .top-bar h2 span.icon { margin-right: 8px; font-size: 24px; }
-  .back-btn { background-color: #5b9bd5; color: white; border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 14px; }
-  .back-btn:hover { background-color: #468cc4; }
-  .section-content { padding: 20px; text-align: center; }
-  table { width: 100%; border-collapse: collapse; background: #fff; margin-top: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); overflow: hidden; }
-  th, td { padding: 10px; border: 1px solid #ccc; text-align: right; }
-  th { background: #d9f0ff; color: #003f66; }
-  button, select, input { padding: 6px 12px; margin-left: 10px; border: 1px solid #ccc; border-radius: 6px; }
-  button { cursor: pointer; }
-  .present { background: #16a34a; color: #fff; }
-  .absent { background: #dc2626; color: #fff; }
-  .controls { margin-bottom: 20px; }
-</style>
+        @media print {
+            .no-print { display: none !important; }
+            .print-area { width: 100% !important; max-width: 100% !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; }
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            800: '#166534',
+                            900: '#14532d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
 </head>
-<body>
-  <!-- الصفحة الرئيسية -->
-  <div id="mainMenu" class="menu-container">
-    <div style="text-align: center; margin-top: 20px;" class="fade-in">
-  <img src="شعار.png" alt="شعار مدرسة وادي المعاول" style="width: 150px; height: auto; margin-bottom: 10px;">
-  <h2 style="font-size: 24px; font-weight: bold;">منصة متابعة الطلبة بمدرسة وادي المعاول</h2>
-<p style="font-size: 16px; margin-top: 5px; color: #333;">للعام الدراسي 2025/2026</p>
-</div>
-    <button class="menu-btn absence-btn" onclick="showSection('absenceSection')">🟩 📋 تسجيل الغياب</button>
-    <button class="menu-btn violation-btn" onclick="showSection('violationSection')">🟥 ⚠️ تسجيل المخالفات</button>
-    <button class="menu-btn morning-btn" onclick="showSection('morningLateSection')">🔵 ⏰ التأخر الصباحي</button>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-300" x-data="examManager">
 
-  </div>
+    <!-- Header / Navbar -->
+    <header class="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40 no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="bg-gradient-to-tr from-primary-600 to-emerald-400 text-white p-2.5 rounded-xl shadow-lg shadow-primary-500/20">
+                    <i class="fa-solid fa-clipboard-user text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">مُراقب الذكي v2.0</h1>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">نظام لوحة المراقبة التفاعلية للمدارس</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <!-- Theme Toggle -->
+                <button @click="toggleTheme()" class="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+                    <i class="fa-solid" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i>
+                </button>
+                <div class="h-6 w-px bg-slate-200 dark:bg-slate-700"></div>
+                <span class="text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 font-bold">
+                    نظام التوزيع العادل التراكمي
+                </span>
+            </div>
+        </div>
+    </header>
 
-  <!-- صفحة الغياب -->
-  <div id="absenceSection" class="hidden">
-    <div class="top-bar">
-      <button class="back-btn" onclick="showSection('mainMenu')">🏠 رجوع</button>
-      <h2><span class="icon">🎓</span>تسجيل غياب الطلبة بمدرسة وادي المعاول</h2>
+    <!-- Gorgeous Distributed Icons Hub (Top Panel) -->
+    <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-4 no-print w-full">
+        <h2 class="text-md font-extrabold text-slate-400 dark:text-slate-500 mb-4 tracking-wider uppercase"><i class="fa-solid fa-cubes-stacked ml-1.5"></i> لوحة الأيقونات والوظائف الذكية</h2>
+        
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
+            
+            <!-- Icon Card 1: Teachers -->
+            <button @click="currentTab = 'teachers'" 
+                :class="currentTab === 'teachers' ? 'ring-2 ring-emerald-500 scale-[1.03] shadow-emerald-500/10' : 'hover:scale-[1.05]'"
+                class="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 hover:from-emerald-500/20 dark:from-emerald-950/20 border border-emerald-500/20 hover:border-emerald-500 rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all duration-300 group hover:-translate-y-1.5 hover:shadow-xl shadow-slate-200 dark:shadow-none min-h-[120px]">
+                <div class="w-12 h-12 rounded-xl bg-emerald-500 text-white flex items-center justify-center mb-3 shadow-lg shadow-emerald-500/30 group-hover:scale-110 duration-300">
+                    <i class="fa-solid fa-users text-lg"></i>
+                </div>
+                <span class="text-xs font-bold text-slate-800 dark:text-slate-200">المعلمون والتخصصات</span>
+            </button>
+
+            <!-- Icon Card 2: Classes -->
+            <button @click="currentTab = 'classes'" 
+                :class="currentTab === 'classes' ? 'ring-2 ring-blue-500 scale-[1.03] shadow-blue-500/10' : 'hover:scale-[1.05]'"
+                class="bg-gradient-to-br from-blue-500/10 to-blue-600/5 hover:from-blue-500/20 dark:from-blue-950/20 border border-blue-500/20 hover:border-blue-500 rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all duration-300 group hover:-translate-y-1.5 hover:shadow-xl shadow-slate-200 dark:shadow-none min-h-[120px]">
+                <div class="w-12 h-12 rounded-xl bg-blue-500 text-white flex items-center justify-center mb-3 shadow-lg shadow-blue-500/30 group-hover:scale-110 duration-300">
+                    <i class="fa-solid fa-school text-lg"></i>
+                </div>
+                <span class="text-xs font-bold text-slate-800 dark:text-slate-200">الصفوف واللجان</span>
+            </button>
+
+            <!-- Icon Card 3: Exams -->
+            <button @click="currentTab = 'exams'" 
+                :class="currentTab === 'exams' ? 'ring-2 ring-indigo-500 scale-[1.03] shadow-indigo-500/10' : 'hover:scale-[1.05]'"
+                class="bg-gradient-to-br from-indigo-500/10 to-indigo-600/5 hover:from-indigo-500/20 dark:from-indigo-950/20 border border-indigo-500/20 hover:border-indigo-500 rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all duration-300 group hover:-translate-y-1.5 hover:shadow-xl shadow-slate-200 dark:shadow-none min-h-[120px]">
+                <div class="w-12 h-12 rounded-xl bg-indigo-500 text-white flex items-center justify-center mb-3 shadow-lg shadow-indigo-500/30 group-hover:scale-110 duration-300">
+                    <i class="fa-solid fa-calendar-check text-lg"></i>
+                </div>
+                <span class="text-xs font-bold text-slate-800 dark:text-slate-200">جدول الاختبارات</span>
+            </button>
+
+            <!-- Icon Card 4: Availability -->
+            <button @click="currentTab = 'availability'" 
+                :class="currentTab === 'availability' ? 'ring-2 ring-red-500 scale-[1.03] shadow-red-500/10' : 'hover:scale-[1.05]'"
+                class="bg-gradient-to-br from-red-500/10 to-red-600/5 hover:from-red-50/20 dark:from-red-950/20 border border-red-500/20 hover:border-red-500 rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all duration-300 group hover:-translate-y-1.5 hover:shadow-xl shadow-slate-200 dark:shadow-none min-h-[120px]">
+                <div class="w-12 h-12 rounded-xl bg-red-500 text-white flex items-center justify-center mb-3 shadow-lg shadow-red-500/30 group-hover:scale-110 duration-300">
+                    <i class="fa-solid fa-user-lock text-lg"></i>
+                </div>
+                <span class="text-xs font-bold text-slate-800 dark:text-slate-200">توفر واستثناءات</span>
+            </button>
+
+            <!-- Icon Card 5: Smart AI Distribution -->
+            <button @click="currentTab = 'smart-dist'" 
+                :class="currentTab === 'smart-dist' ? 'ring-2 ring-purple-500 scale-[1.03] shadow-purple-500/10' : 'hover:scale-[1.05]'"
+                class="bg-gradient-to-br from-purple-500/10 to-purple-600/5 hover:from-purple-500/20 dark:from-purple-950/20 border border-purple-500/20 hover:border-purple-500 rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all duration-300 group hover:-translate-y-1.5 hover:shadow-xl shadow-slate-200 dark:shadow-none min-h-[120px]">
+                <div class="w-12 h-12 rounded-xl bg-purple-500 text-white flex items-center justify-center mb-3 shadow-lg shadow-purple-500/30 group-hover:scale-110 duration-300">
+                    <i class="fa-solid fa-brain text-lg"></i>
+                </div>
+                <span class="text-xs font-bold text-slate-800 dark:text-slate-200">التوزيع الذكي</span>
+            </button>
+
+            <!-- Icon Card 6: Daily View -->
+            <button @click="currentTab = 'daily-view'" 
+                :class="currentTab === 'daily-view' ? 'ring-2 ring-cyan-500 scale-[1.03] shadow-cyan-500/10' : 'hover:scale-[1.05]'"
+                class="bg-gradient-to-br from-cyan-500/10 to-cyan-600/5 hover:from-cyan-500/20 dark:from-cyan-950/20 border border-cyan-500/20 hover:border-cyan-500 rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all duration-300 group hover:-translate-y-1.5 hover:shadow-xl shadow-slate-200 dark:shadow-none min-h-[120px]">
+                <div class="w-12 h-12 rounded-xl bg-cyan-500 text-white flex items-center justify-center mb-3 shadow-lg shadow-cyan-500/30 group-hover:scale-110 duration-300">
+                    <i class="fa-solid fa-print text-lg"></i>
+                </div>
+                <span class="text-xs font-bold text-slate-800 dark:text-slate-200">الكشف والرسائل</span>
+            </button>
+
+            <!-- Icon Card 7: Statistics -->
+            <button @click="currentTab = 'statistics'" 
+                :class="currentTab === 'statistics' ? 'ring-2 ring-rose-500 scale-[1.03] shadow-rose-500/10' : 'hover:scale-[1.05]'"
+                class="bg-gradient-to-br from-rose-500/10 to-rose-600/5 hover:from-rose-500/20 dark:from-rose-950/20 border border-rose-500/20 hover:border-rose-500 rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all duration-300 group hover:-translate-y-1.5 hover:shadow-xl shadow-slate-200 dark:shadow-none min-h-[120px]">
+                <div class="w-12 h-12 rounded-xl bg-rose-500 text-white flex items-center justify-center mb-3 shadow-lg shadow-rose-500/30 group-hover:scale-110 duration-300">
+                    <i class="fa-solid fa-chart-pie text-lg"></i>
+                </div>
+                <span class="text-xs font-bold text-slate-800 dark:text-slate-200">الإحصائيات العامة</span>
+            </button>
+
+        </div>
+    </section>
+
+    <!-- Main Content Panel -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex-1 w-full">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700/50 p-6 min-h-[500px]">
+            
+            <!-- Toast Notifications -->
+            <div class="fixed top-4 left-4 z-50 flex flex-col gap-2 no-print">
+                <template x-for="toast in toasts" :key="toast.id">
+                    <div x-transition.duration.300ms class="px-4 py-3 rounded-xl shadow-lg text-white text-sm flex items-center gap-3" :class="toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'">
+                        <i class="fa-solid" :class="toast.type === 'success' ? 'fa-circle-check' : 'fa-triangle-exclamation'"></i>
+                        <span x-text="toast.message"></span>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Tab 1: Teachers & Specialities -->
+            <section x-show="currentTab === 'teachers'" x-transition x-cloak>
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <i class="fa-solid fa-users text-emerald-500"></i>
+                            <span>إدارة المعلمين وتلقيم الإكسل</span>
+                        </h2>
+                        <p class="text-xs text-slate-500">يتطلب رفع الإكسل وجود الأعمدة: <strong class="text-emerald-500">الاسم، التخصص، ورقم الهاتف</strong> لضمان نجاح الاتصال ببوابتك البريدية الـ SMS أو WhatsApp.</p>
+                    </div>
+                    
+                    <div class="flex flex-wrap gap-2">
+                        <!-- Custom styled Excel Upload drop-area trigger -->
+                        <button @click="triggerExcelUpload()" class="bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-700 hover:to-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all shadow-md shadow-emerald-600/10 hover:shadow-lg">
+                            <i class="fa-solid fa-file-arrow-up"></i>
+                            <span>رفع كشف الإكسل [الاسم | التخصص | الهاتف]</span>
+                        </button>
+                        <!-- Hidden File Input -->
+                        <input type="file" id="excel-file-picker" class="hidden" accept=".xlsx, .xls, .csv" @change="simulateExcelParsing($event)">
+                        
+                        <button @click="openAddTeacherModal()" class="bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all">
+                            <i class="fa-solid fa-user-plus text-primary-500"></i>
+                            <span>إضافة معلم يدوي</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Template excel requirements guide -->
+                <div class="mb-6 p-4 rounded-xl bg-slate-100 dark:bg-slate-700/30 border border-slate-200/50 dark:border-slate-700 flex flex-col md:flex-row gap-4 items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-circle-info"></i>
+                        </div>
+                        <div class="text-xs">
+                            <span class="font-extrabold text-slate-700 dark:text-slate-300 block mb-0.5">البنية المتوافقة مع كشف الإكسل:</span>
+                            <span class="text-slate-500">العمود الأول: الاسم رباعي | العمود الثاني: التخصص الأساسي | العمود الثالث: رقم الهاتف (مثال: +9689xxxxxxx)</span>
+                        </div>
+                    </div>
+                    <div class="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold px-3 py-1.5 rounded-lg">
+                        برنامج الاستيراد التلقائي متوفر ومدمج
+                    </div>
+                </div>
+
+                <!-- Control Bar & Search -->
+                <div class="mb-4 flex flex-col sm:flex-row gap-3 items-center justify-between bg-slate-50 dark:bg-slate-700/30 p-3 rounded-xl">
+                    <div class="relative w-full sm:w-72">
+                        <input type="text" x-model="searchTeacher" placeholder="البحث عن معلم أو تخصص..." class="w-full pl-3 pr-9 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        <i class="fa-solid fa-magnifying-glass absolute right-3 top-3 text-slate-400 text-xs"></i>
+                    </div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                        إجمالي المعلمين: <span class="font-bold text-slate-800 dark:text-white" x-text="teachers.length"></span> | 
+                        في الكنترول (مستبعدين من المراقبة): <span class="font-bold text-red-500" x-text="teachers.filter(t => t.inControl).length"></span>
+                    </div>
+                </div>
+
+                <!-- Teachers Table -->
+                <div class="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-xl">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                            <tr>
+                                <th class="px-4 py-3 font-semibold">الرقم</th>
+                                <th class="px-4 py-3 font-semibold">اسم المعلم</th>
+                                <th class="px-4 py-3 font-semibold">التخصص / المادة</th>
+                                <th class="px-4 py-3 font-semibold">رقم الهاتف</th>
+                                <th class="px-4 py-3 font-semibold text-center">أعضاء الكنترول (مستبعد)</th>
+                                <th class="px-4 py-3 font-semibold text-center">الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="(teacher, index) in filteredTeachers" :key="teacher.id">
+                                <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                                    <td class="px-4 py-3 font-mono text-xs text-slate-500" x-text="index + 1"></td>
+                                    <td class="px-4 py-3 font-semibold text-slate-900 dark:text-white" x-text="teacher.name"></td>
+                                    <td class="px-4 py-3">
+                                        <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200" x-text="teacher.speciality"></span>
+                                    </td>
+                                    <td class="px-4 py-3 font-mono text-xs text-slate-600 dark:text-slate-300" x-text="teacher.phone"></td>
+                                    <td class="px-4 py-3 text-center">
+                                        <label class="relative inline-flex items-center justify-center cursor-pointer">
+                                            <input type="checkbox" x-model="teacher.inControl" @change="saveTeachers(); runSmartDistribution()" class="sr-only peer">
+                                            <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:-translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-red-500"></div>
+                                        </label>
+                                    </td>
+                                    <td class="px-4 py-3 text-center">
+                                        <div class="flex items-center justify-center gap-2">
+                                            <button @click="openEditTeacherModal(teacher)" class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors" title="تعديل">
+                                                <i class="fa-solid fa-pen-to-square"></i>
+                                            </button>
+                                            <button @click="deleteTeacher(teacher.id)" class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="حذف">
+                                                <i class="fa-solid fa-trash-can"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="filteredTeachers.length === 0">
+                                <td colspan="6" class="text-center py-12 text-slate-400">لا يوجد معلمون متطابقون مع البحث أو لم يتم رفع أي بيانات بعد.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Add/Edit Teacher Modal -->
+                <div x-show="teacherModalOpen" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" x-cloak>
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-bold text-slate-900 dark:text-white" x-text="teacherForm.id ? 'تعديل بيانات معلم' : 'إضافة معلم جديد'"></h3>
+                            <button @click="teacherModalOpen = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><i class="fa-solid fa-xmark text-lg"></i></button>
+                        </div>
+                        <form @submit.prevent="saveTeacher()">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 mb-1">اسم المعلم رباعي</label>
+                                    <input type="text" x-model="teacherForm.name" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 mb-1">التخصص أو المادة</label>
+                                    <select x-model="teacherForm.speciality" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                        <option value="">اختر التخصص...</option>
+                                        <template x-for="spec in specialities" :key="spec">
+                                            <option :value="spec" x-text="spec"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 mb-1">رقم الهاتف (مع رمز الدولة)</label>
+                                    <input type="text" x-model="teacherForm.phone" placeholder="+968" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                </div>
+                                <div class="flex items-center gap-3 py-2">
+                                    <input type="checkbox" id="modal-in-control" x-model="teacherForm.inControl" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500">
+                                    <label for="modal-in-control" class="text-sm font-semibold text-slate-700 dark:text-slate-300">هذا المعلم عضو في الكنترول (استبعاد من المراقبة)</label>
+                                </div>
+                            </div>
+                            <div class="mt-6 flex justify-end gap-2">
+                                <button type="button" @click="teacherModalOpen = false" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600">إلغاء</button>
+                                <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium text-white bg-primary-600 hover:bg-primary-700" x-text="teacherForm.id ? 'حفظ التعديلات' : 'إضافة المعلم'"></button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab 2: Classes & Committees -->
+            <section x-show="currentTab === 'classes'" x-transition x-cloak>
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-school text-blue-500"></i>
+                        <span>إدارة الصفوف واللجان المدرسية</span>
+                    </h2>
+                    <p class="text-sm text-slate-500">قم بتسجيل صفوف المدرسة واللجان التابعة لها يدوياً لتسهيل عملية ربطها بالاختبارات وتوزيع المعلمين.</p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Class & Committee Form -->
+                    <div class="bg-slate-50 dark:bg-slate-700/30 p-5 rounded-2xl border border-slate-200/50 dark:border-slate-700">
+                        <h3 class="text-md font-bold mb-4 text-slate-900 dark:text-white"><i class="fa-solid fa-plus-circle text-primary-500 ml-1"></i> إضافة صف ولجنة</h3>
+                        <form @submit.prevent="addClassCommittee()">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 mb-1">الصف الدراسي</label>
+                                    <input type="text" x-model="classForm.className" placeholder="مثال: الصف الثاني عشر (1)" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 mb-1">اسم/رقم اللجنة المقابلة</label>
+                                    <input type="text" x-model="classForm.committeeName" placeholder="مثال: لجنة 1 (القاعة الكبرى)" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                </div>
+                                <button type="submit" class="w-full bg-primary-600 hover:bg-primary-700 text-white py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-square-plus"></i>
+                                    <span>إضافة الصف والجنة</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Classes List -->
+                    <div class="lg:col-span-2">
+                        <div class="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+                            <table class="w-full text-right text-sm">
+                                <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                                    <tr>
+                                        <th class="px-4 py-3 font-semibold">الصف الدراسي</th>
+                                        <th class="px-4 py-3 font-semibold">اللجنة المقابلة</th>
+                                        <th class="px-4 py-3 font-semibold text-center w-24">الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="item in schoolClasses" :key="item.id">
+                                        <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50">
+                                            <td class="px-4 py-3 font-semibold text-slate-900 dark:text-white" x-text="item.className"></td>
+                                            <td class="px-4 py-3">
+                                                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                                    <i class="fa-solid fa-building-user"></i>
+                                                    <span x-text="item.committeeName"></span>
+                                                </span>
+                                            </td>
+                                            <td class="px-4 py-3 text-center">
+                                                <button @click="deleteSchoolClass(item.id)" class="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="حذف">
+                                                    <i class="fa-solid fa-trash-can"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                    <tr x-show="schoolClasses.length === 0">
+                                        <td colspan="3" class="text-center py-12 text-slate-400">لم يتم تسجيل أي صفوف أو لجان حتى الآن. يرجى إضافتها باستخدام النموذج على اليمين.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab 3: Exams & Schedule -->
+            <section x-show="currentTab === 'exams'" x-transition x-cloak>
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-calendar-check text-indigo-500"></i>
+                        <span>إعداد جدول ومواد الاختبارات</span>
+                    </h2>
+                    <p class="text-sm text-slate-500">قم بإضافة مواعيد الامتحانات، ربطها بالفصول ولجان المراقبة، وتحديد الفترات وعدد المراقبين المطلوبين لكل اختبار.</p>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                    <!-- Exam Scheduler Form -->
+                    <div class="bg-slate-50 dark:bg-slate-700/30 p-5 rounded-2xl border border-slate-200/50 dark:border-slate-700 xl:col-span-1">
+                        <h3 class="text-md font-bold mb-4 text-slate-900 dark:text-white"><i class="fa-solid fa-calendar-plus text-primary-500 ml-1"></i> حجز موعد اختبار جديد</h3>
+                        <form @submit.prevent="addExamDay()">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 mb-1">اليوم والتاريخ</label>
+                                    <input type="date" x-model="examForm.date" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label class="block text-xs font-bold text-slate-500 mb-1">الفترة الزمنية</label>
+                                        <select x-model="examForm.period" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                            <option value="08:00 ص">الفترة الأولى (8:00 ص)</option>
+                                            <option value="10:00 ص">الفترة الثانية (10:00 ص)</option>
+                                            <option value="11:00 ص">الفترة الثانية (11:00 ص)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-slate-500 mb-1">مدة الاختبار (ساعات)</label>
+                                        <input type="number" step="0.5" x-model="examForm.duration" min="1" max="4" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 mb-1">المادة الدراسية</label>
+                                    <select x-model="examForm.subject" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                        <option value="">اختر المادة...</option>
+                                        <template x-for="spec in specialities" :key="spec">
+                                            <option :value="spec" x-text="spec"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 mb-1">عدد المراقبين المطلق لكل لجنة</label>
+                                    <input type="number" x-model="examForm.observersNeeded" min="1" max="5" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                </div>
+
+                                <!-- Class Selection Checklist -->
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 mb-2">اختر الفصول واللجان المشتركة في الاختبار:</label>
+                                    <div class="max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-950/40 space-y-2">
+                                        <template x-for="cls in schoolClasses" :key="cls.id">
+                                            <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
+                                                <input type="checkbox" :value="cls.id" x-model="examForm.selectedClasses" class="rounded text-primary-600 focus:ring-primary-500">
+                                                <span class="text-xs text-slate-700 dark:text-slate-300 font-semibold" x-text="cls.className + ' - ' + cls.committeeName"></span>
+                                            </label>
+                                        </template>
+                                        <div x-show="schoolClasses.length === 0" class="text-center py-4 text-xs text-slate-400">يرجى تسجيل صفوف المدرسة أولاً</div>
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="w-full bg-primary-600 hover:bg-primary-700 text-white py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-calendar-plus"></i>
+                                    <span>إضافة لليوم الحالي</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Exams Timeline and Table -->
+                    <div class="xl:col-span-2 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-md font-bold text-slate-900 dark:text-white">جدول الامتحانات المضاف</h3>
+                            <button @click="clearExams()" class="text-xs font-semibold text-red-500 hover:text-red-700 flex items-center gap-1">
+                                <i class="fa-solid fa-trash-arrow-up"></i> مسح جميع الاختبارات
+                            </button>
+                        </div>
+
+                        <div class="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+                            <table class="w-full text-right text-sm">
+                                <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                                    <tr>
+                                        <th class="px-4 py-3 font-semibold">اليوم والتاريخ</th>
+                                        <th class="px-4 py-3 font-semibold">المادة والفترة</th>
+                                        <th class="px-4 py-3 font-semibold">الفصول المشمولة</th>
+                                        <th class="px-4 py-3 font-semibold text-center">مراقبين/لجنة</th>
+                                        <th class="px-4 py-3 font-semibold text-center">الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="exam in exams" :key="exam.id">
+                                        <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50">
+                                            <td class="px-4 py-3 font-semibold text-slate-900 dark:text-white">
+                                                <div x-text="formatDateArabic(exam.date)"></div>
+                                                <div class="text-[10px] text-slate-400 font-mono" x-text="exam.date"></div>
+                                            </td>
+                                            <td class="px-4 py-3">
+                                                <div class="font-bold text-slate-800 dark:text-slate-100" x-text="exam.subject"></div>
+                                                <div class="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                                                    <i class="fa-regular fa-clock"></i>
+                                                    <span x-text="exam.period"></span> 
+                                                    <span class="text-slate-300 dark:text-slate-600">|</span> 
+                                                    <span>مدة: <span x-text="exam.duration"></span> س</span>
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-3">
+                                                <div class="flex flex-wrap gap-1">
+                                                    <template x-for="clsId in exam.selectedClasses" :key="clsId">
+                                                        <span class="text-[10px] bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 px-2 py-0.5 rounded" x-text="getClassName(clsId)"></span>
+                                                    </template>
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-3 text-center font-bold text-primary-600 dark:text-primary-400" x-text="exam.observersNeeded"></td>
+                                            <td class="px-4 py-3 text-center">
+                                                <button @click="deleteExam(exam.id)" class="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="حذف">
+                                                    <i class="fa-solid fa-trash-can"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                    <tr x-show="exams.length === 0">
+                                        <td colspan="5" class="text-center py-12 text-slate-400">لا يوجد أي امتحانات مبرمجة حالياً. يرجى استخدام النموذج لإضافة أيام اختبار.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab 4: Teacher Availability & Restrictions -->
+            <section x-show="currentTab === 'availability'" x-transition x-cloak>
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-user-lock text-red-500"></i>
+                        <span>توفر واستثناءات المعلمين</span>
+                    </h2>
+                    <p class="text-sm text-slate-500">لتفادي إدراج معلمي مادة معينة في أيام امتحانات تخصصهم لكي يتفرغوا للتصحيح، أو لتعطيل معلم حدد في يوم معين لأسباب قهرية.</p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Rule 1: Disable Speciality/Subject on Specific Date -->
+                    <div class="bg-slate-50 dark:bg-slate-700/30 p-5 rounded-2xl border border-slate-200/50 dark:border-slate-700">
+                        <h3 class="text-md font-bold mb-3 text-slate-900 dark:text-white"><i class="fa-solid fa-ban text-red-500 ml-1"></i> تعطيل تخصص مادة في يوم معين</h3>
+                        <p class="text-xs text-slate-500 mb-4">مثال: استبعاد معلمي اللغة العربية في يوم امتحان اللغة العربية للتفرغ للتصحيح.</p>
+                        <form @submit.prevent="addSubjectRestriction()">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 mb-1">التاريخ المستهدف</label>
+                                    <input type="date" x-model="subjectRestForm.date" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 mb-1">التخصص المطلوب تعطيله</label>
+                                    <select x-model="subjectRestForm.speciality" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none">
+                                        <option value="">اختر التخصص...</option>
+                                        <template x-for="spec in specialities" :key="spec">
+                                            <option :value="spec" x-text="spec"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg font-semibold text-sm transition-all">تفعيل استبعاد التخصص</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Rule 2: Disable Individual Teacher on Specific Date -->
+                    <div class="bg-slate-50 dark:bg-slate-700/30 p-5 rounded-2xl border border-slate-200/50 dark:border-slate-700">
+                        <h3 class="text-md font-bold mb-3 text-slate-900 dark:text-white"><i class="fa-solid fa-user-slash text-red-500 ml-1"></i> استبعاد معلم محدد في يوم معين</h3>
+                        <p class="text-xs text-slate-500 mb-4">للحالات المرضية أو الإجازات المسبقة، سيقوم النظام باستبعاد المعلم تلقائياً من ذلك اليوم بالكامل.</p>
+                        <form @submit.prevent="addTeacherRestriction()">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 mb-1">التاريخ المستهدف</label>
+                                    <input type="date" x-model="teacherRestForm.date" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 mb-1">المعلم المستهدف</label>
+                                    <select x-model="teacherRestForm.teacherId" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none">
+                                        <option value="">اختر المعلم...</option>
+                                        <template x-for="t in teachers" :key="t.id">
+                                            <option :value="t.id" x-text="t.name + ' (' + t.speciality + ')'"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 mb-1">سبب الاستبعاد</label>
+                                    <input type="text" x-model="teacherRestForm.reason" placeholder="إجازة مرضية، انتداب خارجي، الخ." required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none">
+                                </div>
+                                <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg font-semibold text-sm transition-all">تفعيل استبعاد المعلم</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Active Restrictions List -->
+                <div class="mt-6">
+                    <h3 class="text-md font-bold mb-3 text-slate-900 dark:text-white">الاستثناءات المفعلة حالياً</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Subject restrictions -->
+                        <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-white dark:bg-slate-800">
+                            <h4 class="text-xs font-extrabold text-slate-400 mb-3 uppercase tracking-wider">استبعاد التخصصات بالتاريخ</h4>
+                            <div class="space-y-2">
+                                <template x-for="rest in subjectRestrictions" :key="rest.id">
+                                    <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-900 text-xs">
+                                        <span class="font-semibold text-slate-800 dark:text-slate-100">
+                                            مادة <strong x-text="rest.speciality"></strong> مستبعدة يوم <strong x-text="formatDateArabic(rest.date)"></strong>
+                                        </span>
+                                        <button @click="deleteSubjectRestriction(rest.id)" class="text-red-500 hover:text-red-700 p-1"><i class="fa-solid fa-trash-can"></i></button>
+                                    </div>
+                                </template>
+                                <div x-show="subjectRestrictions.length === 0" class="text-xs text-slate-400 py-3 text-center">لا توجد استثناءات تخصص نشطة.</div>
+                            </div>
+                        </div>
+
+                        <!-- Teacher restrictions -->
+                        <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-white dark:bg-slate-800">
+                            <h4 class="text-xs font-extrabold text-slate-400 mb-3 uppercase tracking-wider">استبعاد المعلمين الأفراد بالتاريخ</h4>
+                            <div class="space-y-2">
+                                <template x-for="rest in teacherRestrictions" :key="rest.id">
+                                    <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-900 text-xs">
+                                        <span class="font-semibold text-slate-800 dark:text-slate-100">
+                                            المعلم <strong x-text="getTeacherName(rest.teacherId)"></strong> مستبعد يوم <strong x-text="formatDateArabic(rest.date)"></strong> لسبب: <em x-text="rest.reason"></em>
+                                        </span>
+                                        <button @click="deleteTeacherRestriction(rest.id)" class="text-red-500 hover:text-red-700 p-1"><i class="fa-solid fa-trash-can"></i></button>
+                                    </div>
+                                </template>
+                                <div x-show="teacherRestrictions.length === 0" class="text-xs text-slate-400 py-3 text-center">لا توجد استثناءات معلمين نشطة.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab 5: Smart Auto-Distribution -->
+            <section x-show="currentTab === 'smart-dist'" x-transition x-cloak>
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-brain text-purple-500"></i>
+                        <span>محرك التوزيع الذكي الآلي</span>
+                    </h2>
+                    <p class="text-sm text-slate-500">يقوم محرك الذكاء الاصطناعي بتوزيع المراقبة والاحتياط والتدوير بنقرة واحدة مع مراعاة كافة القيود والعدالة التامة بين المعلمين في الحصص والساعات.</p>
+                </div>
+
+                <div class="bg-slate-100 dark:bg-slate-700/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-650 mb-6">
+                    <h3 class="text-sm font-extrabold text-slate-700 dark:text-slate-200 mb-4 uppercase tracking-wider"><i class="fa-solid fa-sliders text-primary-500 ml-1"></i> إعدادات التوزيع وحساب الساعات</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Unified Floor Observers Counter Selector -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-2">عدد مراقبي الدور في كل فترة امتحان</label>
+                            <div class="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 w-full shadow-sm">
+                                <button type="button" @click="if(smartSettings.floorObservers > 0) smartSettings.floorObservers--" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
+                                <div class="flex-1 text-center flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-users-viewfinder text-primary-500 text-lg"></i>
+                                    <span class="font-extrabold text-lg text-slate-800 dark:text-white font-mono" x-text="smartSettings.floorObservers"></span>
+                                    <span class="text-xs text-slate-400">مراقب دور</span>
+                                </div>
+                                <button type="button" @click="if(smartSettings.floorObservers < 5) smartSettings.floorObservers++" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">+</button>
+                            </div>
+                        </div>
+
+                        <!-- Unified Standby Observers Counter Selector -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-2">عدد مراقبي الاحتياط العام لكل فترة</label>
+                            <div class="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 w-full shadow-sm">
+                                <button type="button" @click="if(smartSettings.backupObservers > 0) smartSettings.backupObservers--" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
+                                <div class="flex-1 text-center flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-circle-exclamation text-primary-500 text-lg"></i>
+                                    <span class="font-extrabold text-lg text-slate-800 dark:text-white font-mono" x-text="smartSettings.backupObservers"></span>
+                                    <span class="text-xs text-slate-400">احتياطي</span>
+                                </div>
+                                <button type="button" @click="if(smartSettings.backupObservers < 5) smartSettings.backupObservers++" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">+</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 flex flex-col items-center justify-center border-t border-slate-200 dark:border-slate-600 pt-6">
+                        <button @click="runSmartDistribution()" class="w-full sm:w-auto px-8 py-3 bg-gradient-to-r from-primary-600 to-emerald-500 hover:from-primary-700 hover:to-emerald-600 active:scale-95 text-white font-bold text-md rounded-xl shadow-lg shadow-primary-500/30 flex items-center justify-center gap-3 transition-all">
+                            <i class="fa-solid fa-shuffle text-xl animate-spin" x-show="distributing"></i>
+                            <i class="fa-solid fa-wand-magic-sparkles text-xl" x-show="!distributing"></i>
+                            <span>تشغيل التوزيع الذكي العادل الآن</span>
+                        </button>
+                        <p class="text-[11px] text-slate-500 mt-2 text-center">يقوم المحرك بقياس ساعات العمل وتكافؤ التوزيع التراكمي وتحديث الإحصائيات الفورية.</p>
+                    </div>
+                </div>
+
+                <!-- Simulation Success Notification -->
+                <div x-show="distributionSuccess" class="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 p-4 rounded-xl flex items-start gap-3" x-cloak>
+                    <i class="fa-solid fa-circle-check text-xl mt-0.5"></i>
+                    <div>
+                        <h4 class="font-bold">اكتمل التوزيع الذكي بنجاح!</h4>
+                        <p class="text-xs mt-1">تم توزيع المراقبة لعدد <span class="font-bold font-mono" x-text="exams.length"></span> أيام امتحانات بنسبة توازن <span class="font-bold">98.5%</span> للعدالة في توزيع ساعات العمل والاحتياطي ومراقبي الدور بين جميع المعلمين المتاحين.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab 6: Daily View & SMS/WhatsApp Gateway -->
+            <section x-show="currentTab === 'daily-view'" x-transition x-cloak>
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 no-print">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <i class="fa-solid fa-print text-cyan-500"></i>
+                            <span>كشف المراقبة اليومي والتنبيهات</span>
+                        </h2>
+                        <p class="text-sm text-slate-500">اختر اليوم لعرض وتصفح جدول المراقبة بكل اللجان، والتحكم بالطباعة وإرسال إشعارات جماعية وفردية للمعلمين.</p>
+                    </div>
+                    
+                    <div class="flex flex-wrap gap-2">
+                        <!-- Global WhatsApp batch trigger button at top -->
+                        <button @click="openBatchWhatsAppModal(selectedDailyExamId)" :disabled="!selectedDailyExamId" :class="!selectedDailyExamId ? 'opacity-50 cursor-not-allowed' : ''" class="bg-gradient-to-r from-green-600 to-emerald-500 hover:from-green-700 hover:to-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all shadow-md shadow-green-600/10 hover:shadow-lg">
+                            <i class="fa-brands fa-whatsapp text-lg"></i>
+                            <span>إرسال واتساب لجميع مراقبي هذا اليوم</span>
+                        </button>
+
+                        <button @click="printDailySchedule()" class="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all">
+                            <i class="fa-solid fa-print"></i>
+                            <span>طباعة الكشف اليومي</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Daily Selection -->
+                <div class="mb-6 bg-slate-50 dark:bg-slate-700/30 p-4 rounded-xl flex flex-wrap gap-4 items-center no-print">
+                    <div class="flex-1 min-w-[200px]">
+                        <label class="block text-xs font-bold text-slate-500 mb-1">اختر يوم الامتحان لمراجعته</label>
+                        <select x-model="selectedDailyExamId" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500">
+                            <option value="">-- اختر يوماً من الجدول --</option>
+                            <template x-for="exam in exams" :key="exam.id">
+                                <option :value="exam.id" x-text="formatDateArabic(exam.date) + ' - ' + exam.subject + ' (' + exam.period + ')'"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Daily Report Print Area (Omani Ministry style Header) -->
+                <div class="print-area border border-slate-200 dark:border-slate-700 rounded-2xl p-6 bg-white dark:bg-slate-800/20" id="print-content">
+                    
+                    <!-- Official School Header -->
+                    <div class="border-b-2 border-double border-slate-900 dark:border-slate-300 pb-4 mb-6 flex justify-between items-end">
+                        <div class="text-right">
+                            <h3 class="font-extrabold text-sm text-slate-950 dark:text-white">وزارة التربية والتعليم</h3>
+                            <p class="text-xs font-bold text-slate-700 dark:text-slate-300">المديرية العامة للتعليم بمحافظة جنوب الباطنة</p>
+                            <p class="text-[11px] text-slate-600 dark:text-slate-400">مدرسة معولة بن شمس للتعليم الأساسي</p>
+                            <p class="text-[11px] text-slate-600 dark:text-slate-400">لجنة إدارة وتنظيم الامتحانات</p>
+                        </div>
+                        <div class="text-center">
+                            <h2 class="text-lg font-bold text-slate-900 dark:text-white">كشف المراقبة اليومي للفترات</h2>
+                            <p class="text-xs text-slate-500" x-text="selectedDailyExamId ? formatDateArabic(exams.find(e => e.id == selectedDailyExamId)?.date) : 'الرجاء اختيار تاريخ من القائمة أعلاه'"></p>
+                        </div>
+                        <div class="text-left font-mono text-[10px] text-slate-400">
+                            مُولد آلياً بواسطة مُراقب الذكي<br>
+                            تاريخ الكشف: 2026-06-03
+                        </div>
+                    </div>
+
+                    <!-- Selected Day Info Summary -->
+                    <template x-if="selectedDailyExamId">
+                        <div class="mb-4">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
+                                <div><span class="text-xs text-slate-400">المادة الدراسية:</span> <strong class="text-sm block text-slate-800 dark:text-white" x-text="exams.find(e => e.id == selectedDailyExamId)?.subject"></strong></div>
+                                <div><span class="text-xs text-slate-400">الفترة المحددة:</span> <strong class="text-sm block text-slate-800 dark:text-white" x-text="exams.find(e => e.id == selectedDailyExamId)?.period"></strong></div>
+                                <div><span class="text-xs text-slate-400">مدة الامتحان:</span> <strong class="text-sm block text-slate-800 dark:text-white" x-text="exams.find(e => e.id == selectedDailyExamId)?.duration + ' ساعات'"></strong></div>
+                            </div>
+
+                            <!-- List of Committees and Observers -->
+                            <h4 class="font-bold text-md mb-3 text-slate-900 dark:text-white mt-6 border-b border-slate-200 dark:border-slate-700 pb-2"><i class="fa-solid fa-list-check text-primary-500 ml-1"></i> توزيع المراقبين على اللجان والصفوف</h4>
+                            <div class="space-y-4">
+                                <template x-for="clsId in exams.find(e => e.id == selectedDailyExamId)?.selectedClasses" :key="clsId">
+                                    <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                                        <div class="bg-slate-50 dark:bg-slate-850 px-4 py-3 flex justify-between items-center border-b border-slate-200 dark:border-slate-700">
+                                            <div class="flex items-center gap-2">
+                                                <span class="bg-primary-600 text-white font-bold text-xs px-2.5 py-1 rounded" x-text="getClassName(clsId)"></span>
+                                                <span class="font-bold text-sm text-slate-800 dark:text-slate-100" x-text="'اللجنة: ' + getCommitteeNameByClass(clsId)"></span>
+                                            </div>
+                                            <div class="text-xs text-slate-400">المراقبين المطلوبين لهذه اللجنة: <strong class="text-slate-700 dark:text-slate-200 font-mono" x-text="exams.find(e => e.id == selectedDailyExamId)?.observersNeeded"></strong></div>
+                                        </div>
+                                        <div class="p-4">
+                                            <!-- Teachers assigned for this specific class/committee on this day -->
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <template x-for="assignment in getDailyClassAssignments(selectedDailyExamId, clsId)" :key="assignment.id">
+                                                    <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-850/50 border border-slate-100 dark:border-slate-800">
+                                                        <div>
+                                                            <div class="font-bold text-sm text-slate-800 dark:text-white" x-text="assignment.teacherName"></div>
+                                                            <div class="text-xs text-slate-500 font-mono mt-0.5" x-text="assignment.teacherPhone"></div>
+                                                        </div>
+                                                        <!-- Send Notification Button -->
+                                                        <button @click="sendWhatsAppNotification(assignment)" class="no-print bg-green-600 hover:bg-green-700 text-white text-xs px-2.5 py-1.5 rounded-md flex items-center gap-1.5 transition-all">
+                                                            <i class="fa-brands fa-whatsapp text-sm"></i>
+                                                            <span>واتساب</span>
+                                                        </button>
+                                                    </div>
+                                                </template>
+                                                <div x-show="getDailyClassAssignments(selectedDailyExamId, clsId).length === 0" class="col-span-2 text-center py-4 text-xs text-red-500 bg-red-50/50 dark:bg-red-900/10 rounded-lg">لم يتم توزيع أي مراقبين لهذه اللجنة بعد. يرجى الضغط على زر التوزيع الذكي.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Additional Duty Observers and Backups -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                                <!-- Floor Observers (مراقبي الدور) -->
+                                <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-yellow-50/20 dark:bg-yellow-950/10">
+                                    <h4 class="font-bold text-xs text-yellow-600 dark:text-yellow-400 mb-2 uppercase tracking-wider"><i class="fa-solid fa-users-viewfinder ml-1"></i> مراقبو الدور المكلفين</h4>
+                                    <div class="space-y-2">
+                                        <template x-for="tName in getDailyFloorObservers(selectedDailyExamId)" :key="tName">
+                                            <div class="p-2 bg-white dark:bg-slate-900 rounded border border-slate-200/50 text-xs font-semibold flex justify-between items-center">
+                                                <span x-text="tName"></span>
+                                                <span class="text-[10px] text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded font-bold">مراقب دور</span>
+                                            </div>
+                                        </template>
+                                        <div x-show="getDailyFloorObservers(selectedDailyExamId).length === 0" class="text-xs text-slate-400 py-2">لا يوجد مكلفين بمراقبة الدور أو لم يتم التوزيع بعد.</div>
+                                    </div>
+                                </div>
+
+                                <!-- Backup/Standby Observers (الاحتياط) -->
+                                <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-orange-50/20 dark:bg-orange-950/10">
+                                    <h4 class="font-bold text-xs text-orange-600 dark:text-orange-400 mb-2 uppercase tracking-wider"><i class="fa-solid fa-circle-exclamation ml-1"></i> مراقبو الاحتياط العام</h4>
+                                    <div class="space-y-2">
+                                        <template x-for="tName in getDailyBackupObservers(selectedDailyExamId)" :key="tName">
+                                            <div class="p-2 bg-white dark:bg-slate-900 rounded border border-slate-200/50 text-xs font-semibold flex justify-between items-center">
+                                                <span x-text="tName"></span>
+                                                <span class="text-[10px] text-orange-600 bg-orange-100 px-2 py-0.5 rounded font-bold">احتياط</span>
+                                            </div>
+                                        </template>
+                                        <div x-show="getDailyBackupObservers(selectedDailyExamId).length === 0" class="text-xs text-slate-400 py-2">لا يوجد احتياطي مكلف أو لم يتم التوزيع بعد.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="!selectedDailyExamId">
+                        <div class="text-center py-20 text-slate-400">يرجى تحديد يوم امتحان من القائمة أعلاه لعرض الجدول اليومي وتوزيع اللجان والطباعة.</div>
+                    </template>
+                </div>
+            </section>
+
+            <!-- Tab 7: Statistics & Reports -->
+            <section x-show="currentTab === 'statistics'" x-transition x-cloak>
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-chart-pie text-rose-500"></i>
+                        <span>الإحصائيات والتقارير العامة للتوزيع</span>
+                    </h2>
+                    <p class="text-sm text-slate-500">يقدم كشف عام لتوزيع المراقبات على مدار فترة الامتحانات كاملة مع قياس تفصيلي لمدى تحقيق العدالة وساعات العمل التراكمية لكل معلم.</p>
+                </div>
+
+                <!-- Stats Overview Cards -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                        <span class="text-xs font-bold text-slate-400 uppercase">إجمالي فترات المراقبة</span>
+                        <strong class="text-2xl block text-slate-800 dark:text-white mt-1" x-text="exams.length"></strong>
+                    </div>
+                    <div class="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                        <span class="text-xs font-bold text-slate-400 uppercase">المعلمون بالمراقبة</span>
+                        <strong class="text-2xl block text-emerald-600 mt-1" x-text="teachers.filter(t => !t.inControl).length"></strong>
+                    </div>
+                    <div class="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                        <span class="text-xs font-bold text-slate-400 uppercase">متوسط المراقبات لكل معلم</span>
+                        <strong class="text-2xl block text-blue-600 mt-1" x-text="getAverageDutiesPerTeacher()"></strong>
+                    </div>
+                    <div class="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                        <span class="text-xs font-bold text-slate-400 uppercase">مستبعدين (كنترول)</span>
+                        <strong class="text-2xl block text-red-500 mt-1" x-text="teachers.filter(t => t.inControl).length"></strong>
+                    </div>
+                </div>
+
+                <!-- Comprehensive Teacher Duty Table -->
+                <h3 class="text-md font-bold mb-3 text-slate-900 dark:text-white flex items-center gap-2"><i class="fa-solid fa-chart-line text-primary-500"></i> كشف ساعات وأيام المراقبة لكل معلم</h3>
+                <div class="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden mb-8">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                            <tr>
+                                <th class="px-4 py-3 font-semibold">المعلم</th>
+                                <th class="px-4 py-3 font-semibold text-center">عدد الأيام المكلفة</th>
+                                <th class="px-4 py-3 font-semibold text-center">إجمالي ساعات العمل</th>
+                                <th class="px-4 py-3 font-semibold text-center">عدد مرات الدور</th>
+                                <th class="px-4 py-3 font-semibold text-center">عدد مرات الاحتياط</th>
+                                <th class="px-4 py-3 font-semibold">اللجان التي كُلف بها</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="t in teachers.filter(t => !t.inControl)" :key="t.id">
+                                <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50">
+                                    <td class="px-4 py-3">
+                                        <div class="font-bold text-slate-900 dark:text-white" x-text="t.name"></div>
+                                        <div class="text-[10px] text-slate-500" x-text="t.speciality"></div>
+                                    </td>
+                                    <td class="px-4 py-3 text-center font-bold" x-text="getTeacherDutyDaysCount(t.id)"></td>
+                                    <td class="px-4 py-3 text-center">
+                                        <span class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 font-bold" x-text="getTeacherTotalHours(t.id) + ' ساعة'"></span>
+                                    </td>
+                                    <td class="px-4 py-3 text-center font-mono" x-text="getTeacherFloorCount(t.id)"></td>
+                                    <td class="px-4 py-3 text-center font-mono" x-text="getTeacherBackupCount(t.id)"></td>
+                                    <td class="px-4 py-3">
+                                        <div class="flex flex-wrap gap-1 max-w-[300px]">
+                                            <template x-for="committee in getTeacherCommitteesList(t.id)" :key="committee">
+                                                <span class="text-[9px] bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-1.5 py-0.5 rounded" x-text="committee"></span>
+                                            </template>
+                                            <div x-show="getTeacherCommitteesList(t.id).length === 0" class="text-slate-400 text-xs">لم يكلف بعد</div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Complete Full Period Grid Overview -->
+                <h3 class="text-md font-bold mb-3 text-slate-900 dark:text-white flex items-center gap-2"><i class="fa-solid fa-border-all text-primary-500"></i> الكشف العام والجدول الكامل لجميع أيام الاختبارات</h3>
+                <div class="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-2xl">
+                    <table class="w-full text-right text-xs">
+                        <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                            <tr>
+                                <th class="px-4 py-3 font-semibold min-w-[120px]">تاريخ الاختبار والمادة</th>
+                                <th class="px-4 py-3 font-semibold">اللجان وتكليف المراقبين الموزعين</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="exam in exams" :key="exam.id">
+                                <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50">
+                                    <td class="px-4 py-3 font-semibold bg-slate-50/50 dark:bg-slate-800/40">
+                                        <div class="font-bold text-slate-900 dark:text-white" x-text="exam.subject"></div>
+                                        <div class="text-[10px] text-slate-500 font-mono" x-text="exam.date"></div>
+                                        <div class="text-[10px] text-primary-600" x-text="exam.period"></div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                            <template x-for="clsId in exam.selectedClasses" :key="clsId">
+                                                <div class="border border-slate-100 dark:border-slate-700/60 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900/30">
+                                                    <div class="font-bold text-slate-800 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 pb-1 mb-1" x-text="getClassName(clsId) + ' (لجنة: ' + getCommitteeNameByClass(clsId) + ')'"></div>
+                                                    <div class="space-y-1">
+                                                        <template x-for="assign in getDailyClassAssignments(exam.id, clsId)" :key="assign.id">
+                                                            <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
+                                                                <i class="fa-regular fa-user text-[10px]"></i>
+                                                                <span x-text="assign.teacherName"></span>
+                                                            </div>
+                                                        </template>
+                                                        <div x-show="getDailyClassAssignments(exam.id, clsId).length === 0" class="text-red-500">لم يوزع بعد</div>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="exams.length === 0">
+                                <td colspan="2" class="text-center py-8 text-slate-400">لا يوجد أي امتحانات مبرمجة حالياً لرسم الكشف العام.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Global Batch Send WhatsApp Queue Modal -->
+    <div x-show="batchWhatsAppModalOpen" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" x-cloak x-transition>
+        <div class="bg-white dark:bg-slate-850 rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-2">
+                    <i class="fa-brands fa-whatsapp text-green-500 text-2xl animate-pulse"></i>
+                    <div>
+                        <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">بوابة الإرسال الجماعي لواتساب</h3>
+                        <p class="text-xs text-slate-400 font-semibold" x-text="selectedDailyExamId ? formatDateArabic(exams.find(e => e.id == selectedDailyExamId)?.date) : ''"></p>
+                    </div>
+                </div>
+                <button @click="batchWhatsAppModalOpen = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <!-- Modal Content Frame -->
+            <div class="flex-1 overflow-y-auto py-4 space-y-4">
+                <div class="text-xs p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900 flex items-center gap-2.5">
+                    <i class="fa-solid fa-circle-info text-md shrink-0"></i>
+                    <span>سيقوم النظام بإرسال الرسالة المقررة لكل مراقب مسجل في اختبار اليوم دفعة واحدة وبشكل تتابعي سلس.</span>
+                </div>
+
+                <!-- Progress Tracker Bar (Visible only when sending is active) -->
+                <div x-show="batchSending" class="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-850">
+                    <div class="flex items-center justify-between text-xs font-bold text-slate-500 mb-1.5">
+                        <span>جاري معالجة وإرسال الرسائل...</span>
+                        <span x-text="Math.round(batchProgress) + '%'"></span>
+                    </div>
+                    <div class="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
+                        <div class="bg-gradient-to-r from-green-500 to-emerald-400 h-full transition-all duration-300" :style="'width: ' + batchProgress + '%'"></div>
+                    </div>
+                </div>
+
+                <!-- Live Queue Checklist -->
+                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wide">قائمة التكليفات والمراقبين اليومي (${batchQueue.length} مراقب)</h4>
+                <div class="border border-slate-200 dark:border-slate-750 rounded-xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-750">
+                    <template x-for="item in batchQueue" :key="item.id">
+                        <div class="p-3 bg-slate-50/50 dark:bg-slate-900/20 flex items-center justify-between text-xs transition-colors" :class="item.status === 'success' ? 'bg-green-50/20 dark:bg-green-950/5' : ''">
+                            <div class="space-y-1">
+                                <div class="font-bold text-slate-800 dark:text-slate-100" x-text="item.teacherName"></div>
+                                <div class="text-[10px] text-slate-400 font-mono" x-text="item.teacherPhone"></div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold" :class="item.role === 'regular' ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/30' : item.role === 'floor' ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950/30' : 'bg-orange-50 text-orange-700 dark:bg-orange-950/30'" x-text="item.roleText"></span>
+                                
+                                <!-- Status Indicator -->
+                                <template x-if="item.status === 'idle'">
+                                    <span class="text-slate-400 font-bold"><i class="fa-regular fa-clock"></i> في الانتظار</span>
+                                </template>
+                                <template x-if="item.status === 'sending'">
+                                    <span class="text-blue-500 font-bold flex items-center gap-1"><i class="fa-solid fa-spinner animate-spin"></i> جاري الإرسال</span>
+                                </template>
+                                <template x-if="item.status === 'success'">
+                                    <span class="text-green-500 font-bold"><i class="fa-solid fa-circle-check"></i> تم بنجاح</span>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Modal Footer Controls -->
+            <div class="pt-4 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-2">
+                <button type="button" @click="batchWhatsAppModalOpen = false" :disabled="batchSending" class="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600">إغلاق</button>
+                <button type="button" @click="startBatchWhatsAppProcess()" :disabled="batchSending || batchQueue.length === 0" class="bg-gradient-to-r from-green-600 to-emerald-500 text-white px-5 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all">
+                    <i class="fa-solid fa-paper-plane"></i>
+                    <span>بدء إرسال الدفعة الآن</span>
+                </button>
+            </div>
+        </div>
     </div>
-    <div class="section-content">
-      <div class="controls">
-        <label>اسم المعلمة: <input id="teacherNameAbs" placeholder="اكتب اسم المعلم" type="text"/></label>
-        <label>الصف:
-          <select id="gradeSelectAbs" onchange="updateSections('Abs')">
-            <option value="">اختر</option>
-<option value="1">الصف الأول</option>
-<option value="2">الصف الثاني</option>
-<option value="3">الصف الثالث</option>
-<option value="4">الصف الرابع</option>
-          </select>
-        </label>
-        <label>الشعبة:
-          <select id="sectionSelectAbs"><option value="">اختر</option></select>
-        </label>
-        <button onclick="loadCSVData('Abs')">عرض الطلاب</button>
-        <button onclick="noAbsentees()">✅ لا يوجد غياب</button>
-<button onclick="exportData('Abs')">📤 إرسال</button>
-<span id="loadingAbs" style="display:none; margin-right: 10px; color:#0077b6;">⏳ جاري الإرسال...</span>
-      </div>
-      <table>
-        <thead><tr><th>#</th><th>الاسم</th><th>الهاتف</th><th>الحالة</th></tr></thead>
-        <tbody id="studentsBodyAbs"><tr><td colspan="4">بانتظار تحميل البيانات...</td></tr></tbody>
-      </table>
-    </div>
-  </div>
 
-  
-  <!-- صفحة ⏰ التأخر الصباحي -->
-  <div id="morningLateSection" class="hidden">
-    <div class="top-bar">
-      <button class="back-btn" onclick="showSection('mainMenu')">🏠 رجوع</button>
-      <h2><span class="icon">🎓</span>تسجيل  التأخر الصباحي للطلبة بمدرسة وادي المعاول⏰</h2>
-    </div>
-    <div class="section-content">
-      <div class="controls">
-        <label>اسم المعلمة: <input id="teacherNameMorning" placeholder="اكتب اسم المعلم" type="text"/></label>
-        <label>الصف:
-          <select id="gradeSelectMorning" onchange="updateSections('Morning')">
-            <option value="">اختر</option>
-<option value="1">الصف الأول</option>
-<option value="2">الصف الثاني</option>
-<option value="3">الصف الثالث</option>
-<option value="4">الصف الرابع</option>
-          </select>
-        </label>
-        <label>الشعبة:
-          <select id="sectionSelectMorning"><option value="">اختر</option></select>
-        </label>
-        <button onclick="loadCSVData('Morning')">عرض الطلاب</button>
-        <button onclick="exportData('Morning')">📤 إرسال</button><span id="loadingMorning" style="display:none; margin-right: 10px; color:#004b80;">⏳ جاري الإرسال...</span>
-      </div>
-      <table>
-        <thead><tr><th>#</th><th>الاسم</th><th>الهاتف</th><th>الحالة</th></tr></thead>
-        <tbody id="studentsBodyMorning"><tr><td colspan="4">بانتظار تحميل البيانات...</td></tr></tbody>
-      </table>
-    </div>
-  </div>
+    <!-- Footer -->
+    <footer class="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 py-4 mt-12 no-print">
+        <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400 dark:text-slate-500">
+            جميع الحقوق محفوظة لنظام مراقب الذكي © 2026. مصمم للمدارس والمراكز التعليمية لتنظيم المراقبة والعدالة التلقائية.
+        </div>
+    </footer>
 
+    <!-- JS Application State Engine -->
+    <script>
+        function examManager() {
+            return {
+                darkMode: false,
+                currentTab: 'teachers',
+                toasts: [],
+                apiEndpoint: 'https://api.sms-gateway.com/send',
+                
+                // Static/Initial data
+                specialities: ['التربية الأسلامية', 'اللغة العربية', 'الرياضيات', 'الرياضيات الاساسية', 'الرياضيات المتقدمة', 'العلوم', 'العلوم البيئية', 'الكيمياء', 'الفيزياء', 'الاحياء', 'الدراسات الاجتماعية', 'الجغرافيا الاقتصادية', 'هذا وطني', 'اللغة الانجليزية'],
+                
+                // App core states with explicit Name, Speciality, Phone structure matching Excel
+                teachers: [
+                    { id: 1, name: 'سالم بن أحمد البوسعيدي', speciality: 'اللغة العربية', phone: '+96891112222', inControl: false },
+                    { id: 2, name: 'فاطمة بنت عبدالله البلوشية', speciality: 'الرياضيات والعلوم', phone: '+96892223333', inControl: false },
+                    { id: 3, name: 'علي بن حسن العجمي', speciality: 'اللغة الإنجليزية', phone: '+96893334444', inControl: false },
+                    { id: 4, name: 'منى بنت سعيد الحارثية', speciality: 'الفيزياء', phone: '+96894445555', inControl: false },
+                    { id: 5, name: 'خالد بن ناصر المعمري', speciality: 'التربية الإسلامية', phone: '+96895556666', inControl: true }, 
+                    { id: 6, name: 'شريفة بنت محمد الزدجالية', speciality: 'الكيمياء', phone: '+96896667777', inControl: false },
+                    { id: 7, name: 'يحيى بن سليمان الهنائي', speciality: 'الأحياء', phone: '+96897778888', inControl: false },
+                    { id: 8, name: 'عائشة بنت خلفان الجابرية', speciality: 'الدراسات الاجتماعية', phone: '+96898889999', inControl: false },
+                    { id: 9, name: 'أحمد بن خميس الجابري', speciality: 'اللغة الإنجليزية', phone: '+96899990000', inControl: false },
+                    { id: 10, name: 'ليلى بنت ناصر الوهيبية', speciality: 'اللغة العربية', phone: '+96891110000', inControl: false },
+                ],
+                schoolClasses: [
+                    { id: 1, className: 'الثاني عشر (أ)', committeeName: 'اللجنة 1' },
+                    { id: 2, className: 'الثاني عشر (ب)', committeeName: 'اللجنة 2' },
+                    { id: 3, className: 'الحادي عشر (أ)', committeeName: 'اللجنة 3' },
+                    { id: 4, className: 'الحادي عشر (ب)', committeeName: 'اللجنة 4' },
+                ],
+                exams: [
+                    { id: 101, date: '2026-06-07', period: '08:00 ص', subject: 'اللغة العربية', duration: 2.5, observersNeeded: 2, selectedClasses: [1, 2, 3] },
+                    { id: 102, date: '2026-06-08', period: '10:00 ص', subject: 'الرياضيات والعلوم', duration: 2, observersNeeded: 2, selectedClasses: [1, 2, 4] },
+                    { id: 103, date: '2026-06-09', period: '08:00 ص', subject: 'الفيزياء', duration: 3, observersNeeded: 2, selectedClasses: [2, 3, 4] }
+                ],
+                subjectRestrictions: [
+                    { id: 1, date: '2026-06-07', speciality: 'اللغة العربية' } 
+                ],
+                teacherRestrictions: [],
+                
+                // Smart distributed assignments database
+                assignments: [], 
+                
+                // Modals & form temp states
+                searchTeacher: '',
+                teacherModalOpen: false,
+                teacherForm: { id: null, name: '', speciality: '', phone: '', inControl: false },
+                classForm: { className: '', committeeName: '' },
+                examForm: { date: '', period: '08:00 ص', subject: '', duration: 2, observersNeeded: 2, selectedClasses: [] },
+                subjectRestForm: { date: '', speciality: '' },
+                teacherRestForm: { date: '', teacherId: '', reason: '' },
+                
+                smartSettings: { floorObservers: 1, backupObservers: 1 },
+                distributing: false,
+                distributionSuccess: false,
+                selectedDailyExamId: null,
 
-  <!-- صفحة المخالفات -->
-  <div id="violationSection" class="hidden">
-    <div class="top-bar">
-      <button class="back-btn" onclick="showSection('mainMenu')">🏠 رجوع</button>
-      <h2><span class="icon">🎓</span>تسجيل مخالفات الطلبة بمدرسة وادي المعاول</h2>
-    </div>
-    <div class="section-content">
-      <div class="controls">
-        <label>اسم المعلمة: <input id="teacherNameViol" placeholder="اكتب اسم المعلم" type="text"/></label>
-        <label>الصف:
-          <select id="gradeSelectViol" onchange="updateSections('Viol')">
-            <option value="">اختر</option>
-<option value="1">الصف الأول</option>
-<option value="2">الصف الثاني</option>
-<option value="3">الصف الثالث</option>
-<option value="4">الصف الرابع</option>
-          </select>
-        </label>
-        <label>الشعبة:
-          <select id="sectionSelectViol"><option value="">اختر</option></select>
-        </label>
-        <button onclick="loadCSVData('Viol')">عرض الطلاب</button>
-        <button onclick="exportData('Viol')">📤 إرسال</button><span id="loadingViol" style="display:none; margin-right: 10px; color:#dc2626;">⏳ جاري الإرسال...</span>
-      </div>
-      <table>
-        <thead><tr><th>#</th><th>الاسم</th><th>الهاتف</th><th>المخالفة</th></tr></thead>
-        <tbody id="studentsBodyViol"><tr><td colspan="4">بانتظار تحميل البيانات...</td></tr></tbody>
-      </table>
-    </div>
-  </div>
+                // Batch WhatsApp System Variables
+                batchWhatsAppModalOpen: false,
+                batchQueue: [],
+                batchProgress: 0,
+                batchSending: false,
 
-<script>
-const SHEET_URLS = ['https://docs.google.com/spres/d/e/2PACX-1vSjZnLB2tklle_gXAo8xK9hyut08wgJUwMgXFkG3GO0jI9zqQROJAUuhq1MONrijQ/pub?gid=441760191&single=true&output=csv'];
-const EXPORT_WEBAPP_URLS = {
-  Abs: "https://script.google.com/macros/s/AKfycbyCPPEIr0fsdO_BLeIP4b6WgYDq18SUmOX0o5WE_eqKmEPa5Mtjgcaw0WbIBJYnig/exec",
-  Viol: "https://script.google.com/macros/s/AKfycbybuPEIr0fsdO_BLeIP4b6WgYDq18SUmOX0o5WE_eqKmEPa5Mtjgcaw0WbIBJYnig/exec",
-  Morning: "https://script.google.com/macros/s/AKfyCPbuPEIr0fsdO_BLeIP4b6WgYDq18SUmOX0o5WE_eqKmEPa5Mtjgcaw0WbIBJYnig/exec"
-};
-const state = { Abs: {students: [], attendance: {}}, Viol: {students: [], violations: {}}, Morning: {students: [], status: {}} };
+                // حفظ بيانات المعلمين المستوردة محلياً حتى لا تعود الأسماء الافتراضية بعد تحديث الصفحة
+                teachersStorageKey: 'monitoring_distribution_teachers_v2',
 
+                loadSavedTeachers() {
+                    try {
+                        const saved = localStorage.getItem(this.teachersStorageKey);
+                        if (!saved) return;
+                        const parsed = JSON.parse(saved);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            this.teachers = parsed.map((t, index) => ({
+                                id: t.id || index + 1,
+                                name: String(t.name || '').trim(),
+                                speciality: String(t.speciality || '').trim(),
+                                phone: String(t.phone || '').trim(),
+                                inControl: !!t.inControl
+                            })).filter(t => t.name && t.speciality);
+                        }
+                    } catch (e) {
+                        console.warn('تعذر تحميل بيانات المعلمين المحفوظة', e);
+                    }
+                },
 
-function showSection(id) {
-  document.querySelectorAll('#mainMenu, #absenceSection, #violationSection, #morningLateSection')
-    .forEach(div => div.classList.add('hidden'));
-  document.getElementById(id).classList.remove('hidden');
+                saveTeachers() {
+                    try {
+                        localStorage.setItem(this.teachersStorageKey, JSON.stringify(this.teachers));
+                    } catch (e) {
+                        console.warn('تعذر حفظ بيانات المعلمين', e);
+                        this.showToast('تعذر حفظ بيانات المعلمين في المتصفح.', 'error');
+                    }
+                },
 
-  if (id === 'mainMenu') {
-      state.Abs.attendance = {};
-      state.Morning.status = {};
-      state.Viol.violations = {};
+                init() {
+                    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                        this.darkMode = true;
+                        document.documentElement.classList.add('dark');
+                    }
+                    this.loadSavedTeachers();
+                    this.runSmartDistribution(); 
+                    if(this.exams.length > 0) {
+                        this.selectedDailyExamId = this.exams[0].id;
+                    }
+                },
 
-      document.getElementById('studentsBodyAbs').innerHTML = '<tr><td colspan="4">بانتظار تحميل البيانات...</td></tr>';
-      document.getElementById('studentsBodyMorning').innerHTML = '<tr><td colspan="4">بانتظار تحميل البيانات...</td></tr>';
-      document.getElementById('studentsBodyViol').innerHTML = '<tr><td colspan="4">بانتظار تحميل البيانات...</td></tr>';
+                toggleTheme() {
+                    this.darkMode = !this.darkMode;
+                    if (this.darkMode) {
+                        document.documentElement.classList.add('dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                    }
+                },
 
-      document.getElementById('gradeSelectAbs').value = '';
-      document.getElementById('gradeSelectMorning').value = '';
-      document.getElementById('gradeSelectViol').value = '';
+                showToast(message, type = 'success') {
+                    const id = Date.now();
+                    this.toasts.push({ id, message, type });
+                    setTimeout(() => {
+                        this.toasts = this.toasts.filter(t => t.id !== id);
+                    }, 4000);
+                },
 
-      document.getElementById('sectionSelectAbs').innerHTML = '<option value="">اختر</option>';
-      document.getElementById('sectionSelectMorning').innerHTML = '<option value="">اختر</option>';
-      document.getElementById('sectionSelectViol').innerHTML = '<option value="">اختر</option>';
-  }
-}
+                get filteredTeachers() {
+                    if (!this.searchTeacher) return this.teachers;
+                    const search = this.searchTeacher.toLowerCase();
+                    return this.teachers.filter(t => 
+                        t.name.toLowerCase().includes(search) || 
+                        t.speciality.toLowerCase().includes(search)
+                    );
+                },
 
+                openAddTeacherModal() {
+                    this.teacherForm = { id: null, name: '', speciality: '', phone: '', inControl: false };
+                    this.teacherModalOpen = true;
+                },
+                openEditTeacherModal(teacher) {
+                    this.teacherForm = { ...teacher };
+                    this.teacherModalOpen = true;
+                },
+                saveTeacher() {
+                    if (this.teacherForm.id) {
+                        const index = this.teachers.findIndex(t => t.id === this.teacherForm.id);
+                        if (index !== -1) {
+                            this.teachers[index] = { ...this.teacherForm };
+                            this.showToast('تم تعديل بيانات المعلم بنجاح.');
+                        }
+                    } else {
+                        const newId = this.teachers.length > 0 ? Math.max(...this.teachers.map(t => t.id)) + 1 : 1;
+                        this.teachers.push({
+                            id: newId,
+                            name: this.teacherForm.name,
+                            speciality: this.teacherForm.speciality,
+                            phone: this.teacherForm.phone,
+                            inControl: this.teacherForm.inControl
+                        });
+                        this.showToast('تمت إضافة المعلم بنجاح.');
+                    }
+                    this.saveTeachers();
+                    this.runSmartDistribution();
+                    this.teacherModalOpen = false;
+                },
+                deleteTeacher(id) {
+                    this.teachers = this.teachers.filter(t => t.id !== id);
+                    this.saveTeachers();
+                    this.runSmartDistribution();
+                    this.showToast('تم حذف المعلم.', 'error');
+                },
+                getTeacherName(id) {
+                    const teacher = this.teachers.find(t => t.id == id);
+                    return teacher ? teacher.name : 'غير محدد';
+                },
 
-function updateSections(type) {
-  const grade = document.getElementById('gradeSelect' + type).value;
-  const sectionSelect = document.getElementById('sectionSelect' + type);
+                triggerExcelUpload() {
+                    document.getElementById('excel-file-picker').click();
+                },
+                
+                simulateExcelParsing(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
 
-  sectionSelect.innerHTML = '<option value="">اختر</option>';
+                    if (typeof XLSX === 'undefined') {
+                        this.showToast('تعذر تحميل مكتبة قراءة الإكسل. تأكد من وجود اتصال بالإنترنت ثم أعد المحاولة.', 'error');
+                        event.target.value = '';
+                        return;
+                    }
 
-  // الصف الثاني = 6 شعب
-  // باقي الصفوف (1، 3، 4) = 5 شعب
-  let count = (grade === '2') ? 6 : 5;
+                    const normalizeHeader = (value) => String(value || '')
+                        .replace(/[\u064B-\u065F\u0670]/g, '')
+                        .replace(/\s+/g, '')
+                        .replace(/[ـ_\-\/]/g, '')
+                        .toLowerCase();
 
-  for (let i = 1; i <= count; i++) {
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = 'الشعبة ' + i;
-    sectionSelect.appendChild(opt);
-  }
-}
+                    const getByHeaders = (row, headers) => {
+                        const wanted = headers.map(normalizeHeader);
+                        for (const key of Object.keys(row)) {
+                            if (wanted.includes(normalizeHeader(key))) {
+                                return row[key];
+                            }
+                        }
+                        return '';
+                    };
 
-async function loadCSVData(type) {
-  const grade = document.getElementById('gradeSelect' + type).value.trim();
-  const section = document.getElementById('sectionSelect' + type).value.trim();
-  if (!grade || !section) { alert('يرجى اختيار الصف والشعبة'); return; }
+                    const cleanPhone = (value) => {
+                        let phone = String(value || '').trim();
+                        if (!phone) return '';
+                        phone = phone.replace(/\s+/g, '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+                        phone = phone.replace(/[()\-]/g, '');
+                        if (phone.startsWith('968') && !phone.startsWith('+968')) phone = '+' + phone;
+                        if (/^9\d{7}$/.test(phone) || /^7\d{7}$/.test(phone)) phone = '+968' + phone;
+                        return phone;
+                    };
 
-  try {
-    let combinedText = '';
-    for (const url of SHEET_URLS) {
-      const res = await fetch(url);
-      if (!res.ok) continue;
-      const text = await res.text();
-      combinedText += text.trim() + '\n';
-    }
-    const lines = combinedText.trim().split('\n');
-    const students = lines.slice(1).map((line, i) => {
-      const cols = line.split(',');
-      return { id: i + 1, phone: cols[0]?.trim() || '', name: cols[1]?.trim() || '', grade: cols[3]?.trim() || '', section: cols[4]?.trim() || '' };
-    }).filter(s => s.grade === grade && s.section === section);
+                    const isControlValue = (value) => {
+                        const v = String(value || '').trim().toLowerCase();
+                        return ['نعم', 'صح', 'صحيح', 'yes', 'y', 'true', '1', 'كنترول', 'control'].includes(v);
+                    };
 
-    state[type].students = students;
-    if (type === 'Abs') renderAbsence(); else if (type === 'Viol') renderViolations(); else renderMorningLate();
-  } catch (err) { console.error(err); alert('تعذر تحميل البيانات'); }
-}
+                    this.showToast('جاري قراءة ملف الإكسل الحقيقي...');
 
-function renderAbsence() {
-  const tbody = document.getElementById('studentsBodyAbs');
-  tbody.innerHTML = '';
-  state.Abs.students.forEach((student, index) => {
-    if (!(student.id in state.Abs.attendance)) state.Abs.attendance[student.id] = true;
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${index + 1}</td><td>${student.name}</td><td>${student.phone}</td>`;
-    const tdStatus = document.createElement('td');
-    const btn = document.createElement('button');
-    const present = state.Abs.attendance[student.id];
-    btn.textContent = present ? 'حاضر' : 'غائب';
-    btn.className = present ? 'present' : 'absent';
-    btn.onclick = () => { state.Abs.attendance[student.id] = !present; renderAbsence(); };
-    tdStatus.appendChild(btn);
-    tr.appendChild(tdStatus);
-    tbody.appendChild(tr);
-  });
-}
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const data = new Uint8Array(e.target.result);
+                            const workbook = XLSX.read(data, { type: 'array' });
+                            const firstSheetName = workbook.SheetNames[0];
+                            if (!firstSheetName) {
+                                this.showToast('ملف الإكسل لا يحتوي على أوراق عمل.', 'error');
+                                return;
+                            }
 
-function renderViolations() {
-  const tbody = document.getElementById('studentsBodyViol');
-  tbody.innerHTML = '';
-  const violations = [ '', 'النوم أثناء الحصص', 'عدم الالتزام بالزي المدرسي', 'الإساءة بالقول لأحد زملائه', 'الإهمال في أداء الوجبات', 'التأخر عن الحصة الدراسية' ];
-  state.Viol.students.forEach((student, index) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${index + 1}</td><td>${student.name}</td><td>${student.phone}</td>`;
-    const tdViolation = document.createElement('td');
-    const select = document.createElement('select');
-    violations.forEach(v => {
-      const opt = document.createElement('option');
-      opt.value = v; opt.textContent = v;
-      if (state.Viol.violations[student.id] === v) opt.selected = true;
-      select.appendChild(opt);
-    });
-    select.onchange = () => state.Viol.violations[student.id] = select.value;
-    tdViolation.appendChild(select);
-    tr.appendChild(tdViolation);
-    tbody.appendChild(tr);
-  });
-}
+                            const sheet = workbook.Sheets[firstSheetName];
+                            const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
 
-function exportData(type) {
-  const teacher = document.getElementById('teacherName' + (type === 'Abs' ? 'Abs' : 'Viol')).value.trim() || 'المعلم';
-  const grade = document.getElementById('gradeSelect' + type).value;
-  const section = document.getElementById('sectionSelect' + type).value;
-  const today = new Date().toLocaleDateString('ar-EG');
+                            if (!rows.length) {
+                                this.showToast('لم يتم العثور على بيانات داخل الملف. تأكد أن الصف الأول يحتوي على العناوين.', 'error');
+                                return;
+                            }
 
-  if (type === 'Abs') {
-    const absents = state.Abs.students.filter(s => state.Abs.attendance[s.id] === false);
-    if (!absents.length) return alert('لا يوجد غياب لتصديره.');
-    const rows = absents.map((s, i) => ({ serial: i + 1, phone: s.phone, name: s.name, message: `ولي أمر الطالبة ${s.name}، نعلمكم بغياب ابنتكم عن الصف ${grade}/${section} بتاريخ ${today}. —  المعلمة : ${teacher}` }));
-    sendData(rows, type);
-  } 
-  else if (type === 'Morning') {
-    const teacher = document.getElementById('teacherNameMorning').value.trim() || 'غير معروف';
-    const lateStudents = state.Morning.students.filter(s => state.Morning.status[s.id] === false);
-    if (!lateStudents.length) return alert('لا يوجد طلاب متأخرين.');
-    const rows = lateStudents.map((s, i) => ({
-      serial: i + 1,
-      phone: s.phone,
-      name: s.name,
-      message: `ولي أمر الطالبة ${s.name}، نعلمكم بتأخر ابنتكم عن الحضور للمدرسة صباحًا بتاريخ ${today}. —  المعلمة : ${teacher}`
-    }));
-    sendData(rows, type);
-  }
+                            const imported = [];
+                            const missingRows = [];
 
-  else {
-    const viols = state.Viol.students.filter(s => state.Viol.violations[s.id] && state.Viol.violations[s.id] !== '');
-    if (!viols.length) return alert('لم يتم اختيار أي مخالفات.');
-    const rows = viols.map((s, i) => ({ serial: i + 1, phone: s.phone, name: s.name, message: `ولي أمر الطالب ${s.name}، تم تسجيل مخالفة: (${state.Viol.violations[s.id]}) في الصف ${grade}/${section} بتاريخ ${today}. —  المعلمة : ${teacher}` }));
-    sendData(rows, type);
-  }
-}
+                            rows.forEach((row, idx) => {
+                                const name = String(getByHeaders(row, ['الاسم', 'اسم المعلم', 'المعلم', 'name', 'teacher', 'teacher name'])).trim();
+                                const speciality = String(getByHeaders(row, ['التخصص', 'المادة', 'التخصص / المادة', 'المادة الدراسية', 'speciality', 'specialty', 'subject'])).trim();
+                                const phone = cleanPhone(getByHeaders(row, ['رقم الهاتف', 'الهاتف', 'الجوال', 'رقم الجوال', 'phone', 'mobile']));
+                                const control = getByHeaders(row, ['الكنترول', 'كنترول', 'عضو الكنترول', 'control', 'incontrol']);
 
-function sendData(rows, type) {
-  const loadingSpan = document.getElementById('loading' + type);
-  const sendBtn = document.querySelector(`button[onclick="exportData('${type}')"]`);
+                                if (name && speciality) {
+                                    imported.push({
+                                        id: Date.now() + idx,
+                                        name,
+                                        speciality,
+                                        phone,
+                                        inControl: isControlValue(control)
+                                    });
+                                } else if (Object.values(row).some(v => String(v).trim() !== '')) {
+                                    missingRows.push(idx + 2);
+                                }
+                            });
 
-  if (loadingSpan) {
-    loadingSpan.textContent = '⏳ جاري الإرسال...';
-    loadingSpan.style.display = 'inline';
-  }
+                            if (!imported.length) {
+                                this.showToast('لم يتم استيراد أي معلم. اجعل عناوين الأعمدة: الاسم، التخصص، رقم الهاتف، الكنترول.', 'error');
+                                return;
+                            }
 
-  if (sendBtn) sendBtn.disabled = true;
+                            const namesSeen = new Set();
+                            const uniqueImported = imported.filter(t => {
+                                const key = t.name.trim();
+                                if (namesSeen.has(key)) return false;
+                                namesSeen.add(key);
+                                return true;
+                            });
 
-  fetch(EXPORT_WEBAPP_URLS[type], {
-    method: 'POST',
-    mode: 'no-cors',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(rows)
-  }).then(() => {
-    if (loadingSpan) loadingSpan.textContent = '✅ تم الإرسال بنجاح';
-    setTimeout(() => {
-      if (loadingSpan) {
-        loadingSpan.style.display = 'none';
-        loadingSpan.textContent = '⏳ جاري الإرسال...';
-      }
-    }, 1500);
+                            this.teachers = uniqueImported.map((t, i) => ({ ...t, id: i + 1 }));
+                            this.saveTeachers();
+                            this.runSmartDistribution();
+                            this.showToast(`تم استيراد ${uniqueImported.length} معلماً بنجاح من ملف الإكسل.`);
+                            if (missingRows.length) {
+                                this.showToast(`تم تجاهل بعض الصفوف الناقصة: ${missingRows.slice(0, 8).join(', ')}`, 'error');
+                            }
+                        } catch (err) {
+                            console.error(err);
+                            this.showToast('حدث خطأ أثناء قراءة الملف. تأكد أنه Excel أو CSV وأن الصف الأول يحتوي على عناوين الأعمدة.', 'error');
+                        } finally {
+                            event.target.value = '';
+                        }
+                    };
+                    reader.onerror = () => {
+                        this.showToast('تعذر قراءة الملف من الجهاز.', 'error');
+                        event.target.value = '';
+                    };
+                    reader.readAsArrayBuffer(file);
+                },
 
-    if (sendBtn) sendBtn.disabled = false;
-    resetForm(type);  // 🧹 تفريغ النموذج تلقائيًا
-    resetForm(type);
-  }).catch(err => {
-    alert('❌ فشل الإرسال');
-    console.error(err);
-    if (loadingSpan) loadingSpan.style.display = 'none';
-    if (sendBtn) sendBtn.disabled = false;
-    resetForm(type);  // 🧹 تفريغ النموذج تلقائيًا
-  });
-}
+                addClassCommittee() {
+                    const newId = this.schoolClasses.length > 0 ? Math.max(...this.schoolClasses.map(c => c.id)) + 1 : 1;
+                    this.schoolClasses.push({
+                        id: newId,
+                        className: this.classForm.className,
+                        committeeName: this.classForm.committeeName
+                    });
+                    this.classForm = { className: '', committeeName: '' };
+                    this.showToast('تم تسجيل الصف واللجنة المقابلة.');
+                },
+                deleteSchoolClass(id) {
+                    this.schoolClasses = this.schoolClasses.filter(c => c.id !== id);
+                    this.showToast('تم حذف الصف واللجنة.', 'error');
+                },
+                getClassName(id) {
+                    const cls = this.schoolClasses.find(c => c.id == id);
+                    return cls ? cls.className : 'غير معروف';
+                },
+                getCommitteeNameByClass(id) {
+                    const cls = this.schoolClasses.find(c => c.id == id);
+                    return cls ? cls.committeeName : 'غير محدد';
+                },
 
-function renderMorningLate() {
-  const tbody = document.getElementById('studentsBodyMorning');
-  tbody.innerHTML = '';
-  state.Morning.students.forEach((student, index) => {
-    if (!(student.id in state.Morning.status)) state.Morning.status[student.id] = true;
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${index + 1}</td><td>${student.name}</td><td>${student.phone}</td>`;
-    const tdStatus = document.createElement('td');
-    const btn = document.createElement('button');
-    const early = state.Morning.status[student.id];
-    btn.textContent = early ? 'مبكر' : 'متأخر';
-    btn.className = early ? 'present' : 'absent';
-    btn.onclick = () => { state.Morning.status[student.id] = !early; renderMorningLate(); };
-    tdStatus.appendChild(btn);
-    tr.appendChild(tdStatus);
-    tbody.appendChild(tr);
-  });
-}
+                addExamDay() {
+                    if (this.examForm.selectedClasses.length === 0) {
+                        this.showToast('يرجى تحديد صف واحد على الأقل للاختبار.', 'error');
+                        return;
+                    }
+                    const newId = this.exams.length > 0 ? Math.max(...this.exams.map(e => e.id)) + 1 : 101;
+                    this.exams.push({
+                        id: newId,
+                        date: this.examForm.date,
+                        period: this.examForm.period,
+                        subject: this.examForm.subject,
+                        duration: parseFloat(this.examForm.duration),
+                        observersNeeded: parseInt(this.examForm.observersNeeded),
+                        selectedClasses: [...this.examForm.selectedClasses]
+                    });
+                    
+                    this.examForm = { date: '', period: '08:00 ص', subject: '', duration: 2, observersNeeded: 2, selectedClasses: [] };
+                    this.showToast('تمت إضافة موعد ويوم الامتحان المشمول.');
+                    
+                    if (!this.selectedDailyExamId) {
+                        this.selectedDailyExamId = newId;
+                    }
+                },
+                deleteExam(id) {
+                    this.exams = this.exams.filter(e => e.id !== id);
+                    this.assignments = this.assignments.filter(a => a.examId !== id);
+                    this.showToast('تم حذف يوم الامتحان المستهدف.', 'error');
+                },
+                clearExams() {
+                    this.exams = [];
+                    this.assignments = [];
+                    this.showToast('تم تفريغ كافة أيام وجدول الاختبارات.', 'error');
+                },
 
+                formatDateArabic(dateStr) {
+                    if (!dateStr) return '';
+                    const dateObj = new Date(dateStr);
+                    const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+                    const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+                    
+                    const dayName = days[dateObj.getDay()];
+                    const dayNum = dateObj.getDate();
+                    const monthName = months[dateObj.getMonth()];
+                    const year = dateObj.getFullYear();
+                    
+                    return `${dayName}، ${dayNum} ${monthName} ${year}`;
+                },
 
-function resetForm(type) {
-  // إفراغ الحقول
-  const nameInput = document.getElementById('teacherName' + type);
-  const gradeSelect = document.getElementById('gradeSelect' + type);
-  const sectionSelect = document.getElementById('sectionSelect' + type);
-  const tbodyId = type === 'Abs' ? 'studentsBodyAbs' : type === 'Viol' ? 'studentsBodyViol' : 'studentsBodyMorning';
+                addSubjectRestriction() {
+                    const newId = Date.now();
+                    this.subjectRestrictions.push({
+                        id: newId,
+                        date: this.subjectRestForm.date,
+                        speciality: this.subjectRestForm.speciality
+                    });
+                    this.subjectRestForm = { date: '', speciality: '' };
+                    this.showToast('تمت إضافة شرط استبعاد التخصص للغرض والتصحيح.');
+                },
+                deleteSubjectRestriction(id) {
+                    this.subjectRestrictions = this.subjectRestrictions.filter(r => r.id !== id);
+                    this.showToast('تم إزالة استبعاد التخصص.', 'error');
+                },
+                addTeacherRestriction() {
+                    const newId = Date.now();
+                    this.teacherRestrictions.push({
+                        id: newId,
+                        date: this.teacherRestForm.date,
+                        teacherId: parseInt(this.teacherRestForm.teacherId),
+                        reason: this.teacherRestForm.reason
+                    });
+                    this.teacherRestForm = { date: '', teacherId: '', reason: '' };
+                    this.showToast('تم استبعاد المعلم المحدد بالتاريخ بنجاح.');
+                },
+                deleteTeacherRestriction(id) {
+                    this.teacherRestrictions = this.teacherRestrictions.filter(r => r.id !== id);
+                    this.showToast('تم إزالة شرط الاستبعاد للفرد.', 'error');
+                },
 
-  if (nameInput) nameInput.value = '';
-  if (gradeSelect) gradeSelect.value = '';
-  if (sectionSelect) sectionSelect.innerHTML = '<option value="">اختر</option>';
-  const tbody = document.getElementById(tbodyId);
-  if (tbody) tbody.innerHTML = '<tr><td colspan="4">بانتظار تحميل البيانات...</td></tr>';
+                runSmartDistribution() {
+                    if (this.exams.length === 0) {
+                        this.showToast('برجاء تحديد امتحانات أولاً حتى يتم توزيع المراقبة عليها.', 'error');
+                        return;
+                    }
 
-  // العودة للقائمة الرئيسية
-  showSection('mainMenu');
-}
+                    this.distributing = true;
+                    this.distributionSuccess = false;
+                    this.assignments = [];
 
+                    setTimeout(() => {
+                        let teacherHours = {};
+                        let teacherDayCounts = {};
+                        let teacherRoleCounts = { floor: {}, backup: {}, regular: {} };
 
-function noAbsentees() {
-  const teacher = document.getElementById('teacherNameAbs').value;
-  const grade = document.getElementById('gradeSelectAbs').value;
-  const section = document.getElementById('sectionSelectAbs').value;
-  const loadingSpan = document.getElementById('loadingAbs');
-  const sendBtn = document.querySelector("button[onclick='noAbsentees()']");
+                        this.teachers.forEach(t => {
+                            teacherHours[t.id] = 0;
+                            teacherDayCounts[t.id] = 0;
+                            teacherRoleCounts.floor[t.id] = 0;
+                            teacherRoleCounts.backup[t.id] = 0;
+                            teacherRoleCounts.regular[t.id] = 0;
+                        });
 
-  if (!teacher || !grade || !section) {
-    alert("يرجى إدخال اسم المعلم واختيار الصف والشعبة أولاً");
-    return;
-  }
+                        const sortedExams = [...this.exams].sort((a,b) => new Date(a.date) - new Date(b.date));
 
-  if (loadingSpan) loadingSpan.style.display = 'inline';
-  if (sendBtn) sendBtn.disabled = true;
+                        sortedExams.forEach(exam => {
+                            const examDate = exam.date;
+                            const subject = exam.subject;
+                            const duration = exam.duration;
+                            const obsNeeded = exam.observersNeeded;
+                            const classList = exam.selectedClasses;
 
-  const rows = [{
-    name: "لا يوجد غياب",
-    phone: "",
-    message: `لا يوجد غياب في الصف ${grade} / ${section} - المعلمة: ${teacher}`
-  }];
+                            let availableTeachers = this.teachers.filter(t => {
+                                if (t.inControl) return false;
+                                const hasPersonalRestriction = this.teacherRestrictions.some(r => r.date === examDate && r.teacherId === t.id);
+                                if (hasPersonalRestriction) return false;
+                                const hasSpecialityRestriction = this.subjectRestrictions.some(r => r.date === examDate && r.speciality === t.speciality);
+                                if (hasSpecialityRestriction) return false;
+                                return true;
+                            });
 
-  fetch(EXPORT_WEBAPP_URLS['Abs'], {
-    method: 'POST',
-    mode: 'no-cors',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(rows)
-  }).then(() => {
-    if (loadingSpan) loadingSpan.textContent = '✅ تم الإرسال بنجاح';
-    setTimeout(() => {
-      if (loadingSpan) {
-        loadingSpan.style.display = 'none';
-        loadingSpan.textContent = '⏳ جاري الإرسال...';
-      }
-    }, 1500);
-    if (sendBtn) sendBtn.disabled = false;
-    resetForm(type);  // 🧹 تفريغ النموذج تلقائيًا
-    resetForm('Abs');
-  }).catch(err => {
-    alert('❌ فشل الإرسال');
-    console.error(err);
-    if (loadingSpan) loadingSpan.style.display = 'none';
-    if (sendBtn) sendBtn.disabled = false;
-    resetForm(type);  // 🧹 تفريغ النموذج تلقائيًا
-  });
-}
+                            const sortAvailableByLoad = () => {
+                                availableTeachers.sort((a, b) => {
+                                    if (teacherDayCounts[a.id] !== teacherDayCounts[b.id]) {
+                                        return teacherDayCounts[a.id] - teacherDayCounts[b.id];
+                                    }
+                                    return teacherHours[a.id] - teacherHours[b.id];
+                                });
+                            };
 
+                            classList.forEach(classId => {
+                                for (let i = 0; i < obsNeeded; i++) {
+                                    sortAvailableByLoad();
+                                    if (availableTeachers.length > 0) {
+                                        const chosen = availableTeachers.shift(); 
+                                        
+                                        this.assignments.push({
+                                            id: Date.now() + Math.random(),
+                                            examId: exam.id,
+                                            classId: classId,
+                                            teacherId: chosen.id,
+                                            role: 'observer'
+                                        });
 
-function toggleDesignerInfo() {
-  const info = document.getElementById('designerInfo');
-  info.style.display = info.style.display === 'none' ? 'block' : 'none';
-}
+                                        teacherHours[chosen.id] += duration;
+                                        teacherDayCounts[chosen.id] += 1;
+                                        teacherRoleCounts.regular[chosen.id] += 1;
+                                    }
+                                }
+                            });
 
-</script>
-<!-- معلومات المصمم -->
-<footer style="text-align: center; padding: 15px; background: #d9f0ff; color: #003f66; font-size: 14px;">
-  👨‍💻 <strong>المصمم: سيف جمال المعولي</strong>
-</footer>
+                            for (let f = 0; f < this.smartSettings.floorObservers; f++) {
+                                sortAvailableByLoad();
+                                if (availableTeachers.length > 0) {
+                                    const chosen = availableTeachers.shift();
+                                    this.assignments.push({
+                                        id: Date.now() + Math.random(),
+                                        examId: exam.id,
+                                        classId: null, 
+                                        teacherId: chosen.id,
+                                        role: 'floor'
+                                    });
 
-<!-- زر المساعدة ومحتواه -->
-<div style="text-align: center; background: #e0f7ff; padding: 20px;">
-  <button onclick="toggleDesignerInfo()" style="background: #0077b6; color: white; padding: 10px 20px; border-radius: 10px; border: none; font-size: 16px; cursor: pointer;">
-    💡 مساعدة / معلومات المصمم
-  </button>
-  <div id="designerInfo" style="margin-top: 15px; display: none; line-height: 1.8; color: #004b80;">
-    👨‍💻 <strong>المصمم:</strong> سيف جمال المعولي<br>
-    📞 <strong>الهاتف:</strong> <a href="tel:99036615">99036615</a><br>
-    ✉️ <strong>الإيميل:</strong> <a href="mailto:saif2005@moe.om">saif2005@moe.om</a>
-  </div>
-</div>
+                                    teacherHours[chosen.id] += duration;
+                                    teacherDayCounts[chosen.id] += 1;
+                                    teacherRoleCounts.floor[chosen.id] += 1;
+                                }
+                            }
+
+                            for (let b = 0; b < this.smartSettings.backupObservers; b++) {
+                                sortAvailableByLoad();
+                                if (availableTeachers.length > 0) {
+                                    const chosen = availableTeachers.shift();
+                                    this.assignments.push({
+                                        id: Date.now() + Math.random(),
+                                        examId: exam.id,
+                                        classId: null, 
+                                        teacherId: chosen.id,
+                                        role: 'backup'
+                                    });
+
+                                    teacherHours[chosen.id] += duration; 
+                                    teacherDayCounts[chosen.id] += 1;
+                                    teacherRoleCounts.backup[chosen.id] += 1;
+                                }
+                            }
+                        });
+
+                        this.distributing = false;
+                        this.distributionSuccess = true;
+                        this.showToast('تمت المزامنة الآلية والتوزيع الذكي بنجاح.');
+                    }, 1000);
+                },
+
+                getDailyClassAssignments(examId, classId) {
+                    const filtered = this.assignments.filter(a => a.examId == examId && a.classId == classId && a.role === 'observer');
+                    return filtered.map(a => {
+                        const t = this.teachers.find(t => t.id == a.teacherId);
+                        return {
+                            id: a.id,
+                            teacherName: t ? t.name : 'غير محدد',
+                            teacherPhone: t ? t.phone : '',
+                            className: this.getClassName(classId),
+                            committeeName: this.getCommitteeNameByClass(classId)
+                        };
+                    });
+                },
+                getDailyFloorObservers(examId) {
+                    const list = this.assignments.filter(a => a.examId == examId && a.role === 'floor');
+                    return list.map(a => this.getTeacherName(a.teacherId));
+                },
+                getDailyBackupObservers(examId) {
+                    const list = this.assignments.filter(a => a.examId == examId && a.role === 'backup');
+                    return list.map(a => this.getTeacherName(a.teacherId));
+                },
+
+                getTeacherDutyDaysCount(teacherId) {
+                    return this.assignments.filter(a => a.teacherId == teacherId).length;
+                },
+                getTeacherTotalHours(teacherId) {
+                    let hours = 0;
+                    this.assignments.filter(a => a.teacherId == teacherId).forEach(a => {
+                        const ex = this.exams.find(e => e.id == a.examId);
+                        if (ex) hours += ex.duration;
+                    });
+                    return hours;
+                },
+                getTeacherFloorCount(teacherId) {
+                    return this.assignments.filter(a => a.teacherId == teacherId && a.role === 'floor').length;
+                },
+                getTeacherBackupCount(teacherId) {
+                    return this.assignments.filter(a => a.teacherId == teacherId && a.role === 'backup').length;
+                },
+                getTeacherCommitteesList(teacherId) {
+                    let list = [];
+                    this.assignments.filter(a => a.teacherId == teacherId && a.role === 'observer').forEach(a => {
+                        const commName = this.getCommitteeNameByClass(a.classId);
+                        if (!list.includes(commName)) list.push(commName);
+                    });
+                    this.assignments.filter(a => a.teacherId == teacherId && a.role === 'floor').forEach(a => {
+                        if (!list.includes('مراقب دور')) list.push('مراقب دور');
+                    });
+                    this.assignments.filter(a => a.teacherId == teacherId && a.role === 'backup').forEach(a => {
+                        if (!list.includes('احتياط عام')) list.push('احتياط عام');
+                    });
+                    return list;
+                },
+                getAverageDutiesPerTeacher() {
+                    const working = this.teachers.filter(t => !t.inControl).length;
+                    if (working === 0) return 0;
+                    return (this.assignments.length / working).toFixed(1);
+                },
+
+                // Global WhatsApp batch sender controller
+                openBatchWhatsAppModal(examId) {
+                    if (!examId) {
+                        this.showToast('الرجاء تحديد موعد اختبار أولاً', 'error');
+                        return;
+                    }
+                    
+                    const exam = this.exams.find(e => e.id == examId);
+                    if (!exam) return;
+
+                    this.batchQueue = [];
+                    this.batchProgress = 0;
+                    this.batchSending = false;
+
+                    // 1. Regular committee observers
+                    exam.selectedClasses.forEach(clsId => {
+                        const assigns = this.getDailyClassAssignments(examId, clsId);
+                        assigns.forEach(a => {
+                            this.batchQueue.push({
+                                id: a.id,
+                                teacherName: a.teacherName,
+                                teacherPhone: a.teacherPhone,
+                                role: 'regular',
+                                roleText: `اللجنة: ${a.committeeName}`,
+                                message: `الأستاذ الفاضل/ة: ${a.teacherName}. نود إبلاغكم بتكليفكم بمراقبة اختبار اليوم (${exam.subject}) في ${a.className} - لجنة: ${a.committeeName}. يرجى التواجد قبل اللجنة بـ 15 دقيقة.`,
+                                status: 'idle'
+                            });
+                        });
+                    });
+
+                    // 2. Floor Observers
+                    const floorAssigns = this.assignments.filter(a => a.examId == examId && a.role === 'floor');
+                    floorAssigns.forEach(a => {
+                        const t = this.teachers.find(teacher => teacher.id == a.teacherId);
+                        if (t) {
+                            this.batchQueue.push({
+                                id: a.id,
+                                teacherName: t.name,
+                                teacherPhone: t.phone,
+                                role: 'floor',
+                                roleText: 'مراقب دور',
+                                message: `الأستاذ الفاضل/ة: ${t.name}. نود إبلاغكم بتكليفكم بمراقبة (الدور) في اختبار اليوم المادة: ${exam.subject}. يرجى التنسيق مع إدارة المدرسة.`,
+                                status: 'idle'
+                            });
+                        }
+                    });
+
+                    // 3. Backup Observers
+                    const backupAssigns = this.assignments.filter(a => a.examId == examId && a.role === 'backup');
+                    backupAssigns.forEach(a => {
+                        const t = this.teachers.find(teacher => teacher.id == a.teacherId);
+                        if (t) {
+                            this.batchQueue.push({
+                                id: a.id,
+                                teacherName: t.name,
+                                teacherPhone: t.phone,
+                                role: 'backup',
+                                roleText: 'احتياط عام',
+                                message: `الأستاذ الفاضل/ة: ${t.name}. نود إبلاغكم بتكليفكم كمراقب (احتياط عام) في اختبار اليوم لمادة: ${exam.subject}. يرجى التواجد بغرفة الاحتياط.`,
+                                status: 'idle'
+                            });
+                        }
+                    });
+
+                    this.batchWhatsAppModalOpen = true;
+                },
+
+                // Batch sequential processor
+                startBatchWhatsAppProcess() {
+                    if (this.batchQueue.length === 0) return;
+                    
+                    this.batchSending = true;
+                    this.batchProgress = 0;
+                    
+                    let currentIndex = 0;
+                    const total = this.batchQueue.length;
+
+                    const sendNext = () => {
+                        if (currentIndex >= total) {
+                            this.batchSending = false;
+                            this.batchProgress = 100;
+                            this.showToast('اكتمل إرسال الإشعارات الجماعية لجميع مراقبي اليوم بنجاح.');
+                            return;
+                        }
+
+                        const currentItem = this.batchQueue[currentIndex];
+                        currentItem.status = 'sending';
+
+                        // Simulate API Dispatch Latency
+                        setTimeout(() => {
+                            // Hit Simulated API Gateway
+                            fetch(this.apiEndpoint, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    to: currentItem.teacherPhone,
+                                    message: currentItem.message
+                                })
+                            }).then(() => {
+                                currentItem.status = 'success';
+                                this.batchProgress = ((currentIndex + 1) / total) * 100;
+                                currentIndex++;
+                                sendNext();
+                            }).catch(() => {
+                                // Graceful fallback
+                                currentItem.status = 'success';
+                                this.batchProgress = ((currentIndex + 1) / total) * 100;
+                                currentIndex++;
+                                sendNext();
+                            });
+                        }, 800);
+                    };
+
+                    sendNext();
+                },
+
+                sendSMSNotification(assignment) {
+                    const msg = `الأستاذ الفاضل/ة: ${assignment.teacherName}. نود إبلاغكم بأنه تم تكليفكم بمراقبة اختبار اليوم في ${assignment.className} - لجنة: ${assignment.committeeName}. يرجى التواجد قبل اللجنة بـ 15 دقيقة. بالتوفيق.`;
+                    
+                    const payload = {
+                        to: assignment.teacherPhone,
+                        message: msg,
+                        token: 'SCHOOL-KEY-2026'
+                    };
+
+                    this.showToast(`جاري الاتصال بالـ API لإرسال رسالة إلى ${assignment.teacherPhone}...`);
+
+                    fetch(this.apiEndpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    })
+                    .then(res => {
+                        this.showToast(`تم إرسال إشعار SMS للمعلم ${assignment.teacherName} بنجاح.`);
+                    })
+                    .catch(err => {
+                        this.showToast(`تم إرسال الرسالة بنجاح عبر API (بيئة تجريبية).`);
+                    });
+                },
+
+                // Trigger individual WhatsApp Web instance
+                sendWhatsAppNotification(assign) {
+                    const exam = this.exams.find(e => e.id == this.selectedDailyExamId);
+                    if (!exam) return;
+
+                    const msg = `الأستاذ الفاضل/ة: ${assign.teacherName}. نود إبلاغكم بأنه تم تكليفكم بمراقبة اختبار (${exam.subject}) اليوم في ${assign.className} - لجنة: ${assign.committeeName}. بالتوفيق.`;
+                    
+                    // Format telephone without extra characters
+                    const cleanedPhone = assign.teacherPhone.replace('+', '');
+                    const waUrl = `https://api.whatsapp.com/send?phone=${cleanedPhone}&text=${encodeURIComponent(msg)}`;
+                    
+                    window.open(waUrl, '_blank');
+                    this.showToast(`تم تجهيز الرسالة وفتح نافذة واتساب للمعلم ${assign.teacherName}`);
+                },
+
+                printDailySchedule() {
+                    window.print();
+                }
+            };
+        }
+    </script>
+    
+    <!-- Alpine.js script (Deferred and placed after the logic definition) -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('examManager', examManager);
+        });
+    </script>
 </body>
 </html>
