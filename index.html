@@ -939,7 +939,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <template x-for="t in teachers.filter(t => !t.inControl)" :key="t.id">
+                            <template x-for="t in getTeachersSortedByDuties()" :key="t.id">
                                 <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50">
                                     <td class="px-4 py-3">
                                         <div class="font-bold text-slate-900 dark:text-white" x-text="t.name"></div>
@@ -1823,12 +1823,19 @@
 
                         const sortedExams = [...this.exams].sort((a,b) => new Date(a.date) - new Date(b.date));
 
+                        // حد عادل تقريبي: لا نرفع معلمًا فوق الحد إلا إذا لم يبقَ غيره بسبب التعطيل أو قلة العدد.
+                        const workingTeachersCount = this.teachers.filter(t => !t.inControl).length || 1;
+                        const totalRequiredDuties = sortedExams.reduce((sum, exam) => {
+                            const committeesCount = Array.isArray(exam.selectedClasses) ? exam.selectedClasses.length : 0;
+                            return sum + (committeesCount * parseInt(exam.observersNeeded || 0)) + parseInt(this.smartSettings.floorObservers || 0) + parseInt(this.smartSettings.backupObservers || 0);
+                        }, 0);
+                        const fairMaxDuties = Math.ceil(totalRequiredDuties / workingTeachersCount);
+
                         sortedExams.forEach(exam => {
                             const examDate = exam.date;
-                            const subject = exam.subject;
-                            const duration = exam.duration;
-                            const obsNeeded = exam.observersNeeded;
-                            const classList = exam.selectedClasses;
+                            const duration = parseFloat(exam.duration || 0);
+                            const obsNeeded = parseInt(exam.observersNeeded || 0);
+                            const classList = Array.isArray(exam.selectedClasses) ? exam.selectedClasses : [];
 
                             let availableTeachers = this.teachers.filter(t => {
                                 if (t.inControl) return false;
@@ -1839,76 +1846,64 @@
                                 return true;
                             });
 
-                            const sortAvailableByLoad = () => {
-                                availableTeachers.sort((a, b) => {
-                                    if (teacherDayCounts[a.id] !== teacherDayCounts[b.id]) {
-                                        return teacherDayCounts[a.id] - teacherDayCounts[b.id];
-                                    }
-                                    return teacherHours[a.id] - teacherHours[b.id];
+                            const chooseMostFairTeacher = (roleKey = 'regular') => {
+                                if (availableTeachers.length === 0) return null;
+
+                                // أولًا نحاول اختيار من هم تحت الحد العادل؛ هذا يمنع الفارق الكبير مثل 6 مقابل 3 قدر الإمكان.
+                                let pool = availableTeachers.filter(t => teacherDayCounts[t.id] < fairMaxDuties);
+                                if (pool.length === 0) pool = [...availableTeachers];
+
+                                pool.sort((a, b) => {
+                                    const dutyDiff = teacherDayCounts[a.id] - teacherDayCounts[b.id];
+                                    if (dutyDiff !== 0) return dutyDiff;
+
+                                    const hourDiff = teacherHours[a.id] - teacherHours[b.id];
+                                    if (hourDiff !== 0) return hourDiff;
+
+                                    const roleDiff = (teacherRoleCounts[roleKey]?.[a.id] || 0) - (teacherRoleCounts[roleKey]?.[b.id] || 0);
+                                    if (roleDiff !== 0) return roleDiff;
+
+                                    return a.name.localeCompare(b.name, 'ar');
                                 });
+
+                                const chosen = pool[0];
+                                availableTeachers = availableTeachers.filter(t => t.id !== chosen.id);
+                                return chosen;
+                            };
+
+                            const assignTeacher = (chosen, classId, role, roleKey) => {
+                                if (!chosen) return;
+                                this.assignments.push({
+                                    id: Date.now() + Math.random(),
+                                    examId: exam.id,
+                                    classId: classId,
+                                    teacherId: chosen.id,
+                                    role: role
+                                });
+
+                                teacherHours[chosen.id] += duration;
+                                teacherDayCounts[chosen.id] += 1;
+                                teacherRoleCounts[roleKey][chosen.id] += 1;
                             };
 
                             classList.forEach(classId => {
                                 for (let i = 0; i < obsNeeded; i++) {
-                                    sortAvailableByLoad();
-                                    if (availableTeachers.length > 0) {
-                                        const chosen = availableTeachers.shift(); 
-                                        
-                                        this.assignments.push({
-                                            id: Date.now() + Math.random(),
-                                            examId: exam.id,
-                                            classId: classId,
-                                            teacherId: chosen.id,
-                                            role: 'observer'
-                                        });
-
-                                        teacherHours[chosen.id] += duration;
-                                        teacherDayCounts[chosen.id] += 1;
-                                        teacherRoleCounts.regular[chosen.id] += 1;
-                                    }
+                                    assignTeacher(chooseMostFairTeacher('regular'), classId, 'observer', 'regular');
                                 }
                             });
 
-                            for (let f = 0; f < this.smartSettings.floorObservers; f++) {
-                                sortAvailableByLoad();
-                                if (availableTeachers.length > 0) {
-                                    const chosen = availableTeachers.shift();
-                                    this.assignments.push({
-                                        id: Date.now() + Math.random(),
-                                        examId: exam.id,
-                                        classId: null, 
-                                        teacherId: chosen.id,
-                                        role: 'floor'
-                                    });
-
-                                    teacherHours[chosen.id] += duration;
-                                    teacherDayCounts[chosen.id] += 1;
-                                    teacherRoleCounts.floor[chosen.id] += 1;
-                                }
+                            for (let f = 0; f < parseInt(this.smartSettings.floorObservers || 0); f++) {
+                                assignTeacher(chooseMostFairTeacher('floor'), null, 'floor', 'floor');
                             }
 
-                            for (let b = 0; b < this.smartSettings.backupObservers; b++) {
-                                sortAvailableByLoad();
-                                if (availableTeachers.length > 0) {
-                                    const chosen = availableTeachers.shift();
-                                    this.assignments.push({
-                                        id: Date.now() + Math.random(),
-                                        examId: exam.id,
-                                        classId: null, 
-                                        teacherId: chosen.id,
-                                        role: 'backup'
-                                    });
-
-                                    teacherHours[chosen.id] += duration; 
-                                    teacherDayCounts[chosen.id] += 1;
-                                    teacherRoleCounts.backup[chosen.id] += 1;
-                                }
+                            for (let b = 0; b < parseInt(this.smartSettings.backupObservers || 0); b++) {
+                                assignTeacher(chooseMostFairTeacher('backup'), null, 'backup', 'backup');
                             }
                         });
 
                         this.distributing = false;
                         this.distributionSuccess = true;
-                        this.showToast('تمت المزامنة الآلية والتوزيع الذكي بنجاح.');
+                        this.showToast('تم التوزيع الذكي بعدالة أكبر، وتم ترتيب الإحصائيات من الأعلى مراقبة إلى الأقل.');
                     }, 1000);
                 },
 
@@ -1964,6 +1959,16 @@
                         if (!list.includes('احتياط عام')) list.push('احتياط عام');
                     });
                     return list;
+                },
+                getTeachersSortedByDuties() {
+                    return this.teachers
+                        .filter(t => !t.inControl)
+                        .map(t => ({ ...t, _dutyCount: this.getTeacherDutyDaysCount(t.id), _totalHours: this.getTeacherTotalHours(t.id) }))
+                        .sort((a, b) => {
+                            if (b._dutyCount !== a._dutyCount) return b._dutyCount - a._dutyCount;
+                            if (b._totalHours !== a._totalHours) return b._totalHours - a._totalHours;
+                            return a.name.localeCompare(b.name, 'ar');
+                        });
                 },
                 getAverageDutiesPerTeacher() {
                     const working = this.teachers.filter(t => !t.inControl).length;
