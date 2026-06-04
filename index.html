@@ -2194,8 +2194,10 @@
                             _totalHours: this.getTeacherTotalHours(t.id)
                         }))
                         .sort((a, b) => {
-                            if (b._totalHours !== a._totalHours) return b._totalHours - a._totalHours;
+                            // الترتيب في الإحصائيات: من أكبر عدد أيام مراقبة فعلية إلى الأقل
                             if (b._dutyCount !== a._dutyCount) return b._dutyCount - a._dutyCount;
+                            // عند تساوي الأيام نرتب حسب الساعات الأعلى، مع بقاء ميزان الساعات الدقيق في الحساب
+                            if (b._totalHours !== a._totalHours) return b._totalHours - a._totalHours;
                             if (b._assignmentCount !== a._assignmentCount) return b._assignmentCount - a._assignmentCount;
                             return a.name.localeCompare(b.name, 'ar');
                         });
