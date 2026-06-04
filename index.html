@@ -931,7 +931,7 @@
                         <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                             <tr>
                                 <th class="px-4 py-3 font-semibold">المعلم</th>
-                                <th class="px-4 py-3 font-semibold text-center">عدد الأيام المكلفة</th>
+                                <th class="px-4 py-3 font-semibold text-center">عدد أيام المراقبة الفعلية</th>
                                 <th class="px-4 py-3 font-semibold text-center">إجمالي ساعات العمل</th>
                                 <th class="px-4 py-3 font-semibold text-center">عدد مرات الدور</th>
                                 <th class="px-4 py-3 font-semibold text-center">عدد مرات الاحتياط</th>
@@ -1864,7 +1864,6 @@
                     this.assignments = [];
 
                     setTimeout(() => {
-                        const roleWeight = { observer: 1, floor: 1, backup: 1 };
                         const periodOrder = (period) => {
                             const p = String(period || '');
                             if (p.includes('8') || p.includes('08')) return 1;
@@ -1875,18 +1874,23 @@
 
                         const workingTeachers = this.teachers.filter(t => !t.inControl);
                         let teacherHours = {};
-                        let teacherDuties = {};
+                        let teacherDutyCount = {};
+                        let teacherDutyDates = {};
                         let teacherRoleCounts = { floor: {}, backup: {}, regular: {} };
-                        let teacherAvailableSlots = {};
+                        let teacherAvailableExams = {};
 
-                        workingTeachers.forEach(t => {
-                            teacherHours[t.id] = 0;
-                            teacherDuties[t.id] = 0;
-                            teacherAvailableSlots[t.id] = 0;
-                            teacherRoleCounts.floor[t.id] = 0;
-                            teacherRoleCounts.backup[t.id] = 0;
-                            teacherRoleCounts.regular[t.id] = 0;
-                        });
+                        const initCounters = () => {
+                            workingTeachers.forEach(t => {
+                                teacherHours[t.id] = 0;
+                                teacherDutyCount[t.id] = 0;
+                                teacherDutyDates[t.id] = new Set();
+                                teacherRoleCounts.floor[t.id] = 0;
+                                teacherRoleCounts.backup[t.id] = 0;
+                                teacherRoleCounts.regular[t.id] = 0;
+                                teacherAvailableExams[t.id] = 0;
+                            });
+                        };
+                        initCounters();
 
                         const sortedExams = [...this.exams].sort((a,b) => {
                             const d = new Date(a.date) - new Date(b.date);
@@ -1894,21 +1898,24 @@
                             return periodOrder(a.period) - periodOrder(b.period);
                         });
 
+                        const hasRestrictionOnDate = (teacher, date) => {
+                            if (!teacher || teacher.inControl || !date) return true;
+                            const personal = this.teacherRestrictions.some(r => r.date === date && String(r.teacherId) === String(teacher.id));
+                            if (personal) return true;
+                            const spec = this.subjectRestrictions.some(r => r.date === date && r.speciality === teacher.speciality);
+                            if (spec) return true;
+                            return false;
+                        };
+
                         const isTeacherAvailableForExam = (teacher, exam, ignoreAssignmentId = null) => {
                             if (!teacher || teacher.inControl || !exam) return false;
-                            const examDate = exam.date;
-                            const hasPersonalRestriction = this.teacherRestrictions.some(r => r.date === examDate && String(r.teacherId) === String(teacher.id));
-                            if (hasPersonalRestriction) return false;
-                            const hasSpecialityRestriction = this.subjectRestrictions.some(r => r.date === examDate && r.speciality === teacher.speciality);
-                            if (hasSpecialityRestriction) return false;
-                            // لا يكرر نفس المعلم في نفس الاختبار/الفترة؛ حتى يبقى توزيع اليوم متوازنًا داخل اللجان.
+                            if (hasRestrictionOnDate(teacher, exam.date)) return false;
                             const alreadyInSameExam = this.assignments.some(a =>
                                 a.examId == exam.id &&
                                 String(a.teacherId) === String(teacher.id) &&
                                 (ignoreAssignmentId === null || a.id !== ignoreAssignmentId)
                             );
-                            if (alreadyInSameExam) return false;
-                            return true;
+                            return !alreadyInSameExam;
                         };
 
                         const slots = [];
@@ -1917,55 +1924,61 @@
                             const obsNeeded = parseInt(exam.observersNeeded || 0);
                             classList.forEach(classId => {
                                 for (let i = 0; i < obsNeeded; i++) {
-                                    slots.push({ exam, classId, role: 'observer', roleKey: 'regular' });
+                                    slots.push({ exam, classId, role: 'observer', roleKey: 'regular', duration: parseFloat(exam.duration || 0) });
                                 }
                             });
                             for (let f = 0; f < parseInt(this.smartSettings.floorObservers || 0); f++) {
-                                slots.push({ exam, classId: null, role: 'floor', roleKey: 'floor' });
+                                slots.push({ exam, classId: null, role: 'floor', roleKey: 'floor', duration: parseFloat(exam.duration || 0) });
                             }
                             for (let b = 0; b < parseInt(this.smartSettings.backupObservers || 0); b++) {
-                                slots.push({ exam, classId: null, role: 'backup', roleKey: 'backup' });
+                                slots.push({ exam, classId: null, role: 'backup', roleKey: 'backup', duration: parseFloat(exam.duration || 0) });
                             }
                         });
 
-                        // نحسب فرص كل معلم المتاحة؛ حتى لا نقارن معلمًا معطلًا كثيرًا بمعلم متاح كل الأيام بنفس الطريقة.
-                        workingTeachers.forEach(t => {
-                            teacherAvailableSlots[t.id] = slots.filter(slot => {
-                                const examDate = slot.exam.date;
-                                const personal = this.teacherRestrictions.some(r => r.date === examDate && String(r.teacherId) === String(t.id));
-                                const spec = this.subjectRestrictions.some(r => r.date === examDate && r.speciality === t.speciality);
-                                return !personal && !spec;
-                            }).length;
+                        // توزيع الساعات بدقة: نعالج الاختبارات الأطول أولًا ثم نرجع نرتب الناتج زمنيًا في النهاية.
+                        slots.sort((a, b) => {
+                            const dur = (b.duration || 0) - (a.duration || 0);
+                            if (dur !== 0) return dur;
+                            const d = new Date(a.exam.date) - new Date(b.exam.date);
+                            if (d !== 0) return d;
+                            return periodOrder(a.exam.period) - periodOrder(b.exam.period);
                         });
 
-                        const getTeacher = id => this.teachers.find(t => String(t.id) === String(id));
-                        const getTeacherAssignments = id => this.assignments.filter(a => String(a.teacherId) === String(id));
-                        const getTeacherDutyCount = id => getTeacherAssignments(id).reduce((sum, a) => sum + (roleWeight[a.role] || 1), 0);
-                        const getTeacherHoursNow = id => getTeacherAssignments(id).reduce((sum, a) => {
-                            const ex = this.exams.find(e => e.id == a.examId);
-                            return sum + (ex ? parseFloat(ex.duration || 0) : 0);
-                        }, 0);
-                        const getRoleCountNow = (id, roleKey) => this.assignments.filter(a => String(a.teacherId) === String(id) && ((roleKey === 'regular' && a.role === 'observer') || a.role === roleKey)).length;
+                        workingTeachers.forEach(t => {
+                            teacherAvailableExams[t.id] = sortedExams.filter(exam => !hasRestrictionOnDate(t, exam.date)).length;
+                        });
+
+                        const projectedDayCount = (teacherId, date) => {
+                            const set = teacherDutyDates[teacherId] || new Set();
+                            return set.size + (set.has(date) ? 0 : 1);
+                        };
 
                         const chooseMostBalancedTeacher = (slot) => {
                             const available = workingTeachers.filter(t => isTeacherAvailableForExam(t, slot.exam));
                             if (available.length === 0) return null;
 
                             available.sort((a, b) => {
-                                // الميزان الأساسي: الأقل تكليفًا أولًا، بدون رفع معلم على آخر إلا عند الضرورة.
-                                const dutyDiff = teacherDuties[a.id] - teacherDuties[b.id];
-                                if (dutyDiff !== 0) return dutyDiff;
+                                // الميزان الأهم: إجمالي الساعات بعد إضافة هذا التكليف.
+                                const hourA = (teacherHours[a.id] || 0) + (slot.duration || 0);
+                                const hourB = (teacherHours[b.id] || 0) + (slot.duration || 0);
+                                if (hourA !== hourB) return hourA - hourB;
 
-                                // ثم الأقل ساعات؛ لأن بعض الاختبارات مدتها أطول.
-                                const hourDiff = teacherHours[a.id] - teacherHours[b.id];
-                                if (hourDiff !== 0) return hourDiff;
+                                // ثم عدد أيام المراقبة الحقيقية: التاريخ يُحسب مرة واحدة حتى لو كان للمعلم أكثر من فترة في نفس اليوم.
+                                const dayA = projectedDayCount(a.id, slot.exam.date);
+                                const dayB = projectedDayCount(b.id, slot.exam.date);
+                                if (dayA !== dayB) return dayA - dayB;
 
-                                // ثم الأقل في نفس نوع الدور: مراقبة/دور/احتياط.
+                                // ثم عدد التكليفات التفصيلية.
+                                const dutyA = (teacherDutyCount[a.id] || 0) + 1;
+                                const dutyB = (teacherDutyCount[b.id] || 0) + 1;
+                                if (dutyA !== dutyB) return dutyA - dutyB;
+
+                                // ثم نوع الدور حتى لا يتكرر الدور والاحتياط على نفس الأشخاص.
                                 const roleDiff = (teacherRoleCounts[slot.roleKey]?.[a.id] || 0) - (teacherRoleCounts[slot.roleKey]?.[b.id] || 0);
                                 if (roleDiff !== 0) return roleDiff;
 
-                                // ثم نعطي أولوية بسيطة لمن فرصه المتاحة أقل حتى لا يُظلم بسبب الاستثناءات.
-                                const availabilityDiff = (teacherAvailableSlots[a.id] || 0) - (teacherAvailableSlots[b.id] || 0);
+                                // من فرصه أقل بسبب الاستثناءات يأخذ أولوية بسيطة عند التساوي الكامل.
+                                const availabilityDiff = (teacherAvailableExams[a.id] || 0) - (teacherAvailableExams[b.id] || 0);
                                 if (availabilityDiff !== 0) return availabilityDiff;
 
                                 return a.name.localeCompare(b.name, 'ar');
@@ -1982,81 +1995,116 @@
                                 teacherId: teacher.id,
                                 role: slot.role
                             });
-                            teacherDuties[teacher.id] += 1;
-                            teacherHours[teacher.id] += parseFloat(slot.exam.duration || 0);
+                            teacherDutyCount[teacher.id] += 1;
+                            teacherHours[teacher.id] += (slot.duration || 0);
+                            teacherDutyDates[teacher.id].add(slot.exam.date);
                             teacherRoleCounts[slot.roleKey][teacher.id] += 1;
                         };
 
-                        // التوزيع الأولي: كل خانة تذهب للأقل تكليفًا مباشرة.
                         slots.forEach(slot => addAssignment(chooseMostBalancedTeacher(slot), slot));
 
-                        // مرحلة تحسين الميزان: تبديل تكليفات من الأعلى إلى الأقل إذا كان المعلم الأقل متاحًا لذلك اليوم.
+                        const getExamById = id => this.exams.find(e => e.id == id);
                         const rebuildCounters = () => {
                             teacherHours = {};
-                            teacherDuties = {};
+                            teacherDutyCount = {};
+                            teacherDutyDates = {};
                             teacherRoleCounts = { floor: {}, backup: {}, regular: {} };
                             workingTeachers.forEach(t => {
-                                teacherHours[t.id] = getTeacherHoursNow(t.id);
-                                teacherDuties[t.id] = getTeacherDutyCount(t.id);
-                                teacherRoleCounts.floor[t.id] = getRoleCountNow(t.id, 'floor');
-                                teacherRoleCounts.backup[t.id] = getRoleCountNow(t.id, 'backup');
-                                teacherRoleCounts.regular[t.id] = getRoleCountNow(t.id, 'regular');
+                                teacherHours[t.id] = 0;
+                                teacherDutyCount[t.id] = 0;
+                                teacherDutyDates[t.id] = new Set();
+                                teacherRoleCounts.floor[t.id] = 0;
+                                teacherRoleCounts.backup[t.id] = 0;
+                                teacherRoleCounts.regular[t.id] = 0;
+                            });
+                            this.assignments.forEach(a => {
+                                const ex = getExamById(a.examId);
+                                if (!ex || teacherHours[a.teacherId] === undefined) return;
+                                const duration = parseFloat(ex.duration || 0);
+                                teacherHours[a.teacherId] += duration;
+                                teacherDutyCount[a.teacherId] += 1;
+                                teacherDutyDates[a.teacherId].add(ex.date);
+                                if (a.role === 'observer') teacherRoleCounts.regular[a.teacherId] += 1;
+                                if (a.role === 'floor') teacherRoleCounts.floor[a.teacherId] += 1;
+                                if (a.role === 'backup') teacherRoleCounts.backup[a.teacherId] += 1;
                             });
                         };
 
-                        const getBalanceGap = () => {
-                            const counts = workingTeachers
-                                .filter(t => (teacherAvailableSlots[t.id] || 0) > 0)
-                                .map(t => teacherDuties[t.id] || 0);
-                            if (counts.length === 0) return 0;
-                            return Math.max(...counts) - Math.min(...counts);
+                        const activeTeachers = () => workingTeachers.filter(t => (teacherAvailableExams[t.id] || 0) > 0);
+                        const getHourGap = () => {
+                            const hours = activeTeachers().map(t => teacherHours[t.id] || 0);
+                            if (!hours.length) return 0;
+                            return Math.max(...hours) - Math.min(...hours);
                         };
+                        const getDayGap = () => {
+                            const days = activeTeachers().map(t => (teacherDutyDates[t.id] || new Set()).size);
+                            if (!days.length) return 0;
+                            return Math.max(...days) - Math.min(...days);
+                        };
+                        const smallestDuration = Math.max(0.5, Math.min(...slots.map(s => parseFloat(s.duration || 0)).filter(Boolean), 0.5));
 
                         rebuildCounters();
+
+                        // مراجعة ثانية: نقل تكليف من الأعلى ساعات إلى الأقل ساعات إذا كان النقل يحسن الميزان فعلًا.
                         let changed = true;
                         let guard = 0;
-                        while (changed && getBalanceGap() > 1 && guard < 3000) {
+                        while (changed && guard < 5000) {
                             guard++;
                             changed = false;
-                            const sortedTeachersByLoad = [...workingTeachers]
-                                .filter(t => (teacherAvailableSlots[t.id] || 0) > 0)
-                                .sort((a, b) => {
-                                    const duty = (teacherDuties[b.id] || 0) - (teacherDuties[a.id] || 0);
-                                    if (duty !== 0) return duty;
-                                    return (teacherHours[b.id] || 0) - (teacherHours[a.id] || 0);
-                                });
-                            const highTeachers = sortedTeachersByLoad;
-                            const lowTeachers = [...sortedTeachersByLoad].reverse();
+                            const currentGap = getHourGap();
+                            const teachersByHoursDesc = activeTeachers().sort((a, b) => {
+                                const h = (teacherHours[b.id] || 0) - (teacherHours[a.id] || 0);
+                                if (h !== 0) return h;
+                                return (teacherDutyDates[b.id]?.size || 0) - (teacherDutyDates[a.id]?.size || 0);
+                            });
+                            const teachersByHoursAsc = [...teachersByHoursDesc].reverse();
 
                             outerLoop:
-                            for (const high of highTeachers) {
-                                for (const low of lowTeachers) {
-                                    if ((teacherDuties[high.id] || 0) - (teacherDuties[low.id] || 0) <= 1) continue;
+                            for (const high of teachersByHoursDesc) {
+                                for (const low of teachersByHoursAsc) {
+                                    if (String(high.id) === String(low.id)) continue;
+                                    if ((teacherHours[high.id] || 0) <= (teacherHours[low.id] || 0)) continue;
+
                                     const highAssignments = this.assignments
                                         .filter(a => String(a.teacherId) === String(high.id))
                                         .sort((a, b) => {
-                                            const exA = this.exams.find(e => e.id == a.examId);
-                                            const exB = this.exams.find(e => e.id == b.examId);
+                                            const exA = getExamById(a.examId);
+                                            const exB = getExamById(b.examId);
                                             return parseFloat(exB?.duration || 0) - parseFloat(exA?.duration || 0);
                                         });
 
                                     for (const assignment of highAssignments) {
-                                        const exam = this.exams.find(e => e.id == assignment.examId);
-                                        if (isTeacherAvailableForExam(low, exam, assignment.id)) {
-                                            assignment.teacherId = low.id;
-                                            rebuildCounters();
+                                        const exam = getExamById(assignment.examId);
+                                        if (!exam || !isTeacherAvailableForExam(low, exam, assignment.id)) continue;
+
+                                        const duration = parseFloat(exam.duration || 0);
+                                        const highAfter = (teacherHours[high.id] || 0) - duration;
+                                        const lowAfter = (teacherHours[low.id] || 0) + duration;
+
+                                        // لا ننقل إذا كان النقل سيعكس المشكلة أو لا يحسن فرق الساعات.
+                                        if (Math.abs(highAfter - lowAfter) >= Math.abs((teacherHours[high.id] || 0) - (teacherHours[low.id] || 0))) continue;
+
+                                        const oldTeacherId = assignment.teacherId;
+                                        assignment.teacherId = low.id;
+                                        rebuildCounters();
+                                        const newGap = getHourGap();
+                                        if (newGap <= currentGap) {
                                             changed = true;
                                             break outerLoop;
+                                        } else {
+                                            assignment.teacherId = oldTeacherId;
+                                            rebuildCounters();
                                         }
                                     }
                                 }
                             }
+
+                            if (getHourGap() <= smallestDuration) break;
                         }
 
-                        // ترتيب داخلي نهائي للمخرجات حسب اللجان ثم الدور، بعد تحسين العدالة.
                         this.assignments.sort((a, b) => {
-                            const exA = this.exams.find(e => e.id == a.examId);
-                            const exB = this.exams.find(e => e.id == b.examId);
+                            const exA = getExamById(a.examId);
+                            const exB = getExamById(b.examId);
                             const dateDiff = new Date(exA?.date || 0) - new Date(exB?.date || 0);
                             if (dateDiff !== 0) return dateDiff;
                             const periodDiff = periodOrder(exA?.period) - periodOrder(exB?.period);
@@ -2067,10 +2115,11 @@
                         });
 
                         rebuildCounters();
-                        const finalGap = getBalanceGap();
+                        const finalHourGap = getHourGap();
+                        const finalDayGap = getDayGap();
                         this.distributing = false;
                         this.distributionSuccess = true;
-                        this.showToast(finalGap <= 1 ? 'تم التوزيع بميزان عادل جدًا؛ الفرق بين المعلمين لا يتجاوز تكليفًا واحدًا قدر الإمكان.' : 'تم رفع العدالة لأعلى مستوى ممكن حسب التعطيل والاستثناءات وعدد المعلمين المتاحين.');
+                        this.showToast(`تم التوزيع بميزان ساعات أدق. فرق الساعات: ${finalHourGap.toFixed(1)} ساعة، وفرق الأيام: ${finalDayGap} يوم.`);
                     }, 1000);
                 },
 
@@ -2097,15 +2146,23 @@
                 },
 
                 getTeacherDutyDaysCount(teacherId) {
+                    const dates = new Set();
+                    this.assignments.filter(a => a.teacherId == teacherId).forEach(a => {
+                        const ex = this.exams.find(e => e.id == a.examId);
+                        if (ex && ex.date) dates.add(ex.date);
+                    });
+                    return dates.size;
+                },
+                getTeacherAssignmentCount(teacherId) {
                     return this.assignments.filter(a => a.teacherId == teacherId).length;
                 },
                 getTeacherTotalHours(teacherId) {
                     let hours = 0;
                     this.assignments.filter(a => a.teacherId == teacherId).forEach(a => {
                         const ex = this.exams.find(e => e.id == a.examId);
-                        if (ex) hours += ex.duration;
+                        if (ex) hours += parseFloat(ex.duration || 0);
                     });
-                    return hours;
+                    return Number.isInteger(hours) ? hours : Number(hours.toFixed(1));
                 },
                 getTeacherFloorCount(teacherId) {
                     return this.assignments.filter(a => a.teacherId == teacherId && a.role === 'floor').length;
@@ -2130,10 +2187,16 @@
                 getTeachersSortedByDuties() {
                     return this.teachers
                         .filter(t => !t.inControl)
-                        .map(t => ({ ...t, _dutyCount: this.getTeacherDutyDaysCount(t.id), _totalHours: this.getTeacherTotalHours(t.id) }))
+                        .map(t => ({
+                            ...t,
+                            _dutyCount: this.getTeacherDutyDaysCount(t.id),
+                            _assignmentCount: this.getTeacherAssignmentCount(t.id),
+                            _totalHours: this.getTeacherTotalHours(t.id)
+                        }))
                         .sort((a, b) => {
-                            if (b._dutyCount !== a._dutyCount) return b._dutyCount - a._dutyCount;
                             if (b._totalHours !== a._totalHours) return b._totalHours - a._totalHours;
+                            if (b._dutyCount !== a._dutyCount) return b._dutyCount - a._dutyCount;
+                            if (b._assignmentCount !== a._assignmentCount) return b._assignmentCount - a._assignmentCount;
                             return a.name.localeCompare(b.name, 'ar');
                         });
                 },
