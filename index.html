@@ -342,7 +342,10 @@
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <!-- Class & Committee Form -->
                     <div class="bg-slate-50 dark:bg-slate-700/30 p-5 rounded-2xl border border-slate-200/50 dark:border-slate-700">
-                        <h3 class="text-md font-bold mb-4 text-slate-900 dark:text-white"><i class="fa-solid fa-plus-circle text-primary-500 ml-1"></i> إضافة صف ولجنة</h3>
+                        <h3 class="text-md font-bold mb-4 text-slate-900 dark:text-white flex items-center gap-2">
+                            <i class="fa-solid" :class="classForm.id ? 'fa-pen-to-square text-blue-500' : 'fa-plus-circle text-primary-500'"></i>
+                            <span x-text="classForm.id ? 'تعديل الصف واللجنة' : 'إضافة صف ولجنة'"></span>
+                        </h3>
                         <form @submit.prevent="addClassCommittee()">
                             <div class="space-y-4">
                                 <div>
@@ -353,10 +356,15 @@
                                     <label class="block text-xs font-bold text-slate-500 mb-1">اسم/رقم اللجنة المقابلة</label>
                                     <input type="text" x-model="classForm.committeeName" placeholder="مثال: لجنة 1 (القاعة الكبرى)" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
                                 </div>
-                                <button type="submit" class="w-full bg-primary-600 hover:bg-primary-700 text-white py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center justify-center gap-2">
-                                    <i class="fa-solid fa-square-plus"></i>
-                                    <span>إضافة الصف والجنة</span>
-                                </button>
+                                <div class="flex gap-2">
+                                    <button type="submit" class="flex-1 bg-primary-600 hover:bg-primary-700 text-white py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center justify-center gap-2">
+                                        <i class="fa-solid" :class="classForm.id ? 'fa-floppy-disk' : 'fa-square-plus'"></i>
+                                        <span x-text="classForm.id ? 'حفظ التعديل' : 'إضافة الصف واللجنة'"></span>
+                                    </button>
+                                    <button type="button" x-show="classForm.id" @click="resetClassForm()" class="px-4 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 py-2.5 rounded-lg font-semibold text-sm transition-all">
+                                        إلغاء
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>
@@ -383,9 +391,14 @@
                                                 </span>
                                             </td>
                                             <td class="px-4 py-3 text-center">
-                                                <button @click="deleteSchoolClass(item.id)" class="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="حذف">
-                                                    <i class="fa-solid fa-trash-can"></i>
-                                                </button>
+                                                <div class="flex items-center justify-center gap-2">
+                                                    <button @click="openEditSchoolClass(item)" class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors" title="تعديل">
+                                                        <i class="fa-solid fa-pen-to-square"></i>
+                                                    </button>
+                                                    <button @click="deleteSchoolClass(item.id)" class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="حذف">
+                                                        <i class="fa-solid fa-trash-can"></i>
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     </template>
@@ -1082,7 +1095,7 @@
                 searchTeacher: '',
                 teacherModalOpen: false,
                 teacherForm: { id: null, name: '', speciality: '', phone: '', inControl: false },
-                classForm: { className: '', committeeName: '' },
+                classForm: { id: null, className: '', committeeName: '' },
                 examForm: { date: '', period: '08:00 ص', subject: '', duration: 2, observersNeeded: 2, selectedClasses: [] },
                 subjectRestForm: { date: '', speciality: '' },
                 teacherRestForm: { date: '', teacherId: '', reason: '' },
@@ -1370,19 +1383,41 @@
                     reader.readAsArrayBuffer(file);
                 },
 
+                resetClassForm() {
+                    this.classForm = { id: null, className: '', committeeName: '' };
+                },
+                openEditSchoolClass(item) {
+                    this.classForm = { id: item.id, className: item.className, committeeName: item.committeeName };
+                    this.showToast('يمكنك الآن تعديل بيانات الصف واللجنة من النموذج.');
+                },
                 addClassCommittee() {
-                    const newId = this.schoolClasses.length > 0 ? Math.max(...this.schoolClasses.map(c => c.id)) + 1 : 1;
-                    this.schoolClasses.push({
-                        id: newId,
-                        className: this.classForm.className,
-                        committeeName: this.classForm.committeeName
-                    });
-                    this.classForm = { className: '', committeeName: '' };
-                    this.saveAppData();
-                    this.runSmartDistribution();
-                    this.showToast('تم تسجيل الصف واللجنة المقابلة.');
+                    if (this.classForm.id) {
+                        const index = this.schoolClasses.findIndex(c => c.id == this.classForm.id);
+                        if (index !== -1) {
+                            this.schoolClasses[index] = {
+                                id: this.classForm.id,
+                                className: this.classForm.className,
+                                committeeName: this.classForm.committeeName
+                            };
+                            this.saveAppData();
+                            this.runSmartDistribution();
+                            this.showToast('تم تعديل الصف واللجنة بنجاح.');
+                        }
+                    } else {
+                        const newId = this.schoolClasses.length > 0 ? Math.max(...this.schoolClasses.map(c => c.id)) + 1 : 1;
+                        this.schoolClasses.push({
+                            id: newId,
+                            className: this.classForm.className,
+                            committeeName: this.classForm.committeeName
+                        });
+                        this.saveAppData();
+                        this.runSmartDistribution();
+                        this.showToast('تم تسجيل الصف واللجنة المقابلة.');
+                    }
+                    this.resetClassForm();
                 },
                 deleteSchoolClass(id) {
+                    if (this.classForm.id == id) this.resetClassForm();
                     this.schoolClasses = this.schoolClasses.filter(c => c.id !== id);
                     this.exams = this.exams.map(e => ({ ...e, selectedClasses: e.selectedClasses.filter(clsId => clsId != id) }));
                     this.assignments = this.assignments.filter(a => a.classId != id);
