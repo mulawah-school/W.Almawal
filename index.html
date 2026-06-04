@@ -965,6 +965,61 @@
                     </table>
                 </div>
 
+
+                <!-- Daily Available Unassigned Teachers Report -->
+                <h3 class="text-md font-bold mb-3 text-slate-900 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-user-clock text-primary-500"></i>
+                    كشف المعلمين المتاحين بدون تكليف يومي
+                </h3>
+                <div class="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-2xl mb-8">
+                    <table class="w-full text-right text-xs">
+                        <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                            <tr>
+                                <th class="px-4 py-3 font-semibold min-w-[160px]">اليوم والتاريخ</th>
+                                <th class="px-4 py-3 font-semibold min-w-[180px]">اختبارات اليوم</th>
+                                <th class="px-4 py-3 font-semibold text-center min-w-[90px]">العدد</th>
+                                <th class="px-4 py-3 font-semibold">المعلمون المتاحون بدون تكليف</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="day in getDailyUnassignedTeachersReport()" :key="day.date">
+                                <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50">
+                                    <td class="px-4 py-3 font-semibold bg-slate-50/50 dark:bg-slate-800/40">
+                                        <div class="font-bold text-slate-900 dark:text-white" x-text="formatDateArabic(day.date)"></div>
+                                        <div class="text-[10px] text-slate-500 font-mono" x-text="day.date"></div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="flex flex-wrap gap-1">
+                                            <template x-for="examLabel in day.exams" :key="examLabel">
+                                                <span class="text-[10px] bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 px-2 py-0.5 rounded" x-text="examLabel"></span>
+                                            </template>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 text-center">
+                                        <span class="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 font-extrabold" x-text="day.teachers.length"></span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="flex flex-wrap gap-1.5" x-show="day.teachers.length > 0">
+                                            <template x-for="teacher in day.teachers" :key="teacher.id">
+                                                <span class="inline-flex items-center gap-1 text-[10px] bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 px-2 py-1 rounded">
+                                                    <i class="fa-regular fa-user"></i>
+                                                    <span x-text="teacher.name"></span>
+                                                    <span class="text-slate-400">-</span>
+                                                    <span class="text-slate-500" x-text="teacher.speciality"></span>
+                                                </span>
+                                            </template>
+                                        </div>
+                                        <div x-show="day.teachers.length === 0" class="text-slate-400">لا يوجد معلمون متاحون بدون تكليف في هذا اليوم.</div>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="getDailyUnassignedTeachersReport().length === 0">
+                                <td colspan="4" class="text-center py-8 text-slate-400">لا يوجد جدول اختبارات لعرض كشف المعلمين غير المكلفين.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
                 <!-- Complete Full Period Grid Overview -->
                 <h3 class="text-md font-bold mb-3 text-slate-900 dark:text-white flex items-center gap-2"><i class="fa-solid fa-border-all text-primary-500"></i> الكشف العام والجدول الكامل لجميع أيام الاختبارات</h3>
                 <div class="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-2xl">
@@ -1809,101 +1864,213 @@
                     this.assignments = [];
 
                     setTimeout(() => {
-                        let teacherHours = {};
-                        let teacherDayCounts = {};
-                        let teacherRoleCounts = { floor: {}, backup: {}, regular: {} };
+                        const roleWeight = { observer: 1, floor: 1, backup: 1 };
+                        const periodOrder = (period) => {
+                            const p = String(period || '');
+                            if (p.includes('8') || p.includes('08')) return 1;
+                            if (p.includes('10')) return 2;
+                            if (p.includes('11')) return 3;
+                            return 9;
+                        };
 
-                        this.teachers.forEach(t => {
+                        const workingTeachers = this.teachers.filter(t => !t.inControl);
+                        let teacherHours = {};
+                        let teacherDuties = {};
+                        let teacherRoleCounts = { floor: {}, backup: {}, regular: {} };
+                        let teacherAvailableSlots = {};
+
+                        workingTeachers.forEach(t => {
                             teacherHours[t.id] = 0;
-                            teacherDayCounts[t.id] = 0;
+                            teacherDuties[t.id] = 0;
+                            teacherAvailableSlots[t.id] = 0;
                             teacherRoleCounts.floor[t.id] = 0;
                             teacherRoleCounts.backup[t.id] = 0;
                             teacherRoleCounts.regular[t.id] = 0;
                         });
 
-                        const sortedExams = [...this.exams].sort((a,b) => new Date(a.date) - new Date(b.date));
+                        const sortedExams = [...this.exams].sort((a,b) => {
+                            const d = new Date(a.date) - new Date(b.date);
+                            if (d !== 0) return d;
+                            return periodOrder(a.period) - periodOrder(b.period);
+                        });
 
-                        // حد عادل تقريبي: لا نرفع معلمًا فوق الحد إلا إذا لم يبقَ غيره بسبب التعطيل أو قلة العدد.
-                        const workingTeachersCount = this.teachers.filter(t => !t.inControl).length || 1;
-                        const totalRequiredDuties = sortedExams.reduce((sum, exam) => {
-                            const committeesCount = Array.isArray(exam.selectedClasses) ? exam.selectedClasses.length : 0;
-                            return sum + (committeesCount * parseInt(exam.observersNeeded || 0)) + parseInt(this.smartSettings.floorObservers || 0) + parseInt(this.smartSettings.backupObservers || 0);
-                        }, 0);
-                        const fairMaxDuties = Math.ceil(totalRequiredDuties / workingTeachersCount);
-
-                        sortedExams.forEach(exam => {
+                        const isTeacherAvailableForExam = (teacher, exam, ignoreAssignmentId = null) => {
+                            if (!teacher || teacher.inControl || !exam) return false;
                             const examDate = exam.date;
-                            const duration = parseFloat(exam.duration || 0);
-                            const obsNeeded = parseInt(exam.observersNeeded || 0);
+                            const hasPersonalRestriction = this.teacherRestrictions.some(r => r.date === examDate && String(r.teacherId) === String(teacher.id));
+                            if (hasPersonalRestriction) return false;
+                            const hasSpecialityRestriction = this.subjectRestrictions.some(r => r.date === examDate && r.speciality === teacher.speciality);
+                            if (hasSpecialityRestriction) return false;
+                            // لا يكرر نفس المعلم في نفس الاختبار/الفترة؛ حتى يبقى توزيع اليوم متوازنًا داخل اللجان.
+                            const alreadyInSameExam = this.assignments.some(a =>
+                                a.examId == exam.id &&
+                                String(a.teacherId) === String(teacher.id) &&
+                                (ignoreAssignmentId === null || a.id !== ignoreAssignmentId)
+                            );
+                            if (alreadyInSameExam) return false;
+                            return true;
+                        };
+
+                        const slots = [];
+                        sortedExams.forEach(exam => {
                             const classList = Array.isArray(exam.selectedClasses) ? exam.selectedClasses : [];
-
-                            let availableTeachers = this.teachers.filter(t => {
-                                if (t.inControl) return false;
-                                const hasPersonalRestriction = this.teacherRestrictions.some(r => r.date === examDate && r.teacherId === t.id);
-                                if (hasPersonalRestriction) return false;
-                                const hasSpecialityRestriction = this.subjectRestrictions.some(r => r.date === examDate && r.speciality === t.speciality);
-                                if (hasSpecialityRestriction) return false;
-                                return true;
-                            });
-
-                            const chooseMostFairTeacher = (roleKey = 'regular') => {
-                                if (availableTeachers.length === 0) return null;
-
-                                // أولًا نحاول اختيار من هم تحت الحد العادل؛ هذا يمنع الفارق الكبير مثل 6 مقابل 3 قدر الإمكان.
-                                let pool = availableTeachers.filter(t => teacherDayCounts[t.id] < fairMaxDuties);
-                                if (pool.length === 0) pool = [...availableTeachers];
-
-                                pool.sort((a, b) => {
-                                    const dutyDiff = teacherDayCounts[a.id] - teacherDayCounts[b.id];
-                                    if (dutyDiff !== 0) return dutyDiff;
-
-                                    const hourDiff = teacherHours[a.id] - teacherHours[b.id];
-                                    if (hourDiff !== 0) return hourDiff;
-
-                                    const roleDiff = (teacherRoleCounts[roleKey]?.[a.id] || 0) - (teacherRoleCounts[roleKey]?.[b.id] || 0);
-                                    if (roleDiff !== 0) return roleDiff;
-
-                                    return a.name.localeCompare(b.name, 'ar');
-                                });
-
-                                const chosen = pool[0];
-                                availableTeachers = availableTeachers.filter(t => t.id !== chosen.id);
-                                return chosen;
-                            };
-
-                            const assignTeacher = (chosen, classId, role, roleKey) => {
-                                if (!chosen) return;
-                                this.assignments.push({
-                                    id: Date.now() + Math.random(),
-                                    examId: exam.id,
-                                    classId: classId,
-                                    teacherId: chosen.id,
-                                    role: role
-                                });
-
-                                teacherHours[chosen.id] += duration;
-                                teacherDayCounts[chosen.id] += 1;
-                                teacherRoleCounts[roleKey][chosen.id] += 1;
-                            };
-
+                            const obsNeeded = parseInt(exam.observersNeeded || 0);
                             classList.forEach(classId => {
                                 for (let i = 0; i < obsNeeded; i++) {
-                                    assignTeacher(chooseMostFairTeacher('regular'), classId, 'observer', 'regular');
+                                    slots.push({ exam, classId, role: 'observer', roleKey: 'regular' });
                                 }
                             });
-
                             for (let f = 0; f < parseInt(this.smartSettings.floorObservers || 0); f++) {
-                                assignTeacher(chooseMostFairTeacher('floor'), null, 'floor', 'floor');
+                                slots.push({ exam, classId: null, role: 'floor', roleKey: 'floor' });
                             }
-
                             for (let b = 0; b < parseInt(this.smartSettings.backupObservers || 0); b++) {
-                                assignTeacher(chooseMostFairTeacher('backup'), null, 'backup', 'backup');
+                                slots.push({ exam, classId: null, role: 'backup', roleKey: 'backup' });
                             }
                         });
 
+                        // نحسب فرص كل معلم المتاحة؛ حتى لا نقارن معلمًا معطلًا كثيرًا بمعلم متاح كل الأيام بنفس الطريقة.
+                        workingTeachers.forEach(t => {
+                            teacherAvailableSlots[t.id] = slots.filter(slot => {
+                                const examDate = slot.exam.date;
+                                const personal = this.teacherRestrictions.some(r => r.date === examDate && String(r.teacherId) === String(t.id));
+                                const spec = this.subjectRestrictions.some(r => r.date === examDate && r.speciality === t.speciality);
+                                return !personal && !spec;
+                            }).length;
+                        });
+
+                        const getTeacher = id => this.teachers.find(t => String(t.id) === String(id));
+                        const getTeacherAssignments = id => this.assignments.filter(a => String(a.teacherId) === String(id));
+                        const getTeacherDutyCount = id => getTeacherAssignments(id).reduce((sum, a) => sum + (roleWeight[a.role] || 1), 0);
+                        const getTeacherHoursNow = id => getTeacherAssignments(id).reduce((sum, a) => {
+                            const ex = this.exams.find(e => e.id == a.examId);
+                            return sum + (ex ? parseFloat(ex.duration || 0) : 0);
+                        }, 0);
+                        const getRoleCountNow = (id, roleKey) => this.assignments.filter(a => String(a.teacherId) === String(id) && ((roleKey === 'regular' && a.role === 'observer') || a.role === roleKey)).length;
+
+                        const chooseMostBalancedTeacher = (slot) => {
+                            const available = workingTeachers.filter(t => isTeacherAvailableForExam(t, slot.exam));
+                            if (available.length === 0) return null;
+
+                            available.sort((a, b) => {
+                                // الميزان الأساسي: الأقل تكليفًا أولًا، بدون رفع معلم على آخر إلا عند الضرورة.
+                                const dutyDiff = teacherDuties[a.id] - teacherDuties[b.id];
+                                if (dutyDiff !== 0) return dutyDiff;
+
+                                // ثم الأقل ساعات؛ لأن بعض الاختبارات مدتها أطول.
+                                const hourDiff = teacherHours[a.id] - teacherHours[b.id];
+                                if (hourDiff !== 0) return hourDiff;
+
+                                // ثم الأقل في نفس نوع الدور: مراقبة/دور/احتياط.
+                                const roleDiff = (teacherRoleCounts[slot.roleKey]?.[a.id] || 0) - (teacherRoleCounts[slot.roleKey]?.[b.id] || 0);
+                                if (roleDiff !== 0) return roleDiff;
+
+                                // ثم نعطي أولوية بسيطة لمن فرصه المتاحة أقل حتى لا يُظلم بسبب الاستثناءات.
+                                const availabilityDiff = (teacherAvailableSlots[a.id] || 0) - (teacherAvailableSlots[b.id] || 0);
+                                if (availabilityDiff !== 0) return availabilityDiff;
+
+                                return a.name.localeCompare(b.name, 'ar');
+                            });
+                            return available[0];
+                        };
+
+                        const addAssignment = (teacher, slot) => {
+                            if (!teacher) return;
+                            this.assignments.push({
+                                id: Date.now() + Math.random(),
+                                examId: slot.exam.id,
+                                classId: slot.classId,
+                                teacherId: teacher.id,
+                                role: slot.role
+                            });
+                            teacherDuties[teacher.id] += 1;
+                            teacherHours[teacher.id] += parseFloat(slot.exam.duration || 0);
+                            teacherRoleCounts[slot.roleKey][teacher.id] += 1;
+                        };
+
+                        // التوزيع الأولي: كل خانة تذهب للأقل تكليفًا مباشرة.
+                        slots.forEach(slot => addAssignment(chooseMostBalancedTeacher(slot), slot));
+
+                        // مرحلة تحسين الميزان: تبديل تكليفات من الأعلى إلى الأقل إذا كان المعلم الأقل متاحًا لذلك اليوم.
+                        const rebuildCounters = () => {
+                            teacherHours = {};
+                            teacherDuties = {};
+                            teacherRoleCounts = { floor: {}, backup: {}, regular: {} };
+                            workingTeachers.forEach(t => {
+                                teacherHours[t.id] = getTeacherHoursNow(t.id);
+                                teacherDuties[t.id] = getTeacherDutyCount(t.id);
+                                teacherRoleCounts.floor[t.id] = getRoleCountNow(t.id, 'floor');
+                                teacherRoleCounts.backup[t.id] = getRoleCountNow(t.id, 'backup');
+                                teacherRoleCounts.regular[t.id] = getRoleCountNow(t.id, 'regular');
+                            });
+                        };
+
+                        const getBalanceGap = () => {
+                            const counts = workingTeachers
+                                .filter(t => (teacherAvailableSlots[t.id] || 0) > 0)
+                                .map(t => teacherDuties[t.id] || 0);
+                            if (counts.length === 0) return 0;
+                            return Math.max(...counts) - Math.min(...counts);
+                        };
+
+                        rebuildCounters();
+                        let changed = true;
+                        let guard = 0;
+                        while (changed && getBalanceGap() > 1 && guard < 3000) {
+                            guard++;
+                            changed = false;
+                            const sortedTeachersByLoad = [...workingTeachers]
+                                .filter(t => (teacherAvailableSlots[t.id] || 0) > 0)
+                                .sort((a, b) => {
+                                    const duty = (teacherDuties[b.id] || 0) - (teacherDuties[a.id] || 0);
+                                    if (duty !== 0) return duty;
+                                    return (teacherHours[b.id] || 0) - (teacherHours[a.id] || 0);
+                                });
+                            const highTeachers = sortedTeachersByLoad;
+                            const lowTeachers = [...sortedTeachersByLoad].reverse();
+
+                            outerLoop:
+                            for (const high of highTeachers) {
+                                for (const low of lowTeachers) {
+                                    if ((teacherDuties[high.id] || 0) - (teacherDuties[low.id] || 0) <= 1) continue;
+                                    const highAssignments = this.assignments
+                                        .filter(a => String(a.teacherId) === String(high.id))
+                                        .sort((a, b) => {
+                                            const exA = this.exams.find(e => e.id == a.examId);
+                                            const exB = this.exams.find(e => e.id == b.examId);
+                                            return parseFloat(exB?.duration || 0) - parseFloat(exA?.duration || 0);
+                                        });
+
+                                    for (const assignment of highAssignments) {
+                                        const exam = this.exams.find(e => e.id == assignment.examId);
+                                        if (isTeacherAvailableForExam(low, exam, assignment.id)) {
+                                            assignment.teacherId = low.id;
+                                            rebuildCounters();
+                                            changed = true;
+                                            break outerLoop;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ترتيب داخلي نهائي للمخرجات حسب اللجان ثم الدور، بعد تحسين العدالة.
+                        this.assignments.sort((a, b) => {
+                            const exA = this.exams.find(e => e.id == a.examId);
+                            const exB = this.exams.find(e => e.id == b.examId);
+                            const dateDiff = new Date(exA?.date || 0) - new Date(exB?.date || 0);
+                            if (dateDiff !== 0) return dateDiff;
+                            const periodDiff = periodOrder(exA?.period) - periodOrder(exB?.period);
+                            if (periodDiff !== 0) return periodDiff;
+                            const classDiff = String(a.classId || '999').localeCompare(String(b.classId || '999'), 'ar', { numeric: true });
+                            if (classDiff !== 0) return classDiff;
+                            return String(a.role).localeCompare(String(b.role), 'ar');
+                        });
+
+                        rebuildCounters();
+                        const finalGap = getBalanceGap();
                         this.distributing = false;
                         this.distributionSuccess = true;
-                        this.showToast('تم التوزيع الذكي بعدالة أكبر، وتم ترتيب الإحصائيات من الأعلى مراقبة إلى الأقل.');
+                        this.showToast(finalGap <= 1 ? 'تم التوزيع بميزان عادل جدًا؛ الفرق بين المعلمين لا يتجاوز تكليفًا واحدًا قدر الإمكان.' : 'تم رفع العدالة لأعلى مستوى ممكن حسب التعطيل والاستثناءات وعدد المعلمين المتاحين.');
                     }, 1000);
                 },
 
@@ -1969,6 +2136,36 @@
                             if (b._totalHours !== a._totalHours) return b._totalHours - a._totalHours;
                             return a.name.localeCompare(b.name, 'ar');
                         });
+                },
+
+                isTeacherRestrictedOnDate(teacher, date) {
+                    if (!teacher || !date) return true;
+                    if (teacher.inControl) return true;
+                    const hasPersonalRestriction = this.teacherRestrictions.some(r => r.date === date && r.teacherId == teacher.id);
+                    if (hasPersonalRestriction) return true;
+                    const hasSpecialityRestriction = this.subjectRestrictions.some(r => r.date === date && r.speciality === teacher.speciality);
+                    if (hasSpecialityRestriction) return true;
+                    return false;
+                },
+                getDailyUnassignedTeachersReport() {
+                    const uniqueDates = [...new Set(this.exams.map(exam => exam.date).filter(Boolean))].sort((a, b) => new Date(a) - new Date(b));
+                    return uniqueDates.map(date => {
+                        const dayExams = this.exams.filter(exam => exam.date === date);
+                        const assignedTeacherIds = new Set(
+                            this.assignments
+                                .filter(assign => dayExams.some(exam => exam.id == assign.examId))
+                                .map(assign => String(assign.teacherId))
+                        );
+                        const availableUnassigned = this.teachers
+                            .filter(teacher => !this.isTeacherRestrictedOnDate(teacher, date))
+                            .filter(teacher => !assignedTeacherIds.has(String(teacher.id)))
+                            .sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+                        return {
+                            date,
+                            exams: dayExams.map(exam => `${exam.subject} - ${exam.period}`),
+                            teachers: availableUnassigned
+                        };
+                    });
                 },
                 getAverageDutiesPerTeacher() {
                     const working = this.teachers.filter(t => !t.inControl).length;
