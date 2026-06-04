@@ -1656,7 +1656,7 @@
                     this.currentTab = 'exams';
                     this.showToast('تم فتح بيانات الاختبار للتعديل. عدّل البيانات ثم اضغط حفظ تعديل الاختبار.');
                     setTimeout(() => {
-                        const form = document.querySelector('section[x-show="currentTab === 'exams'"] form');
+                        const form = document.querySelector("section[x-show=\"currentTab === 'exams'\"] form");
                         if (form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }, 100);
                 },
