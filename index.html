@@ -467,19 +467,30 @@
                                     <!-- اختيار سريع حسب الصف الدراسي -->
                                     <div class="mb-3 p-3 rounded-xl border border-indigo-100 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20">
                                         <div class="flex items-center justify-between gap-2 mb-2">
-                                            <span class="text-xs font-extrabold text-indigo-700 dark:text-indigo-300">اختيار سريع حسب الصف</span>
+                                            <div>
+                                                <span class="text-xs font-extrabold text-indigo-700 dark:text-indigo-300">اختيار سريع حسب الصف</span>
+                                                <p class="text-[11px] text-slate-500 mt-0.5">يمكن اختيار أكثر من صف، ثم الضغط على زر تحديد الصفوف المختارة.</p>
+                                            </div>
                                             <button type="button" @click="clearSelectedClasses()" class="text-[11px] font-bold text-red-600 hover:text-red-700">مسح الاختيار</button>
                                         </div>
-                                        <div class="flex flex-wrap gap-2">
+                                        <div class="flex flex-wrap gap-2 mb-3">
                                             <template x-for="grade in getGradeGroups()" :key="grade.key">
-                                                <button type="button"
-                                                    @click="selectGradeClasses(grade.key)"
-                                                    class="px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-600 hover:text-white transition-all">
+                                                <label class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer transition-all"
+                                                    :class="quickGradeSelection.includes(grade.key) ? 'ring-2 ring-indigo-500 bg-indigo-100 dark:bg-indigo-900/30' : ''">
+                                                    <input type="checkbox" :value="grade.key" x-model="quickGradeSelection" class="rounded text-indigo-600 focus:ring-indigo-500">
                                                     <span x-text="grade.label"></span>
                                                     <span class="font-mono" x-text="'(' + grade.count + ')' "></span>
-                                                </button>
+                                                </label>
                                             </template>
                                             <div x-show="getGradeGroups().length === 0" class="text-xs text-slate-400">أضف الصفوف واللجان أولاً حتى تظهر أزرار الاختيار السريع.</div>
+                                        </div>
+                                        <div class="flex flex-wrap gap-2">
+                                            <button type="button" @click="selectQuickGradeClasses()" class="px-3 py-2 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all">
+                                                تحديد الصفوف المختارة
+                                            </button>
+                                            <button type="button" @click="quickGradeSelection = []" class="px-3 py-2 rounded-lg text-xs font-bold bg-slate-200 hover:bg-slate-300 text-slate-700 transition-all">
+                                                مسح اختيار الصفوف فقط
+                                            </button>
                                         </div>
                                     </div>
 
@@ -1124,6 +1135,7 @@
                 distributing: false,
                 distributionSuccess: false,
                 selectedDailyExamId: null,
+                quickGradeSelection: [],
 
                 // Batch WhatsApp System Variables
                 batchWhatsAppModalOpen: false,
@@ -1456,21 +1468,27 @@
 
                 getGradeKeyFromClassName(className) {
                     const text = String(className || '').trim();
-                    const normalized = text.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
-                    const digitMatch = normalized.match(/(?:^|[^0-9])([5-9]|10|11|12)(?:\s*[\/\-\(]|\s|$)/);
+                    const normalized = text
+                        .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+                        .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+                        .replace(/\s+/g, ' ');
+
+                    // يدعم الصيغ مثل: 5/1، ٥/١، الصف الخامس، الخامس (1)، خامس 1
+                    const digitMatch = normalized.match(/(?:^|[^0-9])(10|11|12|[5-9])(?:\s*[\/\-\(]|\s|$)/);
                     if (digitMatch) return digitMatch[1];
+
                     const words = [
-                        ['5', ['الخامس', 'خامس']],
-                        ['6', ['السادس', 'سادس']],
-                        ['7', ['السابع', 'سابع']],
-                        ['8', ['الثامن', 'ثامن']],
-                        ['9', ['التاسع', 'تاسع']],
+                        ['12', ['الثاني عشر', 'ثاني عشر', 'الثاني  عشر']],
+                        ['11', ['الحادي عشر', 'حادي عشر', 'الحادي  عشر']],
                         ['10', ['العاشر', 'عاشر']],
-                        ['11', ['الحادي عشر', 'حادي عشر']],
-                        ['12', ['الثاني عشر', 'ثاني عشر']]
+                        ['9', ['التاسع', 'تاسع']],
+                        ['8', ['الثامن', 'ثامن']],
+                        ['7', ['السابع', 'سابع']],
+                        ['6', ['السادس', 'سادس']],
+                        ['5', ['الخامس', 'خامس']]
                     ];
                     for (const [key, names] of words) {
-                        if (names.some(name => text.includes(name))) return key;
+                        if (names.some(name => normalized.includes(name))) return key;
                     }
                     return text || 'غير مصنف';
                 },
@@ -1503,15 +1521,29 @@
                         return String(a.label).localeCompare(String(b.label), 'ar');
                     });
                 },
-                selectGradeClasses(gradeKey) {
-                    const ids = this.schoolClasses
-                        .filter(cls => this.getGradeKeyFromClassName(cls.className) === gradeKey)
+                getClassIdsByGradeKeys(gradeKeys) {
+                    const keys = Array.isArray(gradeKeys) ? gradeKeys.map(String) : [String(gradeKeys)];
+                    return this.schoolClasses
+                        .filter(cls => keys.includes(this.getGradeKeyFromClassName(cls.className)))
                         .map(cls => cls.id);
+                },
+                selectGradeClasses(gradeKey) {
+                    this.quickGradeSelection = Array.from(new Set([...(this.quickGradeSelection || []), String(gradeKey)]));
+                    this.selectQuickGradeClasses();
+                },
+                selectQuickGradeClasses() {
+                    if (!this.quickGradeSelection || this.quickGradeSelection.length === 0) {
+                        this.showToast('يرجى اختيار صف واحد على الأقل من الاختيار السريع.', 'error');
+                        return;
+                    }
+                    const ids = this.getClassIdsByGradeKeys(this.quickGradeSelection);
                     this.examForm.selectedClasses = Array.from(new Set([...(this.examForm.selectedClasses || []), ...ids]));
-                    this.showToast('تم اختيار جميع لجان ' + this.getGradeLabel(gradeKey) + '.');
+                    const labels = this.quickGradeSelection.map(key => this.getGradeLabel(key)).join('، ');
+                    this.showToast('تم اختيار جميع لجان: ' + labels + '.');
                 },
                 clearSelectedClasses() {
                     this.examForm.selectedClasses = [];
+                    this.quickGradeSelection = [];
                     this.showToast('تم مسح اختيار الفصول واللجان.', 'error');
                 },
 
