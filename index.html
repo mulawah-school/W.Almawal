@@ -609,13 +609,13 @@
                                     <input type="date" x-model="subjectRestForm.date" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-bold text-slate-500 mb-1">التخصص المطلوب تعطيله</label>
-                                    <select x-model="subjectRestForm.speciality" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none">
-                                        <option value="">اختر التخصص...</option>
+                                    <label class="block text-xs font-bold text-slate-500 mb-1">التخصصات المطلوب تعطيلها</label>
+                                    <select x-model="subjectRestForm.specialities" multiple required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none min-h-[150px]">
                                         <template x-for="spec in specialities" :key="spec">
                                             <option :value="spec" x-text="spec"></option>
                                         </template>
                                     </select>
+                                    <p class="text-[11px] text-slate-400 mt-1">يمكنك اختيار أكثر من تخصص بالضغط على Ctrl في ويندوز أو Command في ماك.</p>
                                 </div>
                                 <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg font-semibold text-sm transition-all">تفعيل استبعاد التخصص</button>
                             </div>
@@ -633,13 +633,13 @@
                                     <input type="date" x-model="teacherRestForm.date" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-bold text-slate-500 mb-1">المعلم المستهدف</label>
-                                    <select x-model="teacherRestForm.teacherId" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none">
-                                        <option value="">اختر المعلم...</option>
+                                    <label class="block text-xs font-bold text-slate-500 mb-1">المعلمون المستهدفون</label>
+                                    <select x-model="teacherRestForm.teacherIds" multiple required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none min-h-[150px]">
                                         <template x-for="t in teachers" :key="t.id">
-                                            <option :value="t.id" x-text="t.name + ' (' + t.speciality + ')'"></option>
+                                            <option :value="String(t.id)" x-text="t.name + ' (' + t.speciality + ')'"></option>
                                         </template>
                                     </select>
+                                    <p class="text-[11px] text-slate-400 mt-1">يمكنك اختيار أكثر من معلم بالضغط على Ctrl في ويندوز أو Command في ماك.</p>
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-slate-500 mb-1">سبب الاستبعاد</label>
@@ -1166,8 +1166,8 @@
                 teacherForm: { id: null, name: '', speciality: '', phone: '', inControl: false },
                 classForm: { id: null, className: '', committeeName: '' },
                 examForm: { id: null, date: '', period: '08:00 ص', subject: '', duration: 2, observersNeeded: 2, selectedClasses: [] },
-                subjectRestForm: { date: '', speciality: '' },
-                teacherRestForm: { date: '', teacherId: '', reason: '' },
+                subjectRestForm: { date: '', specialities: [] },
+                teacherRestForm: { date: '', teacherIds: [], reason: '' },
                 
                 smartSettings: { floorObservers: 1, backupObservers: 1 },
                 distributing: false,
@@ -1740,16 +1740,26 @@
                 },
 
                 addSubjectRestriction() {
-                    const newId = Date.now();
-                    this.subjectRestrictions.push({
-                        id: newId,
-                        date: this.subjectRestForm.date,
-                        speciality: this.subjectRestForm.speciality
+                    const selectedSpecialities = Array.isArray(this.subjectRestForm.specialities) ? this.subjectRestForm.specialities : [];
+                    if (!this.subjectRestForm.date || selectedSpecialities.length === 0) {
+                        this.showToast('يرجى اختيار التاريخ وتخصص واحد على الأقل.', 'error');
+                        return;
+                    }
+                    const now = Date.now();
+                    selectedSpecialities.forEach((speciality, index) => {
+                        const exists = this.subjectRestrictions.some(r => r.date === this.subjectRestForm.date && r.speciality === speciality);
+                        if (!exists) {
+                            this.subjectRestrictions.push({
+                                id: now + index,
+                                date: this.subjectRestForm.date,
+                                speciality: speciality
+                            });
+                        }
                     });
-                    this.subjectRestForm = { date: '', speciality: '' };
+                    this.subjectRestForm = { date: '', specialities: [] };
                     this.saveAppData();
                     this.runSmartDistribution();
-                    this.showToast('تمت إضافة شرط استبعاد التخصص للغرض والتصحيح.');
+                    this.showToast('تمت إضافة استبعاد التخصصات المختارة بنجاح.');
                 },
                 deleteSubjectRestriction(id) {
                     this.subjectRestrictions = this.subjectRestrictions.filter(r => r.id !== id);
@@ -1758,17 +1768,28 @@
                     this.showToast('تم إزالة استبعاد التخصص.', 'error');
                 },
                 addTeacherRestriction() {
-                    const newId = Date.now();
-                    this.teacherRestrictions.push({
-                        id: newId,
-                        date: this.teacherRestForm.date,
-                        teacherId: parseInt(this.teacherRestForm.teacherId),
-                        reason: this.teacherRestForm.reason
+                    const selectedTeacherIds = Array.isArray(this.teacherRestForm.teacherIds) ? this.teacherRestForm.teacherIds : [];
+                    if (!this.teacherRestForm.date || selectedTeacherIds.length === 0 || !this.teacherRestForm.reason) {
+                        this.showToast('يرجى اختيار التاريخ ومعلم واحد على الأقل وكتابة سبب الاستبعاد.', 'error');
+                        return;
+                    }
+                    const now = Date.now();
+                    selectedTeacherIds.forEach((teacherId, index) => {
+                        const parsedTeacherId = parseInt(teacherId);
+                        const exists = this.teacherRestrictions.some(r => r.date === this.teacherRestForm.date && r.teacherId === parsedTeacherId);
+                        if (!exists) {
+                            this.teacherRestrictions.push({
+                                id: now + index,
+                                date: this.teacherRestForm.date,
+                                teacherId: parsedTeacherId,
+                                reason: this.teacherRestForm.reason
+                            });
+                        }
                     });
-                    this.teacherRestForm = { date: '', teacherId: '', reason: '' };
+                    this.teacherRestForm = { date: '', teacherIds: [], reason: '' };
                     this.saveAppData();
                     this.runSmartDistribution();
-                    this.showToast('تم استبعاد المعلم المحدد بالتاريخ بنجاح.');
+                    this.showToast('تم استبعاد المعلمين المختارين بالتاريخ بنجاح.');
                 },
                 deleteTeacherRestriction(id) {
                     this.teacherRestrictions = this.teacherRestrictions.filter(r => r.id !== id);
