@@ -425,7 +425,10 @@
                 <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
                     <!-- Exam Scheduler Form -->
                     <div class="bg-slate-50 dark:bg-slate-700/30 p-5 rounded-2xl border border-slate-200/50 dark:border-slate-700 xl:col-span-1">
-                        <h3 class="text-md font-bold mb-4 text-slate-900 dark:text-white"><i class="fa-solid fa-calendar-plus text-primary-500 ml-1"></i> حجز موعد اختبار جديد</h3>
+                        <h3 class="text-md font-bold mb-4 text-slate-900 dark:text-white flex items-center gap-2">
+                            <i class="fa-solid text-primary-500" :class="examForm.id ? 'fa-pen-to-square' : 'fa-calendar-plus'"></i>
+                            <span x-text="examForm.id ? 'تعديل موعد الاختبار' : 'حجز موعد اختبار جديد'"></span>
+                        </h3>
                         <form @submit.prevent="addExamDay()">
                             <div class="space-y-4">
                                 <div>
@@ -505,10 +508,15 @@
                                     </div>
                                 </div>
 
-                                <button type="submit" class="w-full bg-primary-600 hover:bg-primary-700 text-white py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center justify-center gap-2">
-                                    <i class="fa-solid fa-calendar-plus"></i>
-                                    <span>إضافة لليوم الحالي</span>
-                                </button>
+                                <div class="flex flex-col sm:flex-row gap-2">
+                                    <button type="submit" class="flex-1 bg-primary-600 hover:bg-primary-700 text-white py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center justify-center gap-2">
+                                        <i class="fa-solid" :class="examForm.id ? 'fa-floppy-disk' : 'fa-calendar-plus'"></i>
+                                        <span x-text="examForm.id ? 'حفظ تعديل الاختبار' : 'إضافة لليوم الحالي'"></span>
+                                    </button>
+                                    <button type="button" x-show="examForm.id" @click="cancelEditExam()" class="sm:w-auto px-4 py-2.5 rounded-lg text-sm font-bold text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 transition-all">
+                                        إلغاء التعديل
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>
@@ -558,9 +566,14 @@
                                             </td>
                                             <td class="px-4 py-3 text-center font-bold text-primary-600 dark:text-primary-400" x-text="exam.observersNeeded"></td>
                                             <td class="px-4 py-3 text-center">
-                                                <button @click="deleteExam(exam.id)" class="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="حذف">
-                                                    <i class="fa-solid fa-trash-can"></i>
-                                                </button>
+                                                <div class="flex items-center justify-center gap-2">
+                                                    <button @click="openEditExam(exam)" class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors" title="تعديل">
+                                                        <i class="fa-solid fa-pen-to-square"></i>
+                                                    </button>
+                                                    <button @click="deleteExam(exam.id)" class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="حذف">
+                                                        <i class="fa-solid fa-trash-can"></i>
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     </template>
@@ -1152,7 +1165,7 @@
                 teacherModalOpen: false,
                 teacherForm: { id: null, name: '', speciality: '', phone: '', inControl: false },
                 classForm: { id: null, className: '', committeeName: '' },
-                examForm: { date: '', period: '08:00 ص', subject: '', duration: 2, observersNeeded: 2, selectedClasses: [] },
+                examForm: { id: null, date: '', period: '08:00 ص', subject: '', duration: 2, observersNeeded: 2, selectedClasses: [] },
                 subjectRestForm: { date: '', speciality: '' },
                 teacherRestForm: { date: '', teacherId: '', reason: '' },
                 
@@ -1625,32 +1638,78 @@
                     this.showToast('تم مسح اختيار الفصول واللجان.', 'error');
                 },
 
+                resetExamForm() {
+                    this.examForm = { id: null, date: '', period: '08:00 ص', subject: '', duration: 2, observersNeeded: 2, selectedClasses: [] };
+                    this.quickGradeSelection = [];
+                },
+                openEditExam(exam) {
+                    this.examForm = {
+                        id: exam.id,
+                        date: exam.date || '',
+                        period: exam.period || '08:00 ص',
+                        subject: exam.subject || '',
+                        duration: Number(exam.duration || 2),
+                        observersNeeded: Number(exam.observersNeeded || 2),
+                        selectedClasses: [...(exam.selectedClasses || [])]
+                    };
+                    this.quickGradeSelection = [];
+                    this.currentTab = 'exams';
+                    this.showToast('تم فتح بيانات الاختبار للتعديل. عدّل البيانات ثم اضغط حفظ تعديل الاختبار.');
+                    setTimeout(() => {
+                        const form = document.querySelector('section[x-show="currentTab === 'exams'"] form');
+                        if (form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 100);
+                },
+                cancelEditExam() {
+                    this.resetExamForm();
+                    this.showToast('تم إلغاء تعديل الاختبار.', 'error');
+                },
                 addExamDay() {
                     if (this.examForm.selectedClasses.length === 0) {
                         this.showToast('يرجى تحديد صف واحد على الأقل للاختبار.', 'error');
                         return;
                     }
-                    const newId = this.exams.length > 0 ? Math.max(...this.exams.map(e => e.id)) + 1 : 101;
-                    this.exams.push({
-                        id: newId,
-                        date: this.examForm.date,
-                        period: this.examForm.period,
-                        subject: this.examForm.subject,
-                        duration: parseFloat(this.examForm.duration),
-                        observersNeeded: parseInt(this.examForm.observersNeeded),
-                        selectedClasses: [...this.examForm.selectedClasses]
-                    });
-                    
-                    this.examForm = { date: '', period: '08:00 ص', subject: '', duration: 2, observersNeeded: 2, selectedClasses: [] };
-                    this.showToast('تمت إضافة موعد ويوم الامتحان المشمول.');
-                    
-                    if (!this.selectedDailyExamId) {
-                        this.selectedDailyExamId = newId;
+
+                    if (this.examForm.id) {
+                        const index = this.exams.findIndex(e => e.id == this.examForm.id);
+                        if (index !== -1) {
+                            this.exams[index] = {
+                                ...this.exams[index],
+                                date: this.examForm.date,
+                                period: this.examForm.period,
+                                subject: this.examForm.subject,
+                                duration: parseFloat(this.examForm.duration),
+                                observersNeeded: parseInt(this.examForm.observersNeeded),
+                                selectedClasses: [...this.examForm.selectedClasses]
+                            };
+                            this.selectedDailyExamId = this.examForm.id;
+                            this.showToast('تم حفظ تعديل الاختبار بنجاح.');
+                        } else {
+                            this.showToast('تعذر العثور على الاختبار المطلوب تعديله.', 'error');
+                            return;
+                        }
+                    } else {
+                        const newId = this.exams.length > 0 ? Math.max(...this.exams.map(e => e.id)) + 1 : 101;
+                        this.exams.push({
+                            id: newId,
+                            date: this.examForm.date,
+                            period: this.examForm.period,
+                            subject: this.examForm.subject,
+                            duration: parseFloat(this.examForm.duration),
+                            observersNeeded: parseInt(this.examForm.observersNeeded),
+                            selectedClasses: [...this.examForm.selectedClasses]
+                        });
+                        this.showToast('تمت إضافة موعد ويوم الامتحان المشمول.');
+                        if (!this.selectedDailyExamId) {
+                            this.selectedDailyExamId = newId;
+                        }
                     }
+                    this.resetExamForm();
                     this.saveAppData();
                     this.runSmartDistribution();
                 },
                 deleteExam(id) {
+                    if (this.examForm && this.examForm.id == id) this.resetExamForm();
                     this.exams = this.exams.filter(e => e.id !== id);
                     this.assignments = this.assignments.filter(a => a.examId !== id);
                     if (this.selectedDailyExamId == id) this.selectedDailyExamId = this.exams.length ? this.exams[0].id : null;
