@@ -1384,6 +1384,8 @@
                 return;
             }
             const userData = userSnap.data();
+            console.log('Firebase user.uid=', user.uid);
+            console.log('schoolUsers data=', userData);
             if (userData.active !== true) {
                 await signOut(auth);
                 setLoginError('هذا الحساب غير مفعل.');
@@ -1449,7 +1451,7 @@
                     await openAppForUser(user);
                 } catch (error) {
                     console.error(error);
-                    setLoginError('تعذر فتح بيانات المدرسة. تحقق من schoolUsers وقواعد Firestore.');
+                    setLoginError('خطأ فتح المدرسة: ' + (error.code || '') + ' - ' + (error.message || 'تحقق من البيانات والقواعد'));
                 }
             });
         }
@@ -1697,7 +1699,7 @@
                     } catch (e) {
                         console.error('تعذر الحفظ السحابي', e);
                         if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('خطأ في الحفظ', 'error');
-                        this.showToast('تعذر الحفظ في Firebase. تحقق من الاتصال أو الصلاحيات.', 'error');
+                        this.showToast('خطأ حفظ Firebase: ' + (e.code || '') + ' - ' + (e.message || 'تعذر الحفظ'), 'error');
                     }
                 },
 
@@ -1730,7 +1732,7 @@
                     } catch (e) {
                         console.error('تعذر تحميل البيانات السحابية', e);
                         if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('خطأ في التحميل', 'error');
-                        this.showToast('تعذر تحميل بيانات Firebase. تحقق من schoolUsers وقواعد Firestore.', 'error');
+                        this.showToast('خطأ Firebase: ' + (e.code || '') + ' - ' + (e.message || 'تعذر التحميل'), 'error');
                     } finally {
                         this.isLoadingCloudData = false;
                     }
