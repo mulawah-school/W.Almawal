@@ -1965,6 +1965,21 @@
                         .replace(/\s+/g, ' ')
                         .trim();
                 },
+
+                normalizeSubjectName(value) {
+                    // توحيد كتابة أسماء المواد حتى يتم الربط بين جدول الاختبارات
+                    // وقسم المواد الاختيارية حتى لو اختلفت الهمزات أو التاء المربوطة أو المسافات.
+                    return String(value || '')
+                        .trim()
+                        .replace(/[أإآٱ]/g, 'ا')
+                        .replace(/ى/g, 'ي')
+                        .replace(/ة/g, 'ه')
+                        .replace(/ؤ/g, 'و')
+                        .replace(/ئ/g, 'ي')
+                        .replace(/[ًٌٍَُِّْـ]/g, '')
+                        .replace(/\s+/g, ' ')
+                        .toLowerCase();
+                },
                 getGradeKeyFromClassName(className) {
                     const text = this.normalizeArabicDigits(className);
                     if (!text) return 'غير مصنف';
@@ -2110,7 +2125,7 @@
 
                         if (classes.length === 0) {
                             if (result.mode === 'optional') {
-                                this.showToast('مادة ' + subject + ' اختيارية، لكن لا توجد لجان مسجلة لها في قسم المواد الاختيارية داخل الصفوف واللجان.', 'error');
+                                this.showToast('لم تنزل لجان للحادي عشر لأن مادة ' + subject + ' غير مسجلة بعد في قسم المواد الاختيارية داخل الصفوف واللجان، أو عدد طلابها صفر.', 'error');
                             } else {
                                 this.showToast('لم يتم العثور على لجان للصف الحادي عشر في إدارة الصفوف واللجان.', 'error');
                             }
