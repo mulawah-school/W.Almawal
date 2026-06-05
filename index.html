@@ -98,7 +98,7 @@
     <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-4 no-print w-full">
         <h2 class="text-md font-extrabold text-slate-400 dark:text-slate-500 mb-4 tracking-wider uppercase"><i class="fa-solid fa-cubes-stacked ml-1.5"></i> لوحة الأيقونات والوظائف الذكية</h2>
         
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-4">
             
             <!-- Icon Card 1: Teachers -->
             <button @click="currentTab = 'teachers'" 
@@ -160,7 +160,17 @@
                 <span class="text-xs font-bold text-slate-800 dark:text-slate-200">الكشف والرسائل</span>
             </button>
 
-            <!-- Icon Card 7: Statistics -->
+            <!-- Icon Card 7: Grade 11 Optional Subjects -->
+            <button @click="currentTab = 'classes'; setTimeout(() => document.getElementById('grade11-optional-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)" 
+                :class="currentTab === 'classes' ? 'ring-2 ring-amber-500 scale-[1.03] shadow-amber-500/10' : 'hover:scale-[1.05]'"
+                class="bg-gradient-to-br from-amber-500/10 to-amber-600/5 hover:from-amber-500/20 dark:from-amber-950/20 border border-amber-500/20 hover:border-amber-500 rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all duration-300 group hover:-translate-y-1.5 hover:shadow-xl shadow-slate-200 dark:shadow-none min-h-[120px]">
+                <div class="w-12 h-12 rounded-xl bg-amber-500 text-white flex items-center justify-center mb-3 shadow-lg shadow-amber-500/30 group-hover:scale-110 duration-300">
+                    <i class="fa-solid fa-layer-group text-lg"></i>
+                </div>
+                <span class="text-xs font-bold text-slate-800 dark:text-slate-200">إضافة المواد الاختيارية</span>
+            </button>
+
+            <!-- Icon Card 8: Statistics -->
             <button @click="currentTab = 'statistics'" 
                 :class="currentTab === 'statistics' ? 'ring-2 ring-rose-500 scale-[1.03] shadow-rose-500/10' : 'hover:scale-[1.05]'"
                 class="bg-gradient-to-br from-rose-500/10 to-rose-600/5 hover:from-rose-500/20 dark:from-rose-950/20 border border-rose-500/20 hover:border-rose-500 rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all duration-300 group hover:-translate-y-1.5 hover:shadow-xl shadow-slate-200 dark:shadow-none min-h-[120px]">
@@ -369,7 +379,7 @@
                         <i class="fa-solid fa-school text-blue-500"></i>
                         <span>إدارة الصفوف واللجان المدرسية</span>
                     </h2>
-                    <p class="text-sm text-slate-500">قم بتسجيل صفوف المدرسة واللجان التابعة لها يدوياً لتسهيل عملية ربطها بالاختبارات وتوزيع المعلمين.</p>
+                    <p class="text-sm text-slate-500">قم بتسجيل صفوف المدرسة واللجان التابعة لها، ثم سجّل مواد الصف الحادي عشر الاختيارية من القسم المستقل أسفل الصفحة.</p>
                 </div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -383,23 +393,24 @@
                             <div class="space-y-4">
                                 <div>
                                     <label class="block text-xs font-bold text-slate-500 mb-1">الصف الدراسي</label>
-                                    <input type="text" x-model="classForm.className" placeholder="مثال: الصف الثاني عشر (1)" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                    <input type="text" x-model="classForm.className" placeholder="مثال: 11/1 أو الحادي عشر (1)" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-slate-500 mb-1">اسم/رقم اللجنة المقابلة</label>
-                                    <input type="text" x-model="classForm.committeeName" placeholder="مثال: لجنة 1 (القاعة الكبرى)" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                    <input type="text" x-model="classForm.committeeName" placeholder="مثال: لجنة 25" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
                                 </div>
                                 <div class="grid grid-cols-2 gap-2">
                                     <div>
-                                        <label class="block text-xs font-bold text-slate-500 mb-1">عدد الطلبة النظاميين</label>
+                                        <label class="block text-xs font-bold text-slate-500 mb-1">عدد الطلاب النظاميين</label>
                                         <input type="number" min="0" x-model.number="classForm.regularCount" placeholder="0" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
                                     </div>
                                     <div>
-                                        <label class="block text-xs font-bold text-slate-500 mb-1">عدد الطلبة الدارسين</label>
+                                        <label class="block text-xs font-bold text-slate-500 mb-1">عدد الطلاب الدارسين</label>
                                         <input type="number" min="0" x-model.number="classForm.adultCount" placeholder="0" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
                                     </div>
                                 </div>
-                                <p class="text-[11px] text-slate-500 -mt-2">هذه الأعداد محفوظة ومجهزة للانتقال تلقائيًا إلى ملف الكنترول بعد الدمج.</p>
+                                <p class="text-[11px] text-slate-500 -mt-2">هذه الأعداد العامة للصف، أما مواد الصف الحادي عشر الاختيارية فلها قسم مستقل أسفل الصفحة.</p>
+
                                 <div class="flex gap-2">
                                     <button type="submit" class="flex-1 bg-primary-600 hover:bg-primary-700 text-white py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center justify-center gap-2">
                                         <i class="fa-solid" :class="classForm.id ? 'fa-floppy-disk' : 'fa-square-plus'"></i>
@@ -423,7 +434,7 @@
                                         <th class="px-4 py-3 font-semibold">اللجنة المقابلة</th>
                                         <th class="px-4 py-3 font-semibold text-center">النظاميون</th>
                                         <th class="px-4 py-3 font-semibold text-center">الدارسون</th>
-                                        <th class="px-4 py-3 font-semibold text-center w-24">الإجراءات</th>
+                                        <th class="px-4 py-3 font-semibold text-center">الإجراءات</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -451,10 +462,79 @@
                                         </tr>
                                     </template>
                                     <tr x-show="schoolClasses.length === 0">
-                                        <td colspan="5" class="text-center py-12 text-slate-400">لم يتم تسجيل أي صفوف أو لجان حتى الآن. يرجى إضافتها باستخدام النموذج على اليمين.</td>
+                                        <td colspan="5" class="text-center py-12 text-slate-400">لم يتم تسجيل أي صفوف أو لجان حتى الآن.</td>
                                     </tr>
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Independent Grade 11 Optional Subjects Panel inside Classes -->
+                <div id="grade11-optional-panel" class="mt-8 rounded-2xl border-2 border-amber-200 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/10 overflow-hidden">
+                    <div class="p-5 border-b border-amber-200 dark:border-amber-800 bg-white/70 dark:bg-slate-900/40 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                        <div class="flex items-start gap-3">
+                            <div class="w-12 h-12 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/20">
+                                <i class="fa-solid fa-layer-group text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">إضافة المواد الاختيارية للصف الحادي عشر</h3>
+                                <p class="text-xs text-slate-500 mt-1">تظهر لجان الصف الحادي عشر تلقائيًا من الصفوف واللجان. أمام كل لجنة 4 خيارات، وكل خيار يحتوي على مادة وعدد الطلاب.</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button @click="clearGrade11OptionalData()" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center gap-2">
+                                <i class="fa-solid fa-trash-can"></i>
+                                مسح
+                            </button>
+                            <button @click="saveGrade11OptionalData(true)" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center gap-2">
+                                <i class="fa-solid fa-floppy-disk"></i>
+                                حفظ المواد الاختيارية
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="p-5">
+                        <div class="mb-4 p-4 rounded-xl bg-amber-100/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 leading-6">
+                            مثال: إذا كانت لجنة 25 فيها أحياء وفيزياء وكيمياء، ضع كل مادة في خيار مستقل مع عدد الطلاب الخاص بها. عند اختيار المادة في جدول الاختبارات سيأخذ العدد الصحيح تلقائيًا.
+                        </div>
+
+                        <div class="space-y-4">
+                            <template x-for="cls in grade11Classes" :key="cls.id">
+                                <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
+                                    <div class="bg-slate-50 dark:bg-slate-900/40 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 dark:border-slate-700">
+                                        <div>
+                                            <div class="font-extrabold text-slate-900 dark:text-white" x-text="cls.className"></div>
+                                            <div class="text-xs text-blue-600 dark:text-blue-300 mt-1" x-text="'اللجنة: ' + cls.committeeName"></div>
+                                        </div>
+                                        <div class="text-xs text-slate-500">
+                                            العدد العام: <strong x-text="Number(cls.regularCount || 0) + Number(cls.adultCount || 0)"></strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 p-4">
+                                        <template x-for="slotIndex in [0,1,2,3]" :key="slotIndex">
+                                            <div class="rounded-xl border border-amber-100 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/10 p-3 space-y-2">
+                                                <div class="text-[11px] font-extrabold text-amber-700 dark:text-amber-300" x-text="'الخيار ' + (slotIndex + 1)"></div>
+                                                <select :value="getGrade11OptionalSlot(cls.id, slotIndex).subject" @change="updateGrade11OptionalSlot(cls.id, slotIndex, 'subject', $event.target.value)" class="w-full px-2 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500">
+                                                    <option value="">اختر المادة...</option>
+                                                    <template x-for="subject in grade11OptionalSubjects" :key="subject">
+                                                        <option :value="subject" x-text="subject"></option>
+                                                    </template>
+                                                </select>
+                                                <div>
+                                                    <label class="block text-[10px] font-bold text-slate-500 mb-1">عدد الطلاب</label>
+                                                    <input type="number" min="0" :value="getGrade11OptionalSlot(cls.id, slotIndex).regularCount" @input="updateGrade11OptionalSlot(cls.id, slotIndex, 'regularCount', $event.target.value)" class="w-full px-2 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500">
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <div x-show="grade11Classes.length === 0" class="text-center py-12 text-slate-500 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-amber-300 dark:border-amber-800">
+                                لا توجد لجان للصف الحادي عشر. أضف لجان 11 أولًا من صفحة الصفوف واللجان مثل 11/1 أو الحادي عشر.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -505,6 +585,7 @@
                                             <option :value="spec" x-text="spec"></option>
                                         </template>
                                     </select>
+                                    <p class="text-[11px] text-slate-500 mt-1">إذا كانت المادة لها أعداد خاصة في إدارة الصفوف واللجان، سيستخدمها البرنامج تلقائياً.</p>
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-slate-500 mb-1">عدد المراقبين المطلق لكل لجنة</label>
@@ -549,7 +630,7 @@
                                         <template x-for="cls in schoolClasses" :key="cls.id">
                                             <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
                                                 <input type="checkbox" :value="cls.id" x-model="examForm.selectedClasses" class="rounded text-primary-600 focus:ring-primary-500">
-                                                <span class="text-xs text-slate-700 dark:text-slate-300 font-semibold" x-text="cls.className + ' - ' + cls.committeeName"></span>
+                                                <span class="text-xs text-slate-700 dark:text-slate-300 font-semibold" x-text="cls.className + ' - ' + cls.committeeName + ' | العدد: ' + getExamClassCountText(cls.id, examForm.subject)"></span>
                                             </label>
                                         </template>
                                         <div x-show="schoolClasses.length === 0" class="text-center py-4 text-xs text-slate-400">يرجى تسجيل صفوف المدرسة أولاً</div>
@@ -608,7 +689,7 @@
                                             <td class="px-4 py-3">
                                                 <div class="flex flex-wrap gap-1">
                                                     <template x-for="clsId in exam.selectedClasses" :key="clsId">
-                                                        <span class="text-[10px] bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 px-2 py-0.5 rounded" x-text="getClassName(clsId)"></span>
+                                                        <span class="text-[10px] bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 px-2 py-0.5 rounded" x-text="getClassName(clsId) + ' (' + getExamClassCountText(clsId, exam.subject) + ')' "></span>
                                                     </template>
                                                 </div>
                                             </td>
@@ -1277,7 +1358,8 @@
                 searchTeacher: '',
                 teacherModalOpen: false,
                 teacherForm: { id: null, name: '', speciality: '', phone: '', inControl: false },
-                classForm: { id: null, className: '', committeeName: '', regularCount: 0, adultCount: 0 },
+                classForm: { id: null, className: '', committeeName: '', regularCount: 0, adultCount: 0, subjectCounts: {} },
+                subjectCountForm: { subject: '', regularCount: 0, adultCount: 0 },
                 examForm: { id: null, date: '', period: '08:00 ص', subject: '', duration: 2, observersNeeded: 2, selectedClasses: [] },
                 subjectRestForm: { date: '', specialities: [] },
                 teacherRestForm: { date: '', teacherIds: [], reason: '' },
@@ -1287,6 +1369,8 @@
                 distributionSuccess: false,
                 selectedDailyExamId: null,
                 quickGradeSelection: [],
+                grade11OptionalSubjects: ['الكيمياء', 'الأحياء', 'العلوم البيئية', 'الفيزياء', 'التاريخ', 'الجغرافيا الاقتصادية', 'الرياضة المدرسية', 'المهارات الموسيقية'],
+                grade11OptionalRows: {},
 
                 // Batch WhatsApp System Variables
                 batchWhatsAppModalOpen: false,
@@ -1296,6 +1380,7 @@
 
                 // حفظ كل بيانات برنامج التوزيع محلياً حتى لا تعود البيانات الافتراضية بعد تحديث الصفحة
                 appStorageKey: 'monitoring_distribution_full_state_v4',
+                legacyAppStorageKeys: ['monitoring_distribution_full_state_v3', 'monitoring_distribution_full_state_v2', 'monitoring_distribution_full_state_v1'],
                 teachersStorageKey: 'monitoring_distribution_teachers_v2',
 
                 normalizeTeacherList(list) {
@@ -1309,18 +1394,43 @@
                 },
 
                 normalizeSchoolClasses(list) {
-                    return Array.isArray(list) ? list.map((c, index) => ({
-                        id: c.id || index + 1,
-                        className: String(c.className || '').trim(),
-                        committeeName: String(c.committeeName || '').trim(),
-                        regularCount: Number(c.regularCount || c.count || c.registeredNormal || 0),
-                        adultCount: Number(c.adultCount || c.registeredAdults || 0)
-                    })).filter(c => c.className && c.committeeName) : [];
+                    return Array.isArray(list) ? list.map((c, index) => {
+                        const rawSubjectCounts = c.subjectCounts || c.optionalSubjectCounts || {};
+                        const subjectCounts = {};
+                        Object.keys(rawSubjectCounts || {}).forEach(subject => {
+                            const row = rawSubjectCounts[subject] || {};
+                            if (subject) {
+                                subjectCounts[subject] = {
+                                    regularCount: Number(row.regularCount || row.count || row.registeredNormal || 0),
+                                    adultCount: Number(row.adultCount || row.registeredAdults || 0)
+                                };
+                            }
+                        });
+                        return {
+                            id: c.id || index + 1,
+                            className: String(c.className || '').trim(),
+                            committeeName: String(c.committeeName || '').trim(),
+                            regularCount: Number(c.regularCount || c.count || c.registeredNormal || 0),
+                            adultCount: Number(c.adultCount || c.registeredAdults || 0),
+                            subjectCounts
+                        };
+                    }).filter(c => c.className && c.committeeName) : [];
                 },
 
                 loadSavedData() {
                     try {
-                        const saved = localStorage.getItem(this.appStorageKey);
+                        let saved = localStorage.getItem(this.appStorageKey);
+                        let loadedFromLegacy = false;
+                        if (saved === null && Array.isArray(this.legacyAppStorageKeys)) {
+                            for (const key of this.legacyAppStorageKeys) {
+                                const oldSaved = localStorage.getItem(key);
+                                if (oldSaved !== null) {
+                                    saved = oldSaved;
+                                    loadedFromLegacy = true;
+                                    break;
+                                }
+                            }
+                        }
                         if (saved !== null) {
                             const parsed = JSON.parse(saved);
                             if (Object.prototype.hasOwnProperty.call(parsed, 'teachers')) this.teachers = this.normalizeTeacherList(parsed.teachers);
@@ -1336,6 +1446,7 @@
                                 };
                             }
                             if (Object.prototype.hasOwnProperty.call(parsed, 'selectedDailyExamId')) this.selectedDailyExamId = parsed.selectedDailyExamId;
+                            if (parsed.grade11OptionalRows && typeof parsed.grade11OptionalRows === 'object') this.grade11OptionalRows = this.normalizeGrade11OptionalRows(parsed.grade11OptionalRows);
                             return;
                         }
 
@@ -1360,7 +1471,8 @@
                             subjectRestrictions: this.subjectRestrictions,
                             teacherRestrictions: this.teacherRestrictions,
                             smartSettings: this.smartSettings,
-                            selectedDailyExamId: this.selectedDailyExamId
+                            selectedDailyExamId: this.selectedDailyExamId,
+                            grade11OptionalRows: this.grade11OptionalRows
                         };
                         localStorage.setItem(this.appStorageKey, JSON.stringify(state));
                         localStorage.setItem(this.teachersStorageKey, JSON.stringify(this.teachers));
@@ -1382,6 +1494,7 @@
                         exam.selectedClasses.forEach(clsId => {
                             const cls = this.schoolClasses.find(c => c.id == clsId) || {};
                             const proctors = this.getDailyClassAssignments(exam.id, clsId).map(a => a.teacherName).filter(Boolean);
+                            const counts = this.getStudentCountsForSubject(clsId, exam.subject);
                             sessionsByDate[exam.date].push({
                                 id: `${exam.period}-${exam.subject}-${cls.className || clsId}-${cls.committeeName || ''}`,
                                 date: exam.date,
@@ -1392,9 +1505,10 @@
                                 committeeName: cls.committeeName || '',
                                 proctorName: proctors.join(' / '),
                                 proctors,
-                                registeredNormal: Number(cls.regularCount || 0),
-                                registeredAdults: Number(cls.adultCount || 0),
-                                count: Number(cls.regularCount || 0) + Number(cls.adultCount || 0),
+                                registeredNormal: counts.regularCount,
+                                registeredAdults: counts.adultCount,
+                                count: counts.total,
+                                countSource: counts.source,
                                 absentNormal: '',
                                 absentAdults: '',
                                 absenteesNames: '',
@@ -1409,6 +1523,7 @@
                         teachers: this.teachers,
                         controlMembers: this.teachers.filter(t => t.inControl),
                         schoolClasses: this.schoolClasses,
+                        grade11OptionalRows: this.grade11OptionalRows,
                         exams: this.exams,
                         assignments: this.assignments,
                         sessionsByDate
@@ -1430,6 +1545,8 @@
                         document.documentElement.classList.add('dark');
                     }
                     this.loadSavedData();
+                    this.migrateLegacySubjectCountsToGrade11Optional();
+                    this.ensureAllGrade11OptionalRows();
                     if(this.exams.length > 0) {
                         if (!this.selectedDailyExamId || !this.exams.some(e => e.id == this.selectedDailyExamId)) {
                             this.selectedDailyExamId = this.exams[0].id;
@@ -1628,12 +1745,137 @@
                     reader.readAsArrayBuffer(file);
                 },
 
+                get grade11Classes() {
+                    return this.schoolClasses
+                        .filter(c => this.getGradeKeyFromClassName(c.className) === '11')
+                        .sort((a, b) => String(a.className).localeCompare(String(b.className), 'ar', { numeric: true }));
+                },
+                normalizeGrade11OptionalRows(rows) {
+                    const normalized = {};
+                    if (!rows || typeof rows !== 'object') return normalized;
+                    Object.keys(rows).forEach(classId => {
+                        const arr = Array.isArray(rows[classId]) ? rows[classId] : [];
+                        normalized[classId] = [0,1,2,3].map(i => ({
+                            subject: String((arr[i] && arr[i].subject) || '').trim(),
+                            regularCount: Number((arr[i] && (arr[i].regularCount ?? arr[i].count)) || 0),
+                            adultCount: 0
+                        }));
+                    });
+                    return normalized;
+                },
+                ensureGrade11OptionalRow(classId) {
+                    const key = String(classId);
+                    if (!Array.isArray(this.grade11OptionalRows[key]) || this.grade11OptionalRows[key].length !== 4) {
+                        const old = Array.isArray(this.grade11OptionalRows[key]) ? this.grade11OptionalRows[key] : [];
+                        this.grade11OptionalRows[key] = [0,1,2,3].map(i => ({
+                            subject: String((old[i] && old[i].subject) || '').trim(),
+                            regularCount: Number((old[i] && (old[i].regularCount ?? old[i].count)) || 0),
+                            adultCount: 0
+                        }));
+                    }
+                    return this.grade11OptionalRows[key];
+                },
+                ensureAllGrade11OptionalRows() {
+                    this.grade11Classes.forEach(cls => this.ensureGrade11OptionalRow(cls.id));
+                    Object.keys(this.grade11OptionalRows || {}).forEach(classId => {
+                        if (!this.schoolClasses.some(c => String(c.id) === String(classId))) delete this.grade11OptionalRows[classId];
+                    });
+                },
+                migrateLegacySubjectCountsToGrade11Optional() {
+                    this.schoolClasses.forEach(cls => {
+                        if (this.getGradeKeyFromClassName(cls.className) !== '11') return;
+                        const legacy = cls.subjectCounts || {};
+                        const subjects = Object.keys(legacy).filter(Boolean);
+                        if (subjects.length === 0) return;
+                        this.ensureGrade11OptionalRow(cls.id);
+                        subjects.slice(0, 4).forEach((subject, i) => {
+                            const row = legacy[subject] || {};
+                            const exists = this.grade11OptionalRows[String(cls.id)].some(slot => slot.subject === subject);
+                            if (!exists) {
+                                this.grade11OptionalRows[String(cls.id)][i] = {
+                                    subject,
+                                    regularCount: Number(row.regularCount || row.count || 0),
+                                    adultCount: 0
+                                };
+                            }
+                        });
+                        cls.subjectCounts = {};
+                    });
+                },
+                saveGrade11OptionalData(showMessage = true) {
+                    this.ensureAllGrade11OptionalRows();
+                    this.saveAppData();
+                    this.runSmartDistribution();
+                    if (showMessage) this.showToast('تم حفظ بيانات إضافة المواد الاختيارية للصف الحادي عشر.');
+                },
+                clearGrade11OptionalData() {
+                    this.grade11OptionalRows = {};
+                    this.ensureAllGrade11OptionalRows();
+                    this.saveAppData();
+                    this.runSmartDistribution();
+                    this.showToast('تم مسح أعداد إضافة المواد الاختيارية للصف الحادي عشر.', 'error');
+                },
+                getGrade11OptionalCount(classId, subject) {
+                    const slots = this.ensureGrade11OptionalRow(classId);
+                    const subj = String(subject || '').trim();
+                    const slot = slots.find(s => String(s.subject || '').trim() === subj);
+                    if (!slot) return null;
+                    const regularCount = Number(slot.regularCount || 0);
+                    return { regularCount, adultCount: 0, total: regularCount, source: 'grade11Optional' };
+                },
+                getGrade11OptionalSlot(classId, slotIndex) {
+                    const slots = this.ensureGrade11OptionalRow(classId);
+                    const i = Number(slotIndex || 0);
+                    if (!slots[i]) {
+                        slots[i] = { subject: '', regularCount: 0, adultCount: 0 };
+                    }
+                    return slots[i];
+                },
+                updateGrade11OptionalSlot(classId, slotIndex, field, value) {
+                    const slot = this.getGrade11OptionalSlot(classId, slotIndex);
+                    if (field === 'subject') {
+                        slot.subject = String(value || '').trim();
+                    } else if (field === 'regularCount') {
+                        slot.regularCount = Math.max(0, Number(value || 0));
+                        slot.adultCount = 0;
+                    }
+                    this.saveGrade11OptionalData(false);
+                },
                 resetClassForm() {
-                    this.classForm = { id: null, className: '', committeeName: '', regularCount: 0, adultCount: 0 };
+                    this.classForm = { id: null, className: '', committeeName: '', regularCount: 0, adultCount: 0, subjectCounts: {} };
+                    this.subjectCountForm = { subject: '', regularCount: 0, adultCount: 0 };
                 },
                 openEditSchoolClass(item) {
-                    this.classForm = { id: item.id, className: item.className, committeeName: item.committeeName, regularCount: Number(item.regularCount || 0), adultCount: Number(item.adultCount || 0) };
+                    this.classForm = {
+                        id: item.id,
+                        className: item.className,
+                        committeeName: item.committeeName,
+                        regularCount: Number(item.regularCount || 0),
+                        adultCount: Number(item.adultCount || 0),
+                        subjectCounts: JSON.parse(JSON.stringify(item.subjectCounts || {}))
+                    };
+                    this.subjectCountForm = { subject: '', regularCount: 0, adultCount: 0 };
                     this.showToast('يمكنك الآن تعديل بيانات الصف واللجنة من النموذج.');
+                },
+                addClassSubjectCount() {
+                    const subject = String(this.subjectCountForm.subject || '').trim();
+                    if (!subject) {
+                        this.showToast('اختر المادة أولاً لإضافة عددها لهذه اللجنة.', 'error');
+                        return;
+                    }
+                    if (!this.classForm.subjectCounts || typeof this.classForm.subjectCounts !== 'object') this.classForm.subjectCounts = {};
+                    this.classForm.subjectCounts[subject] = {
+                        regularCount: Number(this.subjectCountForm.regularCount || 0),
+                        adultCount: Number(this.subjectCountForm.adultCount || 0)
+                    };
+                    this.subjectCountForm = { subject: '', regularCount: 0, adultCount: 0 };
+                    this.showToast('تم إضافة/تحديث عدد المادة الاختيارية لهذه اللجنة.');
+                },
+                deleteClassSubjectCount(subject) {
+                    if (this.classForm.subjectCounts && Object.prototype.hasOwnProperty.call(this.classForm.subjectCounts, subject)) {
+                        delete this.classForm.subjectCounts[subject];
+                        this.showToast('تم حذف عدد المادة الاختيارية من هذه اللجنة.', 'error');
+                    }
                 },
                 addClassCommittee() {
                     if (this.classForm.id) {
@@ -1644,7 +1886,8 @@
                                 className: this.classForm.className,
                                 committeeName: this.classForm.committeeName,
                                 regularCount: Number(this.classForm.regularCount || 0),
-                                adultCount: Number(this.classForm.adultCount || 0)
+                                adultCount: Number(this.classForm.adultCount || 0),
+                                subjectCounts: JSON.parse(JSON.stringify(this.classForm.subjectCounts || {}))
                             };
                             this.saveAppData();
                             this.runSmartDistribution();
@@ -1657,7 +1900,8 @@
                             className: this.classForm.className,
                             committeeName: this.classForm.committeeName,
                             regularCount: Number(this.classForm.regularCount || 0),
-                            adultCount: Number(this.classForm.adultCount || 0)
+                            adultCount: Number(this.classForm.adultCount || 0),
+                            subjectCounts: JSON.parse(JSON.stringify(this.classForm.subjectCounts || {}))
                         });
                         this.saveAppData();
                         this.runSmartDistribution();
@@ -1667,6 +1911,7 @@
                 },
                 deleteSchoolClass(id) {
                     if (this.classForm.id == id) this.resetClassForm();
+                    if (this.grade11OptionalRows) delete this.grade11OptionalRows[String(id)];
                     this.schoolClasses = this.schoolClasses.filter(c => c.id !== id);
                     this.exams = this.exams.map(e => ({ ...e, selectedClasses: e.selectedClasses.filter(clsId => clsId != id) }));
                     this.assignments = this.assignments.filter(a => a.classId != id);
@@ -1692,6 +1937,29 @@
                 },
                 getClassTotalCount(id) {
                     return this.getClassRegularCount(id) + this.getClassAdultCount(id);
+                },
+                getStudentCountsForSubject(classId, subject) {
+                    const cls = this.schoolClasses.find(c => c.id == classId);
+                    if (!cls) return { regularCount: 0, adultCount: 0, total: 0, source: 'none' };
+                    const subj = String(subject || '').trim();
+                    if (this.getGradeKeyFromClassName(cls.className) === '11' && subj) {
+                        const optionalCounts = this.getGrade11OptionalCount(classId, subj);
+                        if (optionalCounts) return optionalCounts;
+                    }
+                    const subjectCounts = cls.subjectCounts || {};
+                    if (subj && subjectCounts[subj]) {
+                        const regularCount = Number(subjectCounts[subj].regularCount || 0);
+                        const adultCount = Number(subjectCounts[subj].adultCount || 0);
+                        return { regularCount, adultCount, total: regularCount + adultCount, source: 'subject' };
+                    }
+                    const regularCount = Number(cls.regularCount || 0);
+                    const adultCount = Number(cls.adultCount || 0);
+                    return { regularCount, adultCount, total: regularCount + adultCount, source: 'general' };
+                },
+                getExamClassCountText(classId, subject) {
+                    const counts = this.getStudentCountsForSubject(classId, subject);
+                    const suffix = counts.source === 'grade11Optional' ? ' اختياري' : (counts.source === 'subject' ? ' مادة' : ' عام');
+                    return counts.total + suffix;
                 },
 
                 normalizeArabicDigits(value) {
