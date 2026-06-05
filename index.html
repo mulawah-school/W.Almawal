@@ -71,7 +71,38 @@
         }
     </script>
 </head>
-<body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-300" x-data="examManager">
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-300">
+
+    <!-- شاشة تسجيل الدخول لتجربة Firebase -->
+    <div id="login-screen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f1f5f9;font-family:Cairo,Arial,sans-serif;direction:rtl;padding:20px;">
+        <div style="width:390px;background:white;padding:28px;border-radius:22px;box-shadow:0 18px 45px rgba(15,23,42,.16);border:1px solid #e2e8f0;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+                <div style="width:48px;height:48px;border-radius:16px;background:#16a34a;color:white;display:flex;align-items:center;justify-content:center;font-size:22px;">
+                    <i class="fa-solid fa-clipboard-user"></i>
+                </div>
+                <div>
+                    <h2 style="font-size:21px;font-weight:900;margin:0;color:#0f172a;">تسجيل الدخول</h2>
+                    <p style="font-size:12px;color:#64748b;margin:3px 0 0;">برنامج توزيع المراقبة الذكي</p>
+                </div>
+            </div>
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:12px;margin-bottom:16px;font-size:12px;color:#475569;line-height:1.8;">
+                اكتب اسم المستخدم فقط، وسيتم تحويله داخليًا إلى بريد Firebase مثل:<br>
+                <b>school001@monitoring.local</b>
+            </div>
+            <label style="font-size:13px;font-weight:800;color:#334155;display:block;margin-bottom:6px;">اسم المستخدم</label>
+            <input id="login-username" type="text" placeholder="مثال: school001" style="width:100%;margin-bottom:14px;padding:12px;border:1px solid #cbd5e1;border-radius:12px;font-size:14px;box-sizing:border-box;outline:none;">
+            <label style="font-size:13px;font-weight:800;color:#334155;display:block;margin-bottom:6px;">كلمة المرور</label>
+            <input id="login-password" type="password" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter') loginWithUsername()" style="width:100%;margin-bottom:12px;padding:12px;border:1px solid #cbd5e1;border-radius:12px;font-size:14px;box-sizing:border-box;outline:none;">
+            <div id="login-error" style="min-height:20px;color:#dc2626;font-size:13px;margin-bottom:12px;font-weight:700;"></div>
+            <button onclick="loginWithUsername()" style="width:100%;padding:12px;border:none;border-radius:12px;background:#16a34a;color:white;font-weight:900;font-size:15px;cursor:pointer;box-shadow:0 8px 18px rgba(22,163,74,.22);">
+                دخول
+            </button>
+            <p style="font-size:11px;color:#94a3b8;text-align:center;margin:16px 0 0;">نسخة تجربة Firebase - توزيع المراقبة</p>
+        </div>
+    </div>
+
+    <div id="app-screen" x-data="examManager" style="display:none;" x-cloak>
+
 
     <!-- Header / Navbar -->
     <header class="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40 no-print">
@@ -90,6 +121,11 @@
                 <!-- Theme Toggle -->
                 <button @click="toggleTheme()" class="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
                     <i class="fa-solid" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i>
+                </button>
+                <span id="cloud-status" class="text-[10px] px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 font-bold">محلي</span>
+                <button onclick="logoutMonitoring()" class="px-3 py-2 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-700 text-white transition-colors flex items-center gap-1.5">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span>خروج</span>
                 </button>
                 <div class="h-6 w-px bg-slate-200 dark:bg-slate-700"></div>
                 <span class="text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 font-bold">
@@ -1284,6 +1320,140 @@
         </div>
     </footer>
 
+    </div>
+
+
+    <!-- Firebase Auth + Firestore cloud sync for monitoring distribution -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // مهم: استبدل القيم التالية ببيانات مشروع Firebase الخاص بك من Project settings > Web app
+        const firebaseConfig = {
+            apiKey: "ضع_apiKey_هنا",
+            authDomain: "ضع_authDomain_هنا",
+            projectId: "ضع_projectId_هنا",
+            storageBucket: "ضع_storageBucket_هنا",
+            messagingSenderId: "ضع_messagingSenderId_هنا",
+            appId: "ضع_appId_هنا"
+        };
+
+        const firebaseConfigured = firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("ضع_") && firebaseConfig.projectId && !firebaseConfig.projectId.includes("ضع_");
+        let app = null;
+        let auth = null;
+        let db = null;
+
+        function setLoginError(message) {
+            const el = document.getElementById('login-error');
+            if (el) el.textContent = message || '';
+        }
+
+        window.updateCloudStatus = function(message, mode = 'neutral') {
+            const el = document.getElementById('cloud-status');
+            if (!el) return;
+            el.textContent = message;
+            el.className = 'text-[10px] px-2.5 py-1 rounded-full font-bold ' + (
+                mode === 'success' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' :
+                mode === 'error' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
+                mode === 'loading' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+            );
+        };
+
+        if (firebaseConfigured) {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            window.monitoringFirebase = { app, auth, db, doc, getDoc, setDoc, signOut, serverTimestamp };
+        } else {
+            window.monitoringFirebase = null;
+            window.addEventListener('DOMContentLoaded', () => {
+                setLoginError('بيانات Firebase غير مكتملة. افتح ملف HTML واستبدل firebaseConfig ببيانات مشروعك.');
+            });
+        }
+
+        async function openAppForUser(user) {
+            if (!window.monitoringFirebase) return;
+            const userRef = doc(db, 'schoolUsers', user.uid);
+            const userSnap = await getDoc(userRef);
+            if (!userSnap.exists()) {
+                await signOut(auth);
+                setLoginError('هذا المستخدم غير مربوط بمدرسة في schoolUsers.');
+                return;
+            }
+            const userData = userSnap.data();
+            if (userData.active !== true) {
+                await signOut(auth);
+                setLoginError('هذا الحساب غير مفعل.');
+                return;
+            }
+            window.currentSchoolId = userData.schoolId;
+            window.currentUserRole = userData.role || 'school_admin';
+            window.currentUsername = userData.username || '';
+
+            const loginScreen = document.getElementById('login-screen');
+            const appScreen = document.getElementById('app-screen');
+            if (loginScreen) loginScreen.style.display = 'none';
+            if (appScreen) appScreen.style.display = 'block';
+            window.updateCloudStatus('متصل بالسحابة', 'success');
+
+            const runLoad = () => {
+                if (window.monitoringDistributionApp && typeof window.monitoringDistributionApp.loadCloudData === 'function') {
+                    window.monitoringDistributionApp.loadCloudData();
+                }
+            };
+            if (window.monitoringDistributionApp) runLoad();
+            else window.addEventListener('monitoring-app-ready', runLoad, { once: true });
+        }
+
+        window.loginWithUsername = async function() {
+            if (!window.monitoringFirebase) {
+                setLoginError('بيانات Firebase غير مكتملة داخل الملف.');
+                return;
+            }
+            const username = (document.getElementById('login-username')?.value || '').trim().toLowerCase();
+            const password = (document.getElementById('login-password')?.value || '').trim();
+            if (!username || !password) {
+                setLoginError('يرجى إدخال اسم المستخدم وكلمة المرور.');
+                return;
+            }
+            const email = username.includes('@') ? username : `${username}@monitoring.local`;
+            try {
+                setLoginError('');
+                await signInWithEmailAndPassword(auth, email, password);
+            } catch (error) {
+                console.error(error);
+                setLoginError('اسم المستخدم أو كلمة المرور غير صحيحة.');
+            }
+        };
+
+        window.logoutMonitoring = async function() {
+            if (auth) await signOut(auth);
+            window.currentSchoolId = null;
+            location.reload();
+        };
+
+        if (firebaseConfigured) {
+            onAuthStateChanged(auth, async (user) => {
+                if (!user) {
+                    const loginScreen = document.getElementById('login-screen');
+                    const appScreen = document.getElementById('app-screen');
+                    if (loginScreen) loginScreen.style.display = 'flex';
+                    if (appScreen) appScreen.style.display = 'none';
+                    window.updateCloudStatus('غير متصل', 'neutral');
+                    return;
+                }
+                try {
+                    await openAppForUser(user);
+                } catch (error) {
+                    console.error(error);
+                    setLoginError('تعذر فتح بيانات المدرسة. تحقق من schoolUsers وقواعد Firestore.');
+                }
+            });
+        }
+    </script>
+
     <!-- JS Application State Engine -->
     <script>
         function examManager() {
@@ -1389,6 +1559,9 @@
                 appStorageKey: 'monitoring_distribution_full_state_v4',
                 legacyAppStorageKeys: ['monitoring_distribution_full_state_v3', 'monitoring_distribution_full_state_v2', 'monitoring_distribution_full_state_v1'],
                 teachersStorageKey: 'monitoring_distribution_teachers_v2',
+                isLoadingCloudData: false,
+                cloudSaveTimer: null,
+                cloudSaveDelay: 900,
 
                 normalizeTeacherList(list) {
                     return Array.isArray(list) ? list.map((t, index) => ({
@@ -1468,22 +1641,107 @@
                     }
                 },
 
+                getSerializableState() {
+                    return {
+                        schoolSettings: { ...this.schoolSettings, ministry: 'وزارة التعليم' },
+                        teachers: this.teachers,
+                        schoolClasses: this.schoolClasses,
+                        exams: this.exams,
+                        assignments: this.assignments,
+                        subjectRestrictions: this.subjectRestrictions,
+                        teacherRestrictions: this.teacherRestrictions,
+                        smartSettings: this.smartSettings,
+                        selectedDailyExamId: this.selectedDailyExamId,
+                        grade11OptionalRows: this.grade11OptionalRows
+                    };
+                },
+
+                applyAppState(parsed) {
+                    if (!parsed || typeof parsed !== 'object') return;
+                    if (Object.prototype.hasOwnProperty.call(parsed, 'teachers')) this.teachers = this.normalizeTeacherList(parsed.teachers);
+                    if (parsed.schoolSettings && typeof parsed.schoolSettings === 'object') this.schoolSettings = { ...this.schoolSettings, ...parsed.schoolSettings, ministry: 'وزارة التعليم' };
+                    if (Object.prototype.hasOwnProperty.call(parsed, 'schoolClasses')) this.schoolClasses = this.normalizeSchoolClasses(parsed.schoolClasses);
+                    if (Object.prototype.hasOwnProperty.call(parsed, 'exams')) this.exams = Array.isArray(parsed.exams) ? parsed.exams : [];
+                    if (Object.prototype.hasOwnProperty.call(parsed, 'assignments')) this.assignments = Array.isArray(parsed.assignments) ? parsed.assignments : [];
+                    if (Object.prototype.hasOwnProperty.call(parsed, 'subjectRestrictions')) this.subjectRestrictions = Array.isArray(parsed.subjectRestrictions) ? parsed.subjectRestrictions : [];
+                    if (Object.prototype.hasOwnProperty.call(parsed, 'teacherRestrictions')) this.teacherRestrictions = Array.isArray(parsed.teacherRestrictions) ? parsed.teacherRestrictions : [];
+                    if (parsed.smartSettings && typeof parsed.smartSettings === 'object') {
+                        this.smartSettings = {
+                            floorObservers: Number(parsed.smartSettings.floorObservers || 0),
+                            backupObservers: Number(parsed.smartSettings.backupObservers || 0)
+                        };
+                    }
+                    if (Object.prototype.hasOwnProperty.call(parsed, 'selectedDailyExamId')) this.selectedDailyExamId = parsed.selectedDailyExamId;
+                    if (parsed.grade11OptionalRows && typeof parsed.grade11OptionalRows === 'object') this.grade11OptionalRows = this.normalizeGrade11OptionalRows(parsed.grade11OptionalRows);
+                },
+
+                scheduleCloudSave() {
+                    if (!window.currentSchoolId || !window.monitoringFirebase || this.isLoadingCloudData) return;
+                    if (this.cloudSaveTimer) clearTimeout(this.cloudSaveTimer);
+                    if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('جاري الحفظ...', 'loading');
+                    this.cloudSaveTimer = setTimeout(() => this.saveCloudDataNow(), this.cloudSaveDelay);
+                },
+
+                async saveCloudDataNow() {
+                    if (!window.currentSchoolId || !window.monitoringFirebase || this.isLoadingCloudData) return;
+                    try {
+                        const { db, doc, setDoc, serverTimestamp } = window.monitoringFirebase;
+                        const state = this.getSerializableState();
+                        await setDoc(
+                            doc(db, 'schools', window.currentSchoolId, 'monitoring', 'appData', 'main'),
+                            { ...state, updatedAt: serverTimestamp(), updatedAtLocal: new Date().toISOString() },
+                            { merge: true }
+                        );
+                        if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('تم الحفظ', 'success');
+                    } catch (e) {
+                        console.error('تعذر الحفظ السحابي', e);
+                        if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('خطأ في الحفظ', 'error');
+                        this.showToast('تعذر الحفظ في Firebase. تحقق من الاتصال أو الصلاحيات.', 'error');
+                    }
+                },
+
+                async loadCloudData() {
+                    if (!window.currentSchoolId || !window.monitoringFirebase) return;
+                    try {
+                        this.isLoadingCloudData = true;
+                        if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('تحميل البيانات...', 'loading');
+                        const { db, doc, getDoc } = window.monitoringFirebase;
+                        const ref = doc(db, 'schools', window.currentSchoolId, 'monitoring', 'appData', 'main');
+                        const snap = await getDoc(ref);
+                        if (snap.exists()) {
+                            this.applyAppState(snap.data());
+                            this.migrateLegacySubjectCountsToGrade11Optional();
+                            this.ensureAllGrade11OptionalRows();
+                            if (this.exams.length > 0 && (!this.selectedDailyExamId || !this.exams.some(e => e.id == this.selectedDailyExamId))) {
+                                this.selectedDailyExamId = this.exams[0].id;
+                            }
+                            localStorage.setItem(this.appStorageKey, JSON.stringify(this.getSerializableState()));
+                            localStorage.setItem(this.teachersStorageKey, JSON.stringify(this.teachers));
+                            this.syncControlBridgeData();
+                            if (this.exams.length > 0 && this.assignments.length === 0) this.runSmartDistribution();
+                            this.showToast('تم تحميل بيانات المدرسة من Firebase بنجاح.');
+                            if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('متصل بالسحابة', 'success');
+                        } else {
+                            this.saveAppData();
+                            await this.saveCloudDataNow();
+                            this.showToast('لا توجد بيانات سابقة؛ تم إنشاء ملف بيانات جديد لهذه المدرسة.');
+                        }
+                    } catch (e) {
+                        console.error('تعذر تحميل البيانات السحابية', e);
+                        if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('خطأ في التحميل', 'error');
+                        this.showToast('تعذر تحميل بيانات Firebase. تحقق من schoolUsers وقواعد Firestore.', 'error');
+                    } finally {
+                        this.isLoadingCloudData = false;
+                    }
+                },
+
                 saveAppData() {
                     try {
-                        const state = {
-                            schoolSettings: { ...this.schoolSettings, ministry: 'وزارة التعليم' },
-                            teachers: this.teachers,
-                            schoolClasses: this.schoolClasses,
-                            exams: this.exams,
-                            subjectRestrictions: this.subjectRestrictions,
-                            teacherRestrictions: this.teacherRestrictions,
-                            smartSettings: this.smartSettings,
-                            selectedDailyExamId: this.selectedDailyExamId,
-                            grade11OptionalRows: this.grade11OptionalRows
-                        };
+                        const state = this.getSerializableState();
                         localStorage.setItem(this.appStorageKey, JSON.stringify(state));
                         localStorage.setItem(this.teachersStorageKey, JSON.stringify(this.teachers));
                         this.syncControlBridgeData();
+                        this.scheduleCloudSave();
                     } catch (e) {
                         console.warn('تعذر حفظ بيانات برنامج التوزيع', e);
                         this.showToast('تعذر حفظ البيانات في المتصفح.', 'error');
@@ -1547,6 +1805,8 @@
                 },
 
                 init() {
+                    window.monitoringDistributionApp = this;
+                    window.dispatchEvent(new Event('monitoring-app-ready'));
                     if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
                         this.darkMode = true;
                         document.documentElement.classList.add('dark');
