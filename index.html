@@ -272,11 +272,11 @@
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div>
                             <label class="block text-xs font-bold text-slate-500 mb-1">اسم المدرسة</label>
-                            <input type="text" x-model="schoolSettings.schoolName" @input="saveAppData()" placeholder="مثال: مدرسة معولة بن شمس للتعليم الأساسي" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                            <input type="text" x-model="schoolSettings.schoolName" @input="saveAppData()" placeholder="اكتب اسم المدرسة" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-slate-500 mb-1">المديرية</label>
-                            <input type="text" x-model="schoolSettings.directorate" @input="saveAppData()" placeholder="مثال: المديرية العامة للتعليم بمحافظة جنوب الباطنة" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                            <input type="text" x-model="schoolSettings.directorate" @input="saveAppData()" placeholder="اكتب اسم المديرية" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
                         </div>
                     </div>
                     <div class="mt-3 flex flex-wrap gap-2 items-center justify-between">
@@ -971,8 +971,8 @@
                     <div class="border-b-2 border-double border-slate-900 dark:border-slate-300 pb-4 mb-6 flex justify-between items-end">
                         <div class="text-right">
                             <h3 class="font-extrabold text-sm text-slate-950 dark:text-white">وزارة التعليم</h3>
-                            <p class="text-xs font-bold text-slate-700 dark:text-slate-300" x-text="schoolSettings.directorate || 'المديرية العامة للتعليم بمحافظة جنوب الباطنة'"></p>
-                            <p class="text-[11px] text-slate-600 dark:text-slate-400" x-text="schoolSettings.schoolName || 'مدرسة معولة بن شمس للتعليم الأساسي'"></p>
+                            <p class="text-xs font-bold text-slate-700 dark:text-slate-300" x-text="schoolSettings.directorate || ''"></p>
+                            <p class="text-[11px] text-slate-600 dark:text-slate-400" x-text="schoolSettings.schoolName || ''"></p>
                             <p class="text-[11px] text-slate-600 dark:text-slate-400">لجنة إدارة وتنظيم الامتحانات</p>
                         </div>
                         <div class="text-center">
@@ -1435,8 +1435,8 @@
                 const schoolSnap = await getDoc(schoolRef);
                 if (!schoolSnap.exists()) {
                     await setDoc(schoolRef, {
-                        schoolName: 'مدرسة تجريبية',
-                        directorate: 'المديرية العامة للتعليم بمحافظة جنوب الباطنة',
+                        schoolName: '',
+                        directorate: '',
                         active: true,
                         autoCreated: true,
                         createdAt: serverTimestamp()
@@ -1536,8 +1536,8 @@
                 
                 schoolSettings: {
                     ministry: 'وزارة التعليم',
-                    directorate: 'المديرية العامة للتعليم بمحافظة جنوب الباطنة',
-                    schoolName: 'مدرسة معولة بن شمس للتعليم الأساسي'
+                    directorate: '',
+                    schoolName: ''
                 },
 
                 // App core states with explicit Name, Speciality, Phone structure matching Excel
