@@ -236,7 +236,6 @@
                         </div>
                     </div>
                     <div class="mt-3 flex flex-wrap gap-2 items-center justify-between">
-                        <span class="text-[11px] text-slate-500">مفتاح الربط الداخلي: <strong class="font-mono text-emerald-700 dark:text-emerald-400">monitoring_control_bridge_v1</strong></span>
                         <button type="button" @click="saveAppData(); showToast('تم حفظ بيانات المدرسة وتجهيزها للربط مع الكنترول.')" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2">
                             <i class="fa-solid fa-floppy-disk"></i>
                             حفظ بيانات المدرسة
@@ -1329,9 +1328,9 @@
                     { id: 29, className: '11/8', regularCount: 24, adultCount: 0, committeeName: 'اللجنة 29' },
                 ],
                 exams: [
-                    { id: 101, date: '2026-06-07', period: '08:00 ص', subject: 'اللغة العربية', duration: 2.5, observersNeeded: 2, selectedClasses: [1, 2, 3] },
-                    { id: 102, date: '2026-06-08', period: '10:00 ص', subject: 'الرياضيات والعلوم', duration: 2, observersNeeded: 2, selectedClasses: [1, 2, 4] },
-                    { id: 103, date: '2026-06-09', period: '08:00 ص', subject: 'الفيزياء', duration: 3, observersNeeded: 2, selectedClasses: [2, 3, 4] }
+                    { id: 101, date: '2026-06-07', period: '08:00 ص', subject: 'اللغة العربية', duration: 2.5, observersNeeded: 1, selectedClasses: [1, 2, 3] },
+                    { id: 102, date: '2026-06-08', period: '10:00 ص', subject: 'الرياضيات والعلوم', duration: 2, observersNeeded: 1, selectedClasses: [1, 2, 4] },
+                    { id: 103, date: '2026-06-09', period: '08:00 ص', subject: 'الفيزياء', duration: 3, observersNeeded: 1, selectedClasses: [2, 3, 4] }
                 ],
                 subjectRestrictions: [
                     { id: 1, date: '2026-06-07', speciality: 'اللغة العربية' } 
@@ -1347,7 +1346,7 @@
                 teacherForm: { id: null, name: '', speciality: '', phone: '', inControl: false },
                 classForm: { id: null, className: '', committeeName: '', regularCount: 0, adultCount: 0, subjectCounts: {} },
                 subjectCountForm: { subject: '', regularCount: 0, adultCount: 0 },
-                examForm: { id: null, date: '', period: '08:00 ص', subject: '', duration: 2, observersNeeded: 2, selectedClasses: [] },
+                examForm: { id: null, date: '', period: '08:00 ص', subject: '', duration: 2, observersNeeded: 1, selectedClasses: [] },
                 subjectRestForm: { date: '', specialities: [] },
                 teacherRestForm: { date: '', teacherIds: [], reason: '' },
                 
@@ -2084,7 +2083,7 @@
                 },
 
                 resetExamForm() {
-                    this.examForm = { id: null, date: '', period: '08:00 ص', subject: '', duration: 2, observersNeeded: 2, selectedClasses: [] };
+                    this.examForm = { id: null, date: '', period: '08:00 ص', subject: '', duration: 2, observersNeeded: 1, selectedClasses: [] };
                     this.quickGradeSelection = [];
                 },
                 openEditExam(exam) {
@@ -2094,7 +2093,7 @@
                         period: exam.period || '08:00 ص',
                         subject: exam.subject || '',
                         duration: Number(exam.duration || 2),
-                        observersNeeded: Number(exam.observersNeeded || 2),
+                        observersNeeded: Number(exam.observersNeeded || 1),
                         selectedClasses: [...(exam.selectedClasses || [])]
                     };
                     this.quickGradeSelection = [];
