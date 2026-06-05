@@ -214,6 +214,39 @@
                     </div>
                 </div>
 
+                <!-- School Settings Card -->
+                <div class="mb-6 p-5 rounded-2xl bg-gradient-to-br from-emerald-50 to-sky-50 dark:from-slate-700/40 dark:to-slate-800 border border-emerald-200/70 dark:border-slate-700">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-600/20">
+                            <i class="fa-solid fa-school-flag text-lg"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-md font-extrabold text-slate-900 dark:text-white">بيانات المدرسة للتقارير والربط مع الكنترول</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">تُحفظ هذه البيانات وتظهر تلقائيًا في كشوف المراقبة، وتُجهز للانتقال إلى ملف الكنترول عند الدمج.</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">اسم المدرسة</label>
+                            <input type="text" x-model="schoolSettings.schoolName" @input="saveAppData()" placeholder="مثال: مدرسة معولة بن شمس للتعليم الأساسي" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">المديرية</label>
+                            <input type="text" x-model="schoolSettings.directorate" @input="saveAppData()" placeholder="مثال: المديرية العامة للتعليم بمحافظة جنوب الباطنة" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        </div>
+                        <div class="rounded-lg bg-slate-100 dark:bg-slate-700/40 px-3 py-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+                            الوزارة ثابتة في جميع التقارير: <span class="text-emerald-600 dark:text-emerald-400">وزارة التعليم</span>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-2 items-center justify-between">
+                        <span class="text-[11px] text-slate-500">مفتاح الربط الداخلي: <strong class="font-mono text-emerald-700 dark:text-emerald-400">monitoring_control_bridge_v1</strong></span>
+                        <button type="button" @click="saveAppData(); showToast('تم حفظ بيانات المدرسة وتجهيزها للربط مع الكنترول.')" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            حفظ بيانات المدرسة
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Template excel requirements guide -->
                 <div class="mb-6 p-4 rounded-xl bg-slate-100 dark:bg-slate-700/30 border border-slate-200/50 dark:border-slate-700 flex flex-col md:flex-row gap-4 items-center justify-between">
                     <div class="flex items-center gap-3">
@@ -356,6 +389,17 @@
                                     <label class="block text-xs font-bold text-slate-500 mb-1">اسم/رقم اللجنة المقابلة</label>
                                     <input type="text" x-model="classForm.committeeName" placeholder="مثال: لجنة 1 (القاعة الكبرى)" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
                                 </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label class="block text-xs font-bold text-slate-500 mb-1">عدد الطلبة النظاميين</label>
+                                        <input type="number" min="0" x-model.number="classForm.regularCount" placeholder="0" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-slate-500 mb-1">عدد الطلبة الدارسين</label>
+                                        <input type="number" min="0" x-model.number="classForm.adultCount" placeholder="0" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                    </div>
+                                </div>
+                                <p class="text-[11px] text-slate-500 -mt-2">هذه الأعداد محفوظة ومجهزة للانتقال تلقائيًا إلى ملف الكنترول بعد الدمج.</p>
                                 <div class="flex gap-2">
                                     <button type="submit" class="flex-1 bg-primary-600 hover:bg-primary-700 text-white py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center justify-center gap-2">
                                         <i class="fa-solid" :class="classForm.id ? 'fa-floppy-disk' : 'fa-square-plus'"></i>
@@ -377,6 +421,8 @@
                                     <tr>
                                         <th class="px-4 py-3 font-semibold">الصف الدراسي</th>
                                         <th class="px-4 py-3 font-semibold">اللجنة المقابلة</th>
+                                        <th class="px-4 py-3 font-semibold text-center">النظاميون</th>
+                                        <th class="px-4 py-3 font-semibold text-center">الدارسون</th>
                                         <th class="px-4 py-3 font-semibold text-center w-24">الإجراءات</th>
                                     </tr>
                                 </thead>
@@ -390,6 +436,8 @@
                                                     <span x-text="item.committeeName"></span>
                                                 </span>
                                             </td>
+                                            <td class="px-4 py-3 text-center font-bold text-slate-700 dark:text-slate-200" x-text="item.regularCount || 0"></td>
+                                            <td class="px-4 py-3 text-center font-bold text-slate-700 dark:text-slate-200" x-text="item.adultCount || 0"></td>
                                             <td class="px-4 py-3 text-center">
                                                 <div class="flex items-center justify-center gap-2">
                                                     <button @click="openEditSchoolClass(item)" class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors" title="تعديل">
@@ -403,7 +451,7 @@
                                         </tr>
                                     </template>
                                     <tr x-show="schoolClasses.length === 0">
-                                        <td colspan="3" class="text-center py-12 text-slate-400">لم يتم تسجيل أي صفوف أو لجان حتى الآن. يرجى إضافتها باستخدام النموذج على اليمين.</td>
+                                        <td colspan="5" class="text-center py-12 text-slate-400">لم يتم تسجيل أي صفوف أو لجان حتى الآن. يرجى إضافتها باستخدام النموذج على اليمين.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -797,9 +845,9 @@
                     <!-- Official School Header -->
                     <div class="border-b-2 border-double border-slate-900 dark:border-slate-300 pb-4 mb-6 flex justify-between items-end">
                         <div class="text-right">
-                            <h3 class="font-extrabold text-sm text-slate-950 dark:text-white">وزارة التربية والتعليم</h3>
-                            <p class="text-xs font-bold text-slate-700 dark:text-slate-300">المديرية العامة للتعليم بمحافظة جنوب الباطنة</p>
-                            <p class="text-[11px] text-slate-600 dark:text-slate-400">مدرسة معولة بن شمس للتعليم الأساسي</p>
+                            <h3 class="font-extrabold text-sm text-slate-950 dark:text-white">وزارة التعليم</h3>
+                            <p class="text-xs font-bold text-slate-700 dark:text-slate-300" x-text="schoolSettings.directorate || 'المديرية العامة للتعليم بمحافظة جنوب الباطنة'"></p>
+                            <p class="text-[11px] text-slate-600 dark:text-slate-400" x-text="schoolSettings.schoolName || 'مدرسة معولة بن شمس للتعليم الأساسي'"></p>
                             <p class="text-[11px] text-slate-600 dark:text-slate-400">لجنة إدارة وتنظيم الامتحانات</p>
                         </div>
                         <div class="text-center">
@@ -831,7 +879,11 @@
                                                 <span class="bg-primary-600 text-white font-bold text-xs px-2.5 py-1 rounded" x-text="getClassName(clsId)"></span>
                                                 <span class="font-bold text-sm text-slate-800 dark:text-slate-100" x-text="'اللجنة: ' + getCommitteeNameByClass(clsId)"></span>
                                             </div>
-                                            <div class="text-xs text-slate-400">المراقبين المطلوبين لهذه اللجنة: <strong class="text-slate-700 dark:text-slate-200 font-mono" x-text="exams.find(e => e.id == selectedDailyExamId)?.observersNeeded"></strong></div>
+                                            <div class="text-xs text-slate-400 flex flex-col sm:flex-row sm:gap-3">
+                                                <span>المراقبين المطلوبين: <strong class="text-slate-700 dark:text-slate-200 font-mono" x-text="exams.find(e => e.id == selectedDailyExamId)?.observersNeeded"></strong></span>
+                                                <span>النظاميون: <strong class="text-slate-700 dark:text-slate-200 font-mono" x-text="getClassRegularCount(clsId)"></strong></span>
+                                                <span>الدارسون: <strong class="text-slate-700 dark:text-slate-200 font-mono" x-text="getClassAdultCount(clsId)"></strong></span>
+                                            </div>
                                         </div>
                                         <div class="p-4">
                                             <!-- Teachers assigned for this specific class/committee on this day -->
@@ -1158,6 +1210,12 @@
                 // Static/Initial data
                 specialities: ['التربية الأسلامية', 'اللغة العربية', 'الرياضيات', 'الرياضيات الاساسية', 'الرياضيات المتقدمة', 'العلوم', 'العلوم البيئية', 'الكيمياء', 'الفيزياء', 'الاحياء', 'الدراسات الاجتماعية', 'الجغرافيا الاقتصادية', 'هذا وطني', 'اللغة الانجليزية', 'الرياضة المدرسية', 'المهارات الموسيقية'],
                 
+                schoolSettings: {
+                    ministry: 'وزارة التعليم',
+                    directorate: 'المديرية العامة للتعليم بمحافظة جنوب الباطنة',
+                    schoolName: 'مدرسة معولة بن شمس للتعليم الأساسي'
+                },
+
                 // App core states with explicit Name, Speciality, Phone structure matching Excel
                 teachers: [
                     { id: 1, name: 'سالم بن أحمد البوسعيدي', speciality: 'اللغة العربية', phone: '+96891112222', inControl: false },
@@ -1172,35 +1230,35 @@
                     { id: 10, name: 'ليلى بنت ناصر الوهيبية', speciality: 'اللغة العربية', phone: '+96891110000', inControl: false },
                 ],
                 schoolClasses: [
-                    { id: 1, className: '5/1', committeeName: 'اللجنة 1' },
-                    { id: 2, className: '5/2', committeeName: 'اللجنة 2' },
-                    { id: 3, className: '5/3', committeeName: 'اللجنة 3' },
-                    { id: 4, className: '6/1', committeeName: 'اللجنة 4' },
-                    { id: 5, className: '6/2', committeeName: 'اللجنة 5' },
-                    { id: 6, className: '6/3', committeeName: 'اللجنة 6' },
-                    { id: 7, className: '7/1', committeeName: 'اللجنة 7' },
-                    { id: 8, className: '7/2', committeeName: 'اللجنة 8' },
-                    { id: 9, className: '7/3', committeeName: 'اللجنة 9' },
-                    { id: 10, className: '8/1', committeeName: 'اللجنة 10' },
-                    { id: 11, className: '8/2', committeeName: 'اللجنة 11' },
-                    { id: 12, className: '8/3', committeeName: 'اللجنة 12' },
-                    { id: 13, className: '9/1', committeeName: 'اللجنة 13' },
-                    { id: 14, className: '9/2', committeeName: 'اللجنة 14' },
-                    { id: 15, className: '9/3', committeeName: 'اللجنة 15' },
-                    { id: 16, className: '9/4', committeeName: 'اللجنة 16' },
-                    { id: 17, className: '10/1', committeeName: 'اللجنة 17' },
-                    { id: 18, className: '10/2', committeeName: 'اللجنة 18' },
-                    { id: 19, className: '10/3', committeeName: 'اللجنة 19' },
-                    { id: 20, className: '10/4', committeeName: 'اللجنة 20' },
-                    { id: 21, className: '10/5', committeeName: 'اللجنة 21' },
-                    { id: 22, className: '11/1', committeeName: 'اللجنة 22' },
-                    { id: 23, className: '11/2', committeeName: 'اللجنة 23' },
-                    { id: 24, className: '11/3', committeeName: 'اللجنة 24' },
-                    { id: 25, className: '11/4', committeeName: 'اللجنة 25' },
-                    { id: 26, className: '11/5', committeeName: 'اللجنة 26' },
-                    { id: 27, className: '11/6', committeeName: 'اللجنة 27' },
-                    { id: 28, className: '11/7', committeeName: 'اللجنة 28' },
-                    { id: 29, className: '11/8', committeeName: 'اللجنة 29' },
+                    { id: 1, className: '5/1', regularCount: 36, adultCount: 0, committeeName: 'اللجنة 1' },
+                    { id: 2, className: '5/2', regularCount: 37, adultCount: 0, committeeName: 'اللجنة 2' },
+                    { id: 3, className: '5/3', regularCount: 37, adultCount: 0, committeeName: 'اللجنة 3' },
+                    { id: 4, className: '6/1', regularCount: 33, adultCount: 0, committeeName: 'اللجنة 4' },
+                    { id: 5, className: '6/2', regularCount: 35, adultCount: 0, committeeName: 'اللجنة 5' },
+                    { id: 6, className: '6/3', regularCount: 35, adultCount: 0, committeeName: 'اللجنة 6' },
+                    { id: 7, className: '7/1', regularCount: 31, adultCount: 0, committeeName: 'اللجنة 7' },
+                    { id: 8, className: '7/2', regularCount: 30, adultCount: 0, committeeName: 'اللجنة 8' },
+                    { id: 9, className: '7/3', regularCount: 32, adultCount: 0, committeeName: 'اللجنة 9' },
+                    { id: 10, className: '8/1', regularCount: 32, adultCount: 0, committeeName: 'اللجنة 10' },
+                    { id: 11, className: '8/2', regularCount: 34, adultCount: 0, committeeName: 'اللجنة 11' },
+                    { id: 12, className: '8/3', regularCount: 34, adultCount: 0, committeeName: 'اللجنة 12' },
+                    { id: 13, className: '9/1', regularCount: 30, adultCount: 0, committeeName: 'اللجنة 13' },
+                    { id: 14, className: '9/2', regularCount: 28, adultCount: 0, committeeName: 'اللجنة 14' },
+                    { id: 15, className: '9/3', regularCount: 29, adultCount: 0, committeeName: 'اللجنة 15' },
+                    { id: 16, className: '9/4', regularCount: 29, adultCount: 0, committeeName: 'اللجنة 16' },
+                    { id: 17, className: '10/1', regularCount: 26, adultCount: 0, committeeName: 'اللجنة 17' },
+                    { id: 18, className: '10/2', regularCount: 26, adultCount: 0, committeeName: 'اللجنة 18' },
+                    { id: 19, className: '10/3', regularCount: 26, adultCount: 0, committeeName: 'اللجنة 19' },
+                    { id: 20, className: '10/4', regularCount: 25, adultCount: 0, committeeName: 'اللجنة 20' },
+                    { id: 21, className: '10/5', regularCount: 27, adultCount: 0, committeeName: 'اللجنة 21' },
+                    { id: 22, className: '11/1', regularCount: 24, adultCount: 0, committeeName: 'اللجنة 22' },
+                    { id: 23, className: '11/2', regularCount: 24, adultCount: 0, committeeName: 'اللجنة 23' },
+                    { id: 24, className: '11/3', regularCount: 24, adultCount: 0, committeeName: 'اللجنة 24' },
+                    { id: 25, className: '11/4', regularCount: 23, adultCount: 0, committeeName: 'اللجنة 25' },
+                    { id: 26, className: '11/5', regularCount: 24, adultCount: 0, committeeName: 'اللجنة 26' },
+                    { id: 27, className: '11/6', regularCount: 27, adultCount: 0, committeeName: 'اللجنة 27' },
+                    { id: 28, className: '11/7', regularCount: 27, adultCount: 0, committeeName: 'اللجنة 28' },
+                    { id: 29, className: '11/8', regularCount: 24, adultCount: 0, committeeName: 'اللجنة 29' },
                 ],
                 exams: [
                     { id: 101, date: '2026-06-07', period: '08:00 ص', subject: 'اللغة العربية', duration: 2.5, observersNeeded: 2, selectedClasses: [1, 2, 3] },
@@ -1219,7 +1277,7 @@
                 searchTeacher: '',
                 teacherModalOpen: false,
                 teacherForm: { id: null, name: '', speciality: '', phone: '', inControl: false },
-                classForm: { id: null, className: '', committeeName: '' },
+                classForm: { id: null, className: '', committeeName: '', regularCount: 0, adultCount: 0 },
                 examForm: { id: null, date: '', period: '08:00 ص', subject: '', duration: 2, observersNeeded: 2, selectedClasses: [] },
                 subjectRestForm: { date: '', specialities: [] },
                 teacherRestForm: { date: '', teacherIds: [], reason: '' },
@@ -1237,7 +1295,7 @@
                 batchSending: false,
 
                 // حفظ كل بيانات برنامج التوزيع محلياً حتى لا تعود البيانات الافتراضية بعد تحديث الصفحة
-                appStorageKey: 'monitoring_distribution_full_state_v3',
+                appStorageKey: 'monitoring_distribution_full_state_v4',
                 teachersStorageKey: 'monitoring_distribution_teachers_v2',
 
                 normalizeTeacherList(list) {
@@ -1250,13 +1308,24 @@
                     })).filter(t => t.name && t.speciality) : [];
                 },
 
+                normalizeSchoolClasses(list) {
+                    return Array.isArray(list) ? list.map((c, index) => ({
+                        id: c.id || index + 1,
+                        className: String(c.className || '').trim(),
+                        committeeName: String(c.committeeName || '').trim(),
+                        regularCount: Number(c.regularCount || c.count || c.registeredNormal || 0),
+                        adultCount: Number(c.adultCount || c.registeredAdults || 0)
+                    })).filter(c => c.className && c.committeeName) : [];
+                },
+
                 loadSavedData() {
                     try {
                         const saved = localStorage.getItem(this.appStorageKey);
                         if (saved !== null) {
                             const parsed = JSON.parse(saved);
                             if (Object.prototype.hasOwnProperty.call(parsed, 'teachers')) this.teachers = this.normalizeTeacherList(parsed.teachers);
-                            if (Object.prototype.hasOwnProperty.call(parsed, 'schoolClasses')) this.schoolClasses = Array.isArray(parsed.schoolClasses) ? parsed.schoolClasses : [];
+                            if (parsed.schoolSettings && typeof parsed.schoolSettings === 'object') this.schoolSettings = { ...this.schoolSettings, ...parsed.schoolSettings, ministry: 'وزارة التعليم' };
+                            if (Object.prototype.hasOwnProperty.call(parsed, 'schoolClasses')) this.schoolClasses = this.normalizeSchoolClasses(parsed.schoolClasses);
                             if (Object.prototype.hasOwnProperty.call(parsed, 'exams')) this.exams = Array.isArray(parsed.exams) ? parsed.exams : [];
                             if (Object.prototype.hasOwnProperty.call(parsed, 'subjectRestrictions')) this.subjectRestrictions = Array.isArray(parsed.subjectRestrictions) ? parsed.subjectRestrictions : [];
                             if (Object.prototype.hasOwnProperty.call(parsed, 'teacherRestrictions')) this.teacherRestrictions = Array.isArray(parsed.teacherRestrictions) ? parsed.teacherRestrictions : [];
@@ -1284,6 +1353,7 @@
                 saveAppData() {
                     try {
                         const state = {
+                            schoolSettings: { ...this.schoolSettings, ministry: 'وزارة التعليم' },
                             teachers: this.teachers,
                             schoolClasses: this.schoolClasses,
                             exams: this.exams,
@@ -1294,6 +1364,7 @@
                         };
                         localStorage.setItem(this.appStorageKey, JSON.stringify(state));
                         localStorage.setItem(this.teachersStorageKey, JSON.stringify(this.teachers));
+                        this.syncControlBridgeData();
                     } catch (e) {
                         console.warn('تعذر حفظ بيانات برنامج التوزيع', e);
                         this.showToast('تعذر حفظ البيانات في المتصفح.', 'error');
@@ -1302,6 +1373,55 @@
 
                 saveTeachers() {
                     this.saveAppData();
+                },
+
+                exportControlBridgeData() {
+                    const sessionsByDate = {};
+                    this.exams.forEach(exam => {
+                        if (!sessionsByDate[exam.date]) sessionsByDate[exam.date] = [];
+                        exam.selectedClasses.forEach(clsId => {
+                            const cls = this.schoolClasses.find(c => c.id == clsId) || {};
+                            const proctors = this.getDailyClassAssignments(exam.id, clsId).map(a => a.teacherName).filter(Boolean);
+                            sessionsByDate[exam.date].push({
+                                id: `${exam.period}-${exam.subject}-${cls.className || clsId}-${cls.committeeName || ''}`,
+                                date: exam.date,
+                                period: exam.period,
+                                subject: exam.subject,
+                                grade: cls.className || '',
+                                room: cls.committeeName || '',
+                                committeeName: cls.committeeName || '',
+                                proctorName: proctors.join(' / '),
+                                proctors,
+                                registeredNormal: Number(cls.regularCount || 0),
+                                registeredAdults: Number(cls.adultCount || 0),
+                                count: Number(cls.regularCount || 0) + Number(cls.adultCount || 0),
+                                absentNormal: '',
+                                absentAdults: '',
+                                absenteesNames: '',
+                                receiver: ''
+                            });
+                        });
+                    });
+                    return {
+                        version: 'monitoring_control_bridge_v1',
+                        updatedAt: new Date().toISOString(),
+                        schoolSettings: { ...this.schoolSettings, ministry: 'وزارة التعليم' },
+                        teachers: this.teachers,
+                        controlMembers: this.teachers.filter(t => t.inControl),
+                        schoolClasses: this.schoolClasses,
+                        exams: this.exams,
+                        assignments: this.assignments,
+                        sessionsByDate
+                    };
+                },
+                syncControlBridgeData() {
+                    try {
+                        const data = this.exportControlBridgeData();
+                        localStorage.setItem('monitoring_control_bridge_v1', JSON.stringify(data));
+                        window.monitoringDistributionBridge = data;
+                    } catch (e) {
+                        console.warn('تعذر تجهيز بيانات الربط مع الكنترول', e);
+                    }
                 },
 
                 init() {
@@ -1509,10 +1629,10 @@
                 },
 
                 resetClassForm() {
-                    this.classForm = { id: null, className: '', committeeName: '' };
+                    this.classForm = { id: null, className: '', committeeName: '', regularCount: 0, adultCount: 0 };
                 },
                 openEditSchoolClass(item) {
-                    this.classForm = { id: item.id, className: item.className, committeeName: item.committeeName };
+                    this.classForm = { id: item.id, className: item.className, committeeName: item.committeeName, regularCount: Number(item.regularCount || 0), adultCount: Number(item.adultCount || 0) };
                     this.showToast('يمكنك الآن تعديل بيانات الصف واللجنة من النموذج.');
                 },
                 addClassCommittee() {
@@ -1522,7 +1642,9 @@
                             this.schoolClasses[index] = {
                                 id: this.classForm.id,
                                 className: this.classForm.className,
-                                committeeName: this.classForm.committeeName
+                                committeeName: this.classForm.committeeName,
+                                regularCount: Number(this.classForm.regularCount || 0),
+                                adultCount: Number(this.classForm.adultCount || 0)
                             };
                             this.saveAppData();
                             this.runSmartDistribution();
@@ -1533,7 +1655,9 @@
                         this.schoolClasses.push({
                             id: newId,
                             className: this.classForm.className,
-                            committeeName: this.classForm.committeeName
+                            committeeName: this.classForm.committeeName,
+                            regularCount: Number(this.classForm.regularCount || 0),
+                            adultCount: Number(this.classForm.adultCount || 0)
                         });
                         this.saveAppData();
                         this.runSmartDistribution();
@@ -1557,6 +1681,17 @@
                 getCommitteeNameByClass(id) {
                     const cls = this.schoolClasses.find(c => c.id == id);
                     return cls ? cls.committeeName : 'غير محدد';
+                },
+                getClassRegularCount(id) {
+                    const cls = this.schoolClasses.find(c => c.id == id);
+                    return cls ? Number(cls.regularCount || 0) : 0;
+                },
+                getClassAdultCount(id) {
+                    const cls = this.schoolClasses.find(c => c.id == id);
+                    return cls ? Number(cls.adultCount || 0) : 0;
+                },
+                getClassTotalCount(id) {
+                    return this.getClassRegularCount(id) + this.getClassAdultCount(id);
                 },
 
                 normalizeArabicDigits(value) {
