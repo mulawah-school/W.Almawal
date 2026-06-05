@@ -465,7 +465,7 @@
                             </div>
                             <div>
                                 <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">إضافة المواد الاختيارية للصف الحادي عشر</h3>
-                                <p class="text-xs text-slate-500 mt-1">تظهر لجان الصف الحادي عشر تلقائيًا من الصفوف واللجان. أمام كل لجنة 4 خيارات، وكل خيار يحتوي على مادة وعدد الطلاب.</p>
+                                <p class="text-xs text-slate-500 mt-1">أولاً سجّل لجان الصف الحادي عشر في الصفوف واللجان، ثم سجّل هنا مواد كل لجنة وعدد طلابها، وبعد ذلك عند إضافة اختبار اختياري سيجلب البرنامج اللجان المناسبة تلقائيًا.</p>
                             </div>
                         </div>
                         <div class="flex gap-2">
@@ -587,7 +587,7 @@
                                         <div class="flex items-center justify-between gap-2 mb-2">
                                             <div>
                                                 <span class="text-xs font-extrabold text-indigo-700 dark:text-indigo-300">اختيار سريع حسب الصف</span>
-                                                <p class="text-[11px] text-slate-500 mt-0.5">اضغط على الصف مباشرة. الصف الحادي عشر يقرأ مادة الاختبار الحالية: المادة الأساسية تختار كل لجان 11، والمادة الاختيارية تختار اللجان المسجلة لها فقط في قسم المواد الاختيارية.</p>
+                                                <p class="text-[11px] text-slate-500 mt-0.5">اختَر تاريخ الاختبار والمادة أولاً، ثم اضغط الصف. الصف الحادي عشر يختار كل لجانه في المواد الأساسية، ويختار فقط لجان المادة المسجلة في قسم المواد الاختيارية.</p>
                                             </div>
                                             <button type="button" @click="clearSelectedClasses()" class="text-[11px] font-bold text-red-600 hover:text-red-700">مسح الاختيار</button>
                                         </div>
@@ -1799,15 +1799,15 @@
                 saveGrade11OptionalData(showMessage = true) {
                     this.ensureAllGrade11OptionalRows();
                     this.saveAppData();
-                    this.runSmartDistribution();
-                    if (showMessage) this.showToast('تم حفظ بيانات إضافة المواد الاختيارية للصف الحادي عشر.');
+                    if (this.exams && this.exams.length > 0) this.runSmartDistribution(true);
+                    if (showMessage) this.showToast('تم حفظ بيانات المواد الاختيارية. الآن انتقل إلى جدول الاختبارات واختر المادة ثم الصف الحادي عشر.');
                 },
                 clearGrade11OptionalData() {
                     this.grade11OptionalRows = {};
                     this.ensureAllGrade11OptionalRows();
                     this.saveAppData();
-                    this.runSmartDistribution();
-                    this.showToast('تم مسح أعداد إضافة المواد الاختيارية للصف الحادي عشر.', 'error');
+                    if (this.exams && this.exams.length > 0) this.runSmartDistribution(true);
+                    this.showToast('تم مسح أعداد المواد الاختيارية للصف الحادي عشر.', 'error');
                 },
                 getGrade11OptionalCount(classId, subject) {
                     const slots = this.ensureGrade11OptionalRow(classId);
@@ -2334,9 +2334,14 @@
                     this.showToast('تم إزالة شرط الاستبعاد للفرد.', 'error');
                 },
 
-                runSmartDistribution() {
+                runSmartDistribution(silent = false) {
                     if (this.exams.length === 0) {
-                        this.showToast('برجاء تحديد امتحانات أولاً حتى يتم توزيع المراقبة عليها.', 'error');
+                        this.assignments = [];
+                        this.distributionSuccess = false;
+                        // لا نعرض تنبيه أثناء تسجيل الصفوف أو المواد الاختيارية؛ التنبيه يظهر فقط من زر التوزيع الذكي.
+                        if (!silent && this.currentTab === 'smart-dist') {
+                            this.showToast('أولاً سجّل الصفوف واللجان والمواد الاختيارية، ثم أضف الاختبارات وبعدها شغّل التوزيع الذكي.', 'error');
+                        }
                         return;
                     }
 
