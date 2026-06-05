@@ -1329,14 +1329,15 @@
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // مهم: استبدل القيم التالية ببيانات مشروع Firebase الخاص بك من Project settings > Web app
+        // بيانات مشروع Firebase الخاصة بك
         const firebaseConfig = {
-            apiKey: "ضع_apiKey_هنا",
-            authDomain: "ضع_authDomain_هنا",
-            projectId: "ضع_projectId_هنا",
-            storageBucket: "ضع_storageBucket_هنا",
-            messagingSenderId: "ضع_messagingSenderId_هنا",
-            appId: "ضع_appId_هنا"
+            apiKey: "AIzaSyAnoRS_SN3iz3fdLAHkCyk90djaqWd6aSI",
+            authDomain: "monitoring-test-e6867.firebaseapp.com",
+            projectId: "monitoring-test-e6867",
+            storageBucket: "monitoring-test-e6867.firebasestorage.app",
+            messagingSenderId: "654033386790",
+            appId: "1:654033386790:web:c1c656ed6946358a7b55e7",
+            measurementId: "G-2JF9CT69ZZ"
         };
 
         const firebaseConfigured = firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("ضع_") && firebaseConfig.projectId && !firebaseConfig.projectId.includes("ضع_");
