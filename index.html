@@ -1376,30 +1376,65 @@
 
         async function openAppForUser(user) {
             if (!window.monitoringFirebase) return;
+            const usernameFromEmail = (user.email || '').split('@')[0] || 'school001';
             const userRef = doc(db, 'schoolUsers', user.uid);
-            const userSnap = await getDoc(userRef);
+            let userSnap = await getDoc(userRef);
+
+            // وضع تجربة: إذا كان مستند الربط غير موجود وكانت قواعد Firestore مفتوحة مؤقتًا، ينشئه البرنامج تلقائيًا.
             if (!userSnap.exists()) {
-                await signOut(auth);
-                setLoginError('هذا المستخدم غير مربوط بمدرسة في schoolUsers.');
-                return;
+                try {
+                    await setDoc(userRef, {
+                        schoolId: 'demo_school',
+                        role: 'school_admin',
+                        active: true,
+                        username: usernameFromEmail,
+                        autoCreated: true,
+                        createdAt: serverTimestamp()
+                    }, { merge: true });
+                    userSnap = await getDoc(userRef);
+                } catch (autoCreateError) {
+                    console.error('تعذر إنشاء schoolUsers تلقائيًا', autoCreateError);
+                    await signOut(auth);
+                    setLoginError('هذا المستخدم غير مربوط بمدرسة في schoolUsers. الخطأ: ' + (autoCreateError.code || autoCreateError.message));
+                    return;
+                }
             }
+
             const userData = userSnap.data();
-            console.log('Firebase user.uid=', user.uid);
-            console.log('schoolUsers data=', userData);
             if (userData.active !== true) {
                 await signOut(auth);
-                setLoginError('هذا الحساب غير مفعل.');
+                setLoginError('هذا الحساب غير مفعل. تأكد أن active نوعها boolean وقيمتها true.');
                 return;
             }
-            window.currentSchoolId = userData.schoolId;
+            window.currentSchoolId = userData.schoolId || 'demo_school';
             window.currentUserRole = userData.role || 'school_admin';
-            window.currentUsername = userData.username || '';
+            window.currentUsername = userData.username || usernameFromEmail;
+
+            // إنشاء مستند المدرسة تلقائيًا في وضع التجربة إذا لم يكن موجودًا.
+            try {
+                const schoolRef = doc(db, 'schools', window.currentSchoolId);
+                const schoolSnap = await getDoc(schoolRef);
+                if (!schoolSnap.exists()) {
+                    await setDoc(schoolRef, {
+                        schoolName: 'مدرسة تجريبية',
+                        directorate: 'المديرية العامة للتعليم بمحافظة جنوب الباطنة',
+                        active: true,
+                        autoCreated: true,
+                        createdAt: serverTimestamp()
+                    }, { merge: true });
+                }
+            } catch (schoolError) {
+                console.error('تعذر قراءة/إنشاء مستند المدرسة', schoolError);
+                await signOut(auth);
+                setLoginError('تعذر فتح مستند المدرسة schools/' + window.currentSchoolId + '. الخطأ: ' + (schoolError.code || schoolError.message));
+                return;
+            }
 
             const loginScreen = document.getElementById('login-screen');
             const appScreen = document.getElementById('app-screen');
             if (loginScreen) loginScreen.style.display = 'none';
             if (appScreen) appScreen.style.display = 'block';
-            window.updateCloudStatus('متصل بالسحابة', 'success');
+            window.updateCloudStatus('متصل بالسحابة: ' + window.currentSchoolId, 'success');
 
             const runLoad = () => {
                 if (window.monitoringDistributionApp && typeof window.monitoringDistributionApp.loadCloudData === 'function') {
@@ -1427,7 +1462,7 @@
                 await signInWithEmailAndPassword(auth, email, password);
             } catch (error) {
                 console.error(error);
-                setLoginError('اسم المستخدم أو كلمة المرور غير صحيحة.');
+                setLoginError('تعذر تسجيل الدخول: ' + (error.code || error.message));
             }
         };
 
@@ -1451,7 +1486,7 @@
                     await openAppForUser(user);
                 } catch (error) {
                     console.error(error);
-                    setLoginError('خطأ فتح المدرسة: ' + (error.code || '') + ' - ' + (error.message || 'تحقق من البيانات والقواعد'));
+                    setLoginError('تعذر فتح بيانات المدرسة: ' + (error.code || error.message));
                 }
             });
         }
@@ -1691,7 +1726,7 @@
                         const { db, doc, setDoc, serverTimestamp } = window.monitoringFirebase;
                         const state = this.getSerializableState();
                         await setDoc(
-                            doc(db, 'schools', window.currentSchoolId, 'monitoring', 'appData', 'main'),
+                            doc(db, 'schools', window.currentSchoolId, 'monitoring', 'appData'),
                             { ...state, updatedAt: serverTimestamp(), updatedAtLocal: new Date().toISOString() },
                             { merge: true }
                         );
@@ -1699,7 +1734,7 @@
                     } catch (e) {
                         console.error('تعذر الحفظ السحابي', e);
                         if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('خطأ في الحفظ', 'error');
-                        this.showToast('خطأ حفظ Firebase: ' + (e.code || '') + ' - ' + (e.message || 'تعذر الحفظ'), 'error');
+                        this.showToast('تعذر الحفظ في Firebase. تحقق من الاتصال أو الصلاحيات.', 'error');
                     }
                 },
 
@@ -1709,7 +1744,7 @@
                         this.isLoadingCloudData = true;
                         if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('تحميل البيانات...', 'loading');
                         const { db, doc, getDoc } = window.monitoringFirebase;
-                        const ref = doc(db, 'schools', window.currentSchoolId, 'monitoring', 'appData', 'main');
+                        const ref = doc(db, 'schools', window.currentSchoolId, 'monitoring', 'appData');
                         const snap = await getDoc(ref);
                         if (snap.exists()) {
                             this.applyAppState(snap.data());
@@ -1732,7 +1767,7 @@
                     } catch (e) {
                         console.error('تعذر تحميل البيانات السحابية', e);
                         if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('خطأ في التحميل', 'error');
-                        this.showToast('خطأ Firebase: ' + (e.code || '') + ' - ' + (e.message || 'تعذر التحميل'), 'error');
+                        this.showToast('تعذر تحميل بيانات Firebase: ' + (e.code || e.message), 'error');
                     } finally {
                         this.isLoadingCloudData = false;
                     }
