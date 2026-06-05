@@ -73,8 +73,19 @@
 </head>
 <body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-300">
 
+    <!-- شاشة التحقق من تسجيل الدخول لمنع ظهور صفحة الدخول لحظة التحديث -->
+    <div id="auth-loading-screen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f1f5f9;font-family:Cairo,Arial,sans-serif;direction:rtl;padding:20px;">
+        <div style="background:white;padding:26px 34px;border-radius:22px;box-shadow:0 18px 45px rgba(15,23,42,.14);border:1px solid #e2e8f0;text-align:center;min-width:320px;">
+            <div style="width:54px;height:54px;margin:0 auto 14px;border-radius:18px;background:#dbeafe;color:#2563eb;display:flex;align-items:center;justify-content:center;font-size:24px;">
+                <i class="fa-solid fa-cloud-arrow-down"></i>
+            </div>
+            <div style="font-weight:900;color:#0f172a;font-size:18px;margin-bottom:6px;">جاري التحقق من الدخول...</div>
+            <div style="color:#64748b;font-size:13px;">يرجى الانتظار قليلًا</div>
+        </div>
+    </div>
+
     <!-- شاشة تسجيل الدخول لتجربة Firebase -->
-    <div id="login-screen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f1f5f9;font-family:Cairo,Arial,sans-serif;direction:rtl;padding:20px;">
+    <div id="login-screen" style="min-height:100vh;display:none;align-items:center;justify-content:center;background:#f1f5f9;font-family:Cairo,Arial,sans-serif;direction:rtl;padding:20px;">
         <div style="width:390px;background:white;padding:28px;border-radius:22px;box-shadow:0 18px 45px rgba(15,23,42,.16);border:1px solid #e2e8f0;">
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
                 <div style="width:48px;height:48px;border-radius:16px;background:#16a34a;color:white;display:flex;align-items:center;justify-content:center;font-size:22px;">
@@ -1350,6 +1361,16 @@
             if (el) el.textContent = message || '';
         }
 
+        function showLoginAfterAuthError() {
+            const loadingScreen = document.getElementById('auth-loading-screen');
+            const loginScreen = document.getElementById('login-screen');
+            const appScreen = document.getElementById('app-screen');
+            if (loadingScreen) loadingScreen.style.display = 'none';
+            if (loginScreen) loginScreen.style.display = 'flex';
+            if (appScreen) appScreen.style.display = 'none';
+        }
+
+
         window.updateCloudStatus = function(message, mode = 'neutral') {
             const el = document.getElementById('cloud-status');
             if (!el) return;
@@ -1370,6 +1391,10 @@
         } else {
             window.monitoringFirebase = null;
             window.addEventListener('DOMContentLoaded', () => {
+                const loadingScreen = document.getElementById('auth-loading-screen');
+                const loginScreen = document.getElementById('login-screen');
+                if (loadingScreen) loadingScreen.style.display = 'none';
+                if (loginScreen) loginScreen.style.display = 'flex';
                 setLoginError('بيانات Firebase غير مكتملة. افتح ملف HTML واستبدل firebaseConfig ببيانات مشروعك.');
             });
         }
@@ -1395,6 +1420,7 @@
                 } catch (autoCreateError) {
                     console.error('تعذر إنشاء schoolUsers تلقائيًا', autoCreateError);
                     await signOut(auth);
+                    showLoginAfterAuthError();
                     setLoginError('هذا المستخدم غير مربوط بمدرسة في schoolUsers. الخطأ: ' + (autoCreateError.code || autoCreateError.message));
                     return;
                 }
@@ -1403,6 +1429,7 @@
             const userData = userSnap.data();
             if (userData.active !== true) {
                 await signOut(auth);
+                showLoginAfterAuthError();
                 setLoginError('هذا الحساب غير مفعل. تأكد أن active نوعها boolean وقيمتها true.');
                 return;
             }
@@ -1426,12 +1453,15 @@
             } catch (schoolError) {
                 console.error('تعذر قراءة/إنشاء مستند المدرسة', schoolError);
                 await signOut(auth);
+                showLoginAfterAuthError();
                 setLoginError('تعذر فتح مستند المدرسة schools/' + window.currentSchoolId + '. الخطأ: ' + (schoolError.code || schoolError.message));
                 return;
             }
 
+            const loadingScreen = document.getElementById('auth-loading-screen');
             const loginScreen = document.getElementById('login-screen');
             const appScreen = document.getElementById('app-screen');
+            if (loadingScreen) loadingScreen.style.display = 'none';
             if (loginScreen) loginScreen.style.display = 'none';
             if (appScreen) appScreen.style.display = 'block';
             window.updateCloudStatus('متصل بالسحابة: ' + window.currentSchoolId, 'success');
@@ -1475,8 +1505,10 @@
         if (firebaseConfigured) {
             onAuthStateChanged(auth, async (user) => {
                 if (!user) {
+                    const loadingScreen = document.getElementById('auth-loading-screen');
                     const loginScreen = document.getElementById('login-screen');
                     const appScreen = document.getElementById('app-screen');
+                    if (loadingScreen) loadingScreen.style.display = 'none';
                     if (loginScreen) loginScreen.style.display = 'flex';
                     if (appScreen) appScreen.style.display = 'none';
                     window.updateCloudStatus('غير متصل', 'neutral');
@@ -1486,6 +1518,12 @@
                     await openAppForUser(user);
                 } catch (error) {
                     console.error(error);
+                    const loadingScreen = document.getElementById('auth-loading-screen');
+                    const loginScreen = document.getElementById('login-screen');
+                    const appScreen = document.getElementById('app-screen');
+                    if (loadingScreen) loadingScreen.style.display = 'none';
+                    if (loginScreen) loginScreen.style.display = 'flex';
+                    if (appScreen) appScreen.style.display = 'none';
                     setLoginError('تعذر فتح بيانات المدرسة: ' + (error.code || error.message));
                 }
             });
