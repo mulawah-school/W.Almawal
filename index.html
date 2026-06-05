@@ -587,28 +587,31 @@
                                         <div class="flex items-center justify-between gap-2 mb-2">
                                             <div>
                                                 <span class="text-xs font-extrabold text-indigo-700 dark:text-indigo-300">اختيار سريع حسب الصف</span>
-                                                <p class="text-[11px] text-slate-500 mt-0.5">يمكن اختيار أكثر من صف، ويحسب البرنامج الشعب من إدارة الصفوف واللجان تلقائياً.</p>
+                                                <p class="text-[11px] text-slate-500 mt-0.5">اضغط على أي صف لإضافته مباشرة. الصف الحادي عشر يرتبط تلقائيًا بنوع المادة: المواد الأساسية تنزل جميع لجان 11، والمواد الاختيارية تنزل لجان المادة حسب جدول المواد الاختيارية.</p>
                                             </div>
                                             <button type="button" @click="clearSelectedClasses()" class="text-[11px] font-bold text-red-600 hover:text-red-700">مسح الاختيار</button>
                                         </div>
                                         <div class="flex flex-wrap gap-2 mb-3">
                                             <template x-for="grade in getGradeGroups()" :key="grade.key">
-                                                <label class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer transition-all"
-                                                    :class="quickGradeSelection.includes(grade.key) ? 'ring-2 ring-indigo-500 bg-indigo-100 dark:bg-indigo-900/30' : ''">
-                                                    <input type="checkbox" :value="grade.key" x-model="quickGradeSelection" class="rounded text-indigo-600 focus:ring-indigo-500">
-                                                    <span x-text="grade.label"></span>
-                                                    <span class="font-mono" x-text="'(' + grade.count + (grade.expected ? ' / ' + grade.expected : '') + ')' "></span>
-                                                </label>
+                                                <div>
+                                                    <button x-show="grade.key !== '11'" type="button" @click="selectGradeClasses(grade.key)"
+                                                        class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer transition-all">
+                                                        <span x-text="grade.label"></span>
+                                                        <span class="font-mono" x-text="'(' + grade.count + (grade.expected ? ' / ' + grade.expected : '') + ')' "></span>
+                                                        <span class="text-[10px] text-emerald-600">إضافة مباشرة</span>
+                                                    </button>
+                                                    <button x-show="grade.key === '11'" type="button" @click="selectGradeClasses('11')"
+                                                        class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer transition-all">
+                                                        <span x-text="grade.label"></span>
+                                                        <span class="font-mono" x-text="'(' + grade.count + (grade.expected ? ' / ' + grade.expected : '') + ')' "></span>
+                                                        <span class="text-[10px] text-emerald-600">تلقائي</span>
+                                                    </button>
+                                                </div>
                                             </template>
                                             <div x-show="getGradeGroups().length === 0" class="text-xs text-slate-400">أضف الصفوف واللجان أولاً حتى تظهر أزرار الاختيار السريع.</div>
                                         </div>
-                                        <div class="flex flex-wrap gap-2">
-                                            <button type="button" @click="selectQuickGradeClasses()" class="px-3 py-2 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all">
-                                                تحديد الصفوف المختارة
-                                            </button>
-                                            <button type="button" @click="quickGradeSelection = []" class="px-3 py-2 rounded-lg text-xs font-bold bg-slate-200 hover:bg-slate-300 text-slate-700 transition-all">
-                                                مسح اختيار الصفوف فقط
-                                            </button>
+                                        <div class="text-[11px] text-slate-500">
+                                            ملاحظة: إذا كانت مادة الاختبار أساسية ينزل الصف الحادي عشر كاملًا، وإذا كانت اختيارية مثل الكيمياء أو الفيزياء تنزل اللجان المسجلة لهذه المادة فقط من جدول المواد الاختيارية.
                                         </div>
                                     </div>
 
@@ -2054,27 +2057,87 @@
                     });
                     return ids;
                 },
-                selectGradeClasses(gradeKey) {
-                    this.quickGradeSelection = Array.from(new Set([...(this.quickGradeSelection || []), String(gradeKey)]));
-                    this.selectQuickGradeClasses();
+                isGrade11OptionalSubject(subject) {
+                    const subj = String(subject || '').trim();
+                    if (!subj) return false;
+                    return (this.grade11OptionalSubjects || []).some(s => String(s || '').trim() === subj);
                 },
-                selectQuickGradeClasses() {
-                    if (!this.quickGradeSelection || this.quickGradeSelection.length === 0) {
-                        this.showToast('يرجى اختيار صف واحد على الأقل من الاختيار السريع.', 'error');
+                getGrade11ClassesByExamSubject(subject = null) {
+                    const subj = String(subject !== null ? subject : (this.examForm.subject || '')).trim();
+                    const allGrade11 = this.getSortedClassesByGradeKey('11');
+                    if (!subj) return { classes: allGrade11, mode: 'allNoSubject' };
+
+                    if (this.isGrade11OptionalSubject(subj)) {
+                        const optionalClasses = allGrade11.filter(cls => {
+                            const counts = this.getGrade11OptionalCount(cls.id, subj);
+                            return counts && Number(counts.total || 0) > 0;
+                        });
+                        return { classes: optionalClasses, mode: 'optional' };
+                    }
+
+                    return { classes: allGrade11, mode: 'core' };
+                },
+                getGrade11ClassesBySelectedSubject() {
+                    return this.getGrade11ClassesByExamSubject().classes;
+                },
+                selectGradeClasses(gradeKey) {
+                    const key = String(gradeKey);
+                    let classes = [];
+
+                    if (key === '11') {
+                        const subject = String(this.examForm.subject || '').trim();
+                        const result = this.getGrade11ClassesByExamSubject(subject);
+                        classes = result.classes;
+                        if (classes.length === 0) {
+                            if (result.mode === 'optional') {
+                                this.showToast('هذه مادة اختيارية، ولم يتم تسجيل لجان/أعداد لها في قسم المواد الاختيارية داخل الصفوف واللجان.', 'error');
+                            } else {
+                                this.showToast('لم يتم العثور على لجان للصف الحادي عشر في إدارة الصفوف واللجان.', 'error');
+                            }
+                            return;
+                        }
+                        const ids = classes.map(cls => cls.id);
+                        this.examForm.selectedClasses = Array.from(new Set([...(this.examForm.selectedClasses || []), ...ids]));
+                        if (result.mode === 'optional') {
+                            this.showToast('تمت إضافة لجان الصف الحادي عشر لمادة ' + subject + ' حسب جدول المواد الاختيارية، وعددها ' + ids.length + ' لجنة.');
+                        } else if (result.mode === 'core') {
+                            this.showToast('تمت إضافة جميع لجان الصف الحادي عشر للمادة الأساسية ' + subject + '، وعددها ' + ids.length + ' لجنة.');
+                        } else {
+                            this.showToast('تمت إضافة جميع لجان الصف الحادي عشر وعددها ' + ids.length + ' لجنة.');
+                        }
                         return;
                     }
-                    const ids = this.getClassIdsByGradeKeys(this.quickGradeSelection);
+
+                    classes = this.getSortedClassesByGradeKey(key);
+                    const ids = classes.map(cls => cls.id);
                     if (ids.length === 0) {
-                        this.showToast('لم يتم العثور على لجان للصفوف المختارة في إدارة الصفوف واللجان.', 'error');
+                        this.showToast('لم يتم العثور على لجان لهذا الصف في إدارة الصفوف واللجان.', 'error');
                         return;
                     }
                     this.examForm.selectedClasses = Array.from(new Set([...(this.examForm.selectedClasses || []), ...ids]));
-                    const labels = this.quickGradeSelection.map(key => {
+                    const actual = classes.length;
+                    const expected = this.getExpectedGradeCount(key);
+                    const label = this.getGradeLabel(key) + ' (' + actual + (expected ? ' من المتوقع ' + expected : '') + ')';
+                    this.showToast('تمت إضافة شعب ' + label + ' مباشرة إلى الاختبار.');
+                },
+                selectQuickGradeClasses() {
+                    const selected = (this.quickGradeSelection || []).map(String).filter(key => key === '11');
+                    if (selected.length === 0) {
+                        this.showToast('يرجى تحديد الصف الحادي عشر أولاً.', 'error');
+                        return;
+                    }
+                    const ids = this.getClassIdsByGradeKeys(selected);
+                    if (ids.length === 0) {
+                        this.showToast('لم يتم العثور على لجان للصف الحادي عشر في إدارة الصفوف واللجان.', 'error');
+                        return;
+                    }
+                    this.examForm.selectedClasses = Array.from(new Set([...(this.examForm.selectedClasses || []), ...ids]));
+                    const labels = selected.map(key => {
                         const actual = this.getSortedClassesByGradeKey(key).length;
                         const expected = this.getExpectedGradeCount(key);
                         return this.getGradeLabel(key) + ' (' + actual + (expected ? ' من المتوقع ' + expected : '') + ')';
                     }).join('، ');
-                    this.showToast('تم اختيار جميع الشعب المسجلة في إدارة الصفوف واللجان: ' + labels + '.');
+                    this.showToast('تم اختيار جميع شعب ' + labels + '.');
                 },
                 clearSelectedClasses() {
                     this.examForm.selectedClasses = [];
