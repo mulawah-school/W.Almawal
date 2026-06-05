@@ -40,6 +40,11 @@
             background: rgba(100, 116, 139, 0.7);
         }
 
+        .dragging-row { opacity: 0.55; }
+        .drag-over-row { outline: 2px dashed #3b82f6; outline-offset: -4px; background: rgba(59, 130, 246, 0.08) !important; }
+        .drag-handle { cursor: grab; }
+        .drag-handle:active { cursor: grabbing; }
+
         @media print {
             .no-print { display: none !important; }
             .print-area { width: 100% !important; max-width: 100% !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; }
@@ -95,7 +100,7 @@
     </header>
 
     <!-- Gorgeous Distributed Icons Hub (Top Panel) -->
-    <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-4 no-print w-full">
+    <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-4 no-print w-full sticky top-16 z-30 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/70 dark:border-slate-700/70 shadow-sm">
         <h2 class="text-md font-extrabold text-slate-400 dark:text-slate-500 mb-4 tracking-wider uppercase"><i class="fa-solid fa-cubes-stacked ml-1.5"></i> لوحة الأيقونات والوظائف الذكية</h2>
         
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
@@ -412,10 +417,15 @@
 
                     <!-- Classes List -->
                     <div class="lg:col-span-2">
+                        <div class="mb-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                            <i class="fa-solid fa-arrows-up-down-left-right text-blue-500"></i>
+                            <span>يمكنك سحب أي صف من علامة الترتيب لتغيير ترتيب اللجان، وسيتم حفظ الترتيب تلقائيًا.</span>
+                        </div>
                         <div class="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
                             <table class="w-full text-right text-sm">
                                 <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                                     <tr>
+                                        <th class="px-4 py-3 font-semibold text-center w-16">ترتيب</th>
                                         <th class="px-4 py-3 font-semibold">الصف الدراسي</th>
                                         <th class="px-4 py-3 font-semibold">اللجنة المقابلة</th>
                                         <th class="px-4 py-3 font-semibold text-center">النظاميون</th>
@@ -425,7 +435,8 @@
                                 </thead>
                                 <tbody>
                                     <template x-for="item in schoolClasses" :key="item.id">
-                                        <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50">
+                                        <tr draggable="true" @dragstart="startClassDrag(item.id)" @dragover.prevent="dragOverClassId = item.id" @dragleave="if (dragOverClassId == item.id) dragOverClassId = null" @drop.prevent="dropClassOn(item.id)" @dragend="endClassDrag()" class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50 transition-colors" :class="{'dragging-row': draggedClassId == item.id, 'drag-over-row': dragOverClassId == item.id && draggedClassId != item.id}">
+                                            <td class="px-4 py-3 text-center text-slate-400 drag-handle" title="اسحب لتغيير ترتيب اللجنة"><i class="fa-solid fa-grip-vertical"></i></td>
                                             <td class="px-4 py-3 font-semibold text-slate-900 dark:text-white" x-text="item.className"></td>
                                             <td class="px-4 py-3">
                                                 <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
@@ -448,7 +459,7 @@
                                         </tr>
                                     </template>
                                     <tr x-show="schoolClasses.length === 0">
-                                        <td colspan="5" class="text-center py-12 text-slate-400">لم يتم تسجيل أي صفوف أو لجان حتى الآن.</td>
+                                        <td colspan="6" class="text-center py-12 text-slate-400">لم يتم تسجيل أي صفوف أو لجان حتى الآن.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1362,6 +1373,8 @@
                 distributing: false,
                 distributionSuccess: false,
                 selectedDailyExamId: null,
+                draggedClassId: null,
+                dragOverClassId: null,
                 quickGradeSelection: [],
                 grade11OptionalSubjects: ['الكيمياء', 'الاحياء', 'العلوم البيئية', 'الفيزياء', 'التاريخ', 'الجغرافيا الاقتصادية', 'الرياضة المدرسية', 'المهارات الموسيقية'],
                 grade11OptionalRows: {},
@@ -1913,6 +1926,36 @@
                     this.saveAppData();
                     this.runSmartDistribution();
                     this.showToast('تم حذف الصف واللجنة.', 'error');
+                },
+                startClassDrag(id) {
+                    this.draggedClassId = id;
+                    this.dragOverClassId = null;
+                },
+                dropClassOn(targetId) {
+                    if (this.draggedClassId === null || this.draggedClassId == targetId) {
+                        this.endClassDrag();
+                        return;
+                    }
+                    const fromIndex = this.schoolClasses.findIndex(c => c.id == this.draggedClassId);
+                    const toIndex = this.schoolClasses.findIndex(c => c.id == targetId);
+                    if (fromIndex === -1 || toIndex === -1) {
+                        this.endClassDrag();
+                        return;
+                    }
+                    const updated = [...this.schoolClasses];
+                    const [moved] = updated.splice(fromIndex, 1);
+                    updated.splice(toIndex, 0, moved);
+                    this.schoolClasses = updated;
+                    this.endClassDrag();
+                    this.ensureAllGrade11OptionalRows();
+                    this.saveAppData();
+                    this.prepareControlBridgeData();
+                    this.runSmartDistribution();
+                    this.showToast('تم تحديث ترتيب اللجان وحفظه بنجاح.');
+                },
+                endClassDrag() {
+                    this.draggedClassId = null;
+                    this.dragOverClassId = null;
                 },
                 getClassName(id) {
                     const cls = this.schoolClasses.find(c => c.id == id);
