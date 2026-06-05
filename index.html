@@ -565,7 +565,7 @@
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-slate-500 mb-1">المادة الدراسية</label>
-                                    <select x-model="examForm.subject" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                    <select x-model="examForm.subject" @change="refreshGrade11SelectionBySubject()" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
                                         <option value="">اختر المادة...</option>
                                         <template x-for="spec in specialities" :key="spec">
                                             <option :value="spec" x-text="spec"></option>
@@ -1363,7 +1363,7 @@
                 distributionSuccess: false,
                 selectedDailyExamId: null,
                 quickGradeSelection: [],
-                grade11OptionalSubjects: ['الكيمياء', 'الأحياء', 'العلوم البيئية', 'الفيزياء', 'التاريخ', 'الجغرافيا الاقتصادية', 'الرياضة المدرسية', 'المهارات الموسيقية'],
+                grade11OptionalSubjects: ['الكيمياء', 'الاحياء', 'العلوم البيئية', 'الفيزياء', 'التاريخ', 'الجغرافيا الاقتصادية', 'الرياضة المدرسية', 'المهارات الموسيقية'],
                 grade11OptionalRows: {},
 
                 // Batch WhatsApp System Variables
@@ -1811,8 +1811,9 @@
                 },
                 getGrade11OptionalCount(classId, subject) {
                     const slots = this.ensureGrade11OptionalRow(classId);
-                    const subj = String(subject || '').trim();
-                    const slot = slots.find(s => String(s.subject || '').trim() === subj);
+                    const subjKey = this.normalizeSubjectName(subject);
+                    if (!subjKey) return null;
+                    const slot = slots.find(s => this.normalizeSubjectName(s.subject) === subjKey);
                     if (!slot) return null;
                     const regularCount = Number(slot.regularCount || 0);
                     return { regularCount, adultCount: 0, total: regularCount, source: 'grade11Optional' };
@@ -2063,9 +2064,9 @@
                     return ids;
                 },
                 isGrade11OptionalSubject(subject) {
-                    const subj = String(subject || '').trim();
-                    if (!subj) return false;
-                    return (this.grade11OptionalSubjects || []).some(s => String(s || '').trim() === subj);
+                    const subjKey = this.normalizeSubjectName(subject);
+                    if (!subjKey) return false;
+                    return (this.grade11OptionalSubjects || []).some(s => this.normalizeSubjectName(s) === subjKey);
                 },
                 getGrade11ClassesByExamSubject(subject = null) {
                     const subj = String(subject !== null ? subject : (this.examForm.subject || '')).trim();
@@ -2084,6 +2085,14 @@
                 },
                 getGrade11ClassesBySelectedSubject() {
                     return this.getGrade11ClassesByExamSubject().classes;
+                },
+                refreshGrade11SelectionBySubject() {
+                    const current = Array.isArray(this.examForm.selectedClasses) ? this.examForm.selectedClasses : [];
+                    const allGrade11Ids = this.getSortedClassesByGradeKey('11').map(cls => String(cls.id));
+                    const hasGrade11Selected = current.some(id => allGrade11Ids.includes(String(id)));
+                    if (hasGrade11Selected) {
+                        this.selectGradeClasses('11');
+                    }
                 },
                 selectGradeClasses(gradeKey) {
                     const key = String(gradeKey);
