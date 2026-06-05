@@ -98,7 +98,7 @@
     <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-4 no-print w-full">
         <h2 class="text-md font-extrabold text-slate-400 dark:text-slate-500 mb-4 tracking-wider uppercase"><i class="fa-solid fa-cubes-stacked ml-1.5"></i> لوحة الأيقونات والوظائف الذكية</h2>
         
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-4">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
             
             <!-- Icon Card 1: Teachers -->
             <button @click="currentTab = 'teachers'" 
@@ -160,17 +160,7 @@
                 <span class="text-xs font-bold text-slate-800 dark:text-slate-200">الكشف والرسائل</span>
             </button>
 
-            <!-- Icon Card 7: Grade 11 Optional Subjects -->
-            <button @click="currentTab = 'classes'; setTimeout(() => document.getElementById('grade11-optional-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)" 
-                :class="currentTab === 'classes' ? 'ring-2 ring-amber-500 scale-[1.03] shadow-amber-500/10' : 'hover:scale-[1.05]'"
-                class="bg-gradient-to-br from-amber-500/10 to-amber-600/5 hover:from-amber-500/20 dark:from-amber-950/20 border border-amber-500/20 hover:border-amber-500 rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all duration-300 group hover:-translate-y-1.5 hover:shadow-xl shadow-slate-200 dark:shadow-none min-h-[120px]">
-                <div class="w-12 h-12 rounded-xl bg-amber-500 text-white flex items-center justify-center mb-3 shadow-lg shadow-amber-500/30 group-hover:scale-110 duration-300">
-                    <i class="fa-solid fa-layer-group text-lg"></i>
-                </div>
-                <span class="text-xs font-bold text-slate-800 dark:text-slate-200">إضافة المواد الاختيارية</span>
-            </button>
-
-            <!-- Icon Card 8: Statistics -->
+            <!-- Icon Card 7: Statistics -->
             <button @click="currentTab = 'statistics'" 
                 :class="currentTab === 'statistics' ? 'ring-2 ring-rose-500 scale-[1.03] shadow-rose-500/10' : 'hover:scale-[1.05]'"
                 class="bg-gradient-to-br from-rose-500/10 to-rose-600/5 hover:from-rose-500/20 dark:from-rose-950/20 border border-rose-500/20 hover:border-rose-500 rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all duration-300 group hover:-translate-y-1.5 hover:shadow-xl shadow-slate-200 dark:shadow-none min-h-[120px]">
