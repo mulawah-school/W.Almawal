@@ -1627,9 +1627,16 @@
                 appStorageKey: 'monitoring_distribution_full_state_v4',
                 legacyAppStorageKeys: ['monitoring_distribution_full_state_v3', 'monitoring_distribution_full_state_v2', 'monitoring_distribution_full_state_v1'],
                 teachersStorageKey: 'monitoring_distribution_teachers_v2',
+                useFirebaseCloud: true,
                 isLoadingCloudData: false,
                 cloudSaveTimer: null,
                 cloudSaveDelay: 900,
+
+                getScopedStorageKey(baseKey) {
+                    if (window.currentSchoolId) return `${baseKey}_${window.currentSchoolId}`;
+                    if (window.monitoringFirebase) return null;
+                    return baseKey;
+                },
 
                 normalizeTeacherList(list) {
                     return Array.isArray(list) ? list.map((t, index) => ({
@@ -1667,42 +1674,35 @@
 
                 loadSavedData() {
                     try {
-                        let saved = localStorage.getItem(this.appStorageKey);
-                        let loadedFromLegacy = false;
-                        if (saved === null && Array.isArray(this.legacyAppStorageKeys)) {
+                        const scopedAppKey = this.getScopedStorageKey(this.appStorageKey);
+                        const scopedTeachersKey = this.getScopedStorageKey(this.teachersStorageKey);
+
+                        // عند استخدام Firebase لا نحمّل بيانات عامة قبل معرفة المدرسة، حتى لا تنتقل بيانات مدرسة إلى مدرسة أخرى.
+                        if (!scopedAppKey) return;
+
+                        let saved = localStorage.getItem(scopedAppKey);
+                        if (saved === null && !window.currentSchoolId && Array.isArray(this.legacyAppStorageKeys)) {
                             for (const key of this.legacyAppStorageKeys) {
                                 const oldSaved = localStorage.getItem(key);
                                 if (oldSaved !== null) {
                                     saved = oldSaved;
-                                    loadedFromLegacy = true;
                                     break;
                                 }
                             }
                         }
                         if (saved !== null) {
                             const parsed = JSON.parse(saved);
-                            if (Object.prototype.hasOwnProperty.call(parsed, 'teachers')) this.teachers = this.normalizeTeacherList(parsed.teachers);
-                            if (parsed.schoolSettings && typeof parsed.schoolSettings === 'object') this.schoolSettings = { ...this.schoolSettings, ...parsed.schoolSettings, ministry: 'وزارة التعليم' };
-                            if (Object.prototype.hasOwnProperty.call(parsed, 'schoolClasses')) this.schoolClasses = this.normalizeSchoolClasses(parsed.schoolClasses);
-                            if (Object.prototype.hasOwnProperty.call(parsed, 'exams')) this.exams = Array.isArray(parsed.exams) ? parsed.exams : [];
-                            if (Object.prototype.hasOwnProperty.call(parsed, 'subjectRestrictions')) this.subjectRestrictions = Array.isArray(parsed.subjectRestrictions) ? parsed.subjectRestrictions : [];
-                            if (Object.prototype.hasOwnProperty.call(parsed, 'teacherRestrictions')) this.teacherRestrictions = Array.isArray(parsed.teacherRestrictions) ? parsed.teacherRestrictions : [];
-                            if (parsed.smartSettings && typeof parsed.smartSettings === 'object') {
-                                this.smartSettings = {
-                                    floorObservers: Number(parsed.smartSettings.floorObservers || 0),
-                                    backupObservers: Number(parsed.smartSettings.backupObservers || 0)
-                                };
-                            }
-                            if (Object.prototype.hasOwnProperty.call(parsed, 'selectedDailyExamId')) this.selectedDailyExamId = parsed.selectedDailyExamId;
-                            if (parsed.grade11OptionalRows && typeof parsed.grade11OptionalRows === 'object') this.grade11OptionalRows = this.normalizeGrade11OptionalRows(parsed.grade11OptionalRows);
+                            this.applyAppState(parsed);
                             return;
                         }
 
-                        // توافق مع النسخة السابقة التي كانت تحفظ المعلمين فقط
-                        const oldTeachers = localStorage.getItem(this.teachersStorageKey);
-                        if (oldTeachers !== null) {
-                            this.teachers = this.normalizeTeacherList(JSON.parse(oldTeachers));
-                            this.saveAppData();
+                        // توافق مع النسخة السابقة التي كانت تحفظ المعلمين فقط، ويستخدم فقط بدون Firebase أو داخل نفس المدرسة.
+                        if (scopedTeachersKey) {
+                            const oldTeachers = localStorage.getItem(scopedTeachersKey);
+                            if (oldTeachers !== null) {
+                                this.teachers = this.normalizeTeacherList(JSON.parse(oldTeachers));
+                                this.saveAppData();
+                            }
                         }
                     } catch (e) {
                         console.warn('تعذر تحميل بيانات برنامج التوزيع المحفوظة', e);
@@ -1783,16 +1783,26 @@
                             if (this.exams.length > 0 && (!this.selectedDailyExamId || !this.exams.some(e => e.id == this.selectedDailyExamId))) {
                                 this.selectedDailyExamId = this.exams[0].id;
                             }
-                            localStorage.setItem(this.appStorageKey, JSON.stringify(this.getSerializableState()));
-                            localStorage.setItem(this.teachersStorageKey, JSON.stringify(this.teachers));
+                            const scopedAppKey = this.getScopedStorageKey(this.appStorageKey);
+                            const scopedTeachersKey = this.getScopedStorageKey(this.teachersStorageKey);
+                            if (scopedAppKey) localStorage.setItem(scopedAppKey, JSON.stringify(this.getSerializableState()));
+                            if (scopedTeachersKey) localStorage.setItem(scopedTeachersKey, JSON.stringify(this.teachers));
                             this.syncControlBridgeData();
                             if (this.exams.length > 0 && this.assignments.length === 0) this.runSmartDistribution();
-                            this.showToast('تم تحميل بيانات المدرسة من Firebase بنجاح.');
                             if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('متصل بالسحابة', 'success');
                         } else {
-                            this.saveAppData();
+                            // يوزر/مدرسة جديدة: ننشئ بيانات افتراضية مستقلة لهذه المدرسة فقط.
+                            this.migrateLegacySubjectCountsToGrade11Optional();
+                            this.ensureAllGrade11OptionalRows();
+                            if (this.exams.length > 0 && (!this.selectedDailyExamId || !this.exams.some(e => e.id == this.selectedDailyExamId))) {
+                                this.selectedDailyExamId = this.exams[0].id;
+                            }
+                            const scopedAppKey = this.getScopedStorageKey(this.appStorageKey);
+                            const scopedTeachersKey = this.getScopedStorageKey(this.teachersStorageKey);
+                            if (scopedAppKey) localStorage.setItem(scopedAppKey, JSON.stringify(this.getSerializableState()));
+                            if (scopedTeachersKey) localStorage.setItem(scopedTeachersKey, JSON.stringify(this.teachers));
                             await this.saveCloudDataNow();
-                            this.showToast('لا توجد بيانات سابقة؛ تم إنشاء ملف بيانات جديد لهذه المدرسة.');
+                            if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('متصل بالسحابة', 'success');
                         }
                     } catch (e) {
                         console.error('تعذر تحميل البيانات السحابية', e);
@@ -1806,8 +1816,10 @@
                 saveAppData() {
                     try {
                         const state = this.getSerializableState();
-                        localStorage.setItem(this.appStorageKey, JSON.stringify(state));
-                        localStorage.setItem(this.teachersStorageKey, JSON.stringify(this.teachers));
+                        const scopedAppKey = this.getScopedStorageKey(this.appStorageKey);
+                        const scopedTeachersKey = this.getScopedStorageKey(this.teachersStorageKey);
+                        if (scopedAppKey) localStorage.setItem(scopedAppKey, JSON.stringify(state));
+                        if (scopedTeachersKey) localStorage.setItem(scopedTeachersKey, JSON.stringify(this.teachers));
                         this.syncControlBridgeData();
                         this.scheduleCloudSave();
                     } catch (e) {
