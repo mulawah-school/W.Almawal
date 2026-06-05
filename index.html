@@ -587,7 +587,7 @@
                                         <div class="flex items-center justify-between gap-2 mb-2">
                                             <div>
                                                 <span class="text-xs font-extrabold text-indigo-700 dark:text-indigo-300">اختيار سريع حسب الصف</span>
-                                                <p class="text-[11px] text-slate-500 mt-0.5">اضغط على أي صف لإضافته مباشرة. الصف الحادي عشر يرتبط تلقائيًا بنوع المادة: المواد الأساسية تنزل جميع لجان 11، والمواد الاختيارية تنزل لجان المادة حسب جدول المواد الاختيارية.</p>
+                                                <p class="text-[11px] text-slate-500 mt-0.5">اضغط على الصف مباشرة. الصف الحادي عشر يقرأ مادة الاختبار الحالية: المادة الأساسية تختار كل لجان 11، والمادة الاختيارية تختار اللجان المسجلة لها فقط في قسم المواد الاختيارية.</p>
                                             </div>
                                             <button type="button" @click="clearSelectedClasses()" class="text-[11px] font-bold text-red-600 hover:text-red-700">مسح الاختيار</button>
                                         </div>
@@ -611,17 +611,22 @@
                                             <div x-show="getGradeGroups().length === 0" class="text-xs text-slate-400">أضف الصفوف واللجان أولاً حتى تظهر أزرار الاختيار السريع.</div>
                                         </div>
                                         <div class="text-[11px] text-slate-500">
-                                            ملاحظة: إذا كانت مادة الاختبار أساسية ينزل الصف الحادي عشر كاملًا، وإذا كانت اختيارية مثل الكيمياء أو الفيزياء تنزل اللجان المسجلة لهذه المادة فقط من جدول المواد الاختيارية.
+                                            ملاحظة: لا يوجد تحديد لجنة لجنة. الاختيار يتم مباشرة من الصفوف واللجان، والصف الحادي عشر يعتمد على مادة الاختبار الحالية.
                                         </div>
                                     </div>
 
-                                    <div class="max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-950/40 space-y-2">
-                                        <template x-for="cls in schoolClasses" :key="cls.id">
-                                            <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
-                                                <input type="checkbox" :value="cls.id" x-model="examForm.selectedClasses" class="rounded text-primary-600 focus:ring-primary-500">
-                                                <span class="text-xs text-slate-700 dark:text-slate-300 font-semibold" x-text="cls.className + ' - ' + cls.committeeName + ' | العدد: ' + getExamClassCountText(cls.id, examForm.subject)"></span>
-                                            </label>
+                                    <div class="max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-950/40 space-y-2">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <span class="text-xs font-extrabold text-slate-700 dark:text-slate-300">اللجان المختارة تلقائيًا من الصفوف واللجان</span>
+                                            <span class="text-[11px] text-slate-400" x-text="'العدد: ' + (examForm.selectedClasses || []).length"></span>
+                                        </div>
+                                        <template x-for="clsId in examForm.selectedClasses" :key="clsId">
+                                            <div class="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
+                                                <span class="text-xs text-slate-700 dark:text-slate-300 font-semibold" x-text="getClassName(clsId) + ' - ' + getCommitteeNameByClass(clsId) + ' | العدد: ' + getExamClassCountText(clsId, examForm.subject)"></span>
+                                                <button type="button" @click="examForm.selectedClasses = (examForm.selectedClasses || []).filter(id => String(id) !== String(clsId))" class="text-[11px] font-bold text-red-600 hover:text-red-700">إزالة</button>
+                                            </div>
                                         </template>
+                                        <div x-show="(examForm.selectedClasses || []).length === 0" class="text-center py-4 text-xs text-slate-400">اختر الصف من أزرار الاختيار السريع أعلاه؛ لن تحتاج إلى تحديد لجنة لجنة.</div>
                                         <div x-show="schoolClasses.length === 0" class="text-center py-4 text-xs text-slate-400">يرجى تسجيل صفوف المدرسة أولاً</div>
                                     </div>
                                 </div>
@@ -2082,39 +2087,54 @@
                 },
                 selectGradeClasses(gradeKey) {
                     const key = String(gradeKey);
-                    let classes = [];
+                    const current = Array.isArray(this.examForm.selectedClasses) ? this.examForm.selectedClasses : [];
 
                     if (key === '11') {
                         const subject = String(this.examForm.subject || '').trim();
+                        if (!subject) {
+                            this.showToast('اختر مادة الاختبار أولاً حتى يحدد البرنامج لجان الصف الحادي عشر المناسبة.', 'error');
+                            return;
+                        }
+
                         const result = this.getGrade11ClassesByExamSubject(subject);
-                        classes = result.classes;
+                        const classes = result.classes || [];
+
                         if (classes.length === 0) {
                             if (result.mode === 'optional') {
-                                this.showToast('هذه مادة اختيارية، ولم يتم تسجيل لجان/أعداد لها في قسم المواد الاختيارية داخل الصفوف واللجان.', 'error');
+                                this.showToast('مادة ' + subject + ' اختيارية، لكن لا توجد لجان مسجلة لها في قسم المواد الاختيارية داخل الصفوف واللجان.', 'error');
                             } else {
                                 this.showToast('لم يتم العثور على لجان للصف الحادي عشر في إدارة الصفوف واللجان.', 'error');
                             }
                             return;
                         }
+
+                        // مهم: عند اختيار الحادي عشر نزيل أي لجان حادي عشر سابقة أولاً،
+                        // ثم نضيف اللجان الصحيحة فقط حسب المادة، حتى لا تبقى كل اللجان محددة بالخطأ.
+                        const allGrade11Ids = this.getSortedClassesByGradeKey('11').map(cls => String(cls.id));
                         const ids = classes.map(cls => cls.id);
-                        this.examForm.selectedClasses = Array.from(new Set([...(this.examForm.selectedClasses || []), ...ids]));
+                        const withoutOldGrade11 = current.filter(id => !allGrade11Ids.includes(String(id)));
+                        this.examForm.selectedClasses = Array.from(new Set([...withoutOldGrade11, ...ids]));
+
                         if (result.mode === 'optional') {
-                            this.showToast('تمت إضافة لجان الصف الحادي عشر لمادة ' + subject + ' حسب جدول المواد الاختيارية، وعددها ' + ids.length + ' لجنة.');
-                        } else if (result.mode === 'core') {
-                            this.showToast('تمت إضافة جميع لجان الصف الحادي عشر للمادة الأساسية ' + subject + '، وعددها ' + ids.length + ' لجنة.');
+                            this.showToast('تم اختيار ' + ids.length + ' لجان فقط للصف الحادي عشر لمادة ' + subject + ' حسب جدول المواد الاختيارية.');
                         } else {
-                            this.showToast('تمت إضافة جميع لجان الصف الحادي عشر وعددها ' + ids.length + ' لجنة.');
+                            this.showToast('تم اختيار جميع لجان الصف الحادي عشر للمادة الأساسية ' + subject + '، وعددها ' + ids.length + ' لجنة.');
                         }
                         return;
                     }
 
-                    classes = this.getSortedClassesByGradeKey(key);
+                    const classes = this.getSortedClassesByGradeKey(key);
                     const ids = classes.map(cls => cls.id);
                     if (ids.length === 0) {
                         this.showToast('لم يتم العثور على لجان لهذا الصف في إدارة الصفوف واللجان.', 'error');
                         return;
                     }
-                    this.examForm.selectedClasses = Array.from(new Set([...(this.examForm.selectedClasses || []), ...ids]));
+
+                    // عند اختيار صف من الخامس إلى العاشر، نحدث اختيار ذلك الصف مباشرة من بيانات الصفوف واللجان.
+                    const sameGradeIds = this.getSortedClassesByGradeKey(key).map(cls => String(cls.id));
+                    const withoutOldSameGrade = current.filter(id => !sameGradeIds.includes(String(id)));
+                    this.examForm.selectedClasses = Array.from(new Set([...withoutOldSameGrade, ...ids]));
+
                     const actual = classes.length;
                     const expected = this.getExpectedGradeCount(key);
                     const label = this.getGradeLabel(key) + ' (' + actual + (expected ? ' من المتوقع ' + expected : '') + ')';
