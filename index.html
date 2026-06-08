@@ -710,56 +710,62 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <template x-for="dayGroup in getExamsGroupedByDate()" :key="dayGroup.date">
-                                        <template>
-                                            <tr class="bg-indigo-50/70 dark:bg-indigo-950/30 border-b border-indigo-100 dark:border-indigo-900">
+                                    <template x-for="row in getExamDisplayRows()" :key="row.key">
+                                        <tr :class="row.type === 'day' ? 'bg-indigo-50/70 dark:bg-indigo-950/30 border-b border-indigo-100 dark:border-indigo-900' : 'border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50'">
+                                            <template x-if="row.type === 'day'">
                                                 <td colspan="5" class="px-4 py-3">
                                                     <div class="flex flex-wrap items-center justify-between gap-2">
                                                         <div class="font-extrabold text-indigo-800 dark:text-indigo-200">
                                                             <i class="fa-solid fa-calendar-day ml-1"></i>
-                                                            <span x-text="formatDateArabic(dayGroup.date)"></span>
-                                                            <span class="text-[11px] text-indigo-500 font-mono mr-2" x-text="dayGroup.date"></span>
+                                                            <span x-text="formatDateArabic(row.date)"></span>
+                                                            <span class="text-[11px] text-indigo-500 font-mono mr-2" x-text="row.date"></span>
                                                         </div>
-                                                        <div class="text-xs font-bold text-indigo-600 dark:text-indigo-300" x-text="'عدد مجموعات الاختبار في هذا اليوم: ' + dayGroup.exams.length"></div>
+                                                        <div class="text-xs font-bold text-indigo-600 dark:text-indigo-300" x-text="'عدد مجموعات الاختبار في هذا اليوم: ' + row.count"></div>
                                                     </div>
                                                 </td>
-                                            </tr>
-                                            <template x-for="exam in dayGroup.exams" :key="exam.id">
-                                                <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50">
-                                                    <td class="px-4 py-3 font-semibold text-slate-500 dark:text-slate-400">
-                                                        <div class="text-xs">نفس اليوم</div>
-                                                        <div class="text-[10px] text-slate-400 font-mono" x-text="exam.date"></div>
-                                                    </td>
-                                                    <td class="px-4 py-3">
-                                                        <div class="font-bold text-slate-800 dark:text-slate-100" x-text="exam.subject"></div>
-                                                        <div class="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                                                            <i class="fa-regular fa-clock"></i>
-                                                            <span x-text="exam.period"></span>
-                                                            <span class="text-slate-300 dark:text-slate-600">|</span>
-                                                            <span>مدة: <span x-text="exam.duration"></span> س</span>
-                                                        </div>
-                                                    </td>
-                                                    <td class="px-4 py-3">
-                                                        <div class="flex flex-wrap gap-1">
-                                                            <template x-for="clsId in exam.selectedClasses" :key="clsId">
-                                                                <span class="text-[10px] bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 px-2 py-0.5 rounded" x-text="getClassName(clsId) + ' (' + getExamClassCountText(clsId, exam.subject) + ')' "></span>
-                                                            </template>
-                                                        </div>
-                                                    </td>
-                                                    <td class="px-4 py-3 text-center font-bold text-primary-600 dark:text-primary-400" x-text="exam.observersNeeded"></td>
-                                                    <td class="px-4 py-3 text-center">
-                                                        <div class="flex items-center justify-center gap-2">
-                                                            <button @click="openEditExam(exam)" class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors" title="تعديل">
-                                                                <i class="fa-solid fa-pen-to-square"></i>
-                                                            </button>
-                                                            <button @click="deleteExam(exam.id)" class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="حذف">
-                                                                <i class="fa-solid fa-trash-can"></i>
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
                                             </template>
-                                        </template>
+                                            <template x-if="row.type === 'exam'">
+                                                <td class="px-4 py-3 font-semibold text-slate-500 dark:text-slate-400">
+                                                    <div class="text-xs">نفس اليوم</div>
+                                                    <div class="text-[10px] text-slate-400 font-mono" x-text="row.exam.date"></div>
+                                                </td>
+                                            </template>
+                                            <template x-if="row.type === 'exam'">
+                                                <td class="px-4 py-3">
+                                                    <div class="font-bold text-slate-800 dark:text-slate-100" x-text="row.exam.subject"></div>
+                                                    <div class="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                                                        <i class="fa-regular fa-clock"></i>
+                                                        <span x-text="row.exam.period"></span>
+                                                        <span class="text-slate-300 dark:text-slate-600">|</span>
+                                                        <span>مدة: <span x-text="row.exam.duration"></span> س</span>
+                                                    </div>
+                                                </td>
+                                            </template>
+                                            <template x-if="row.type === 'exam'">
+                                                <td class="px-4 py-3">
+                                                    <div class="flex flex-wrap gap-1">
+                                                        <template x-for="clsId in row.exam.selectedClasses" :key="clsId">
+                                                            <span class="text-[10px] bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 px-2 py-0.5 rounded" x-text="getClassName(clsId) + ' (' + getExamClassCountText(clsId, row.exam.subject) + ')' "></span>
+                                                        </template>
+                                                    </div>
+                                                </td>
+                                            </template>
+                                            <template x-if="row.type === 'exam'">
+                                                <td class="px-4 py-3 text-center font-bold text-primary-600 dark:text-primary-400" x-text="row.exam.observersNeeded"></td>
+                                            </template>
+                                            <template x-if="row.type === 'exam'">
+                                                <td class="px-4 py-3 text-center">
+                                                    <div class="flex items-center justify-center gap-2">
+                                                        <button @click="openEditExam(row.exam)" class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors" title="تعديل">
+                                                            <i class="fa-solid fa-pen-to-square"></i>
+                                                        </button>
+                                                        <button @click="deleteExam(row.exam.id)" class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="حذف">
+                                                            <i class="fa-solid fa-trash-can"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </template>
+                                        </tr>
                                     </template>
                                     <tr x-show="exams.length === 0">
                                         <td colspan="5" class="text-center py-12 text-slate-400">لا يوجد أي امتحانات مبرمجة حالياً. يرجى استخدام النموذج لإضافة أيام اختبار.</td>
@@ -1359,6 +1365,40 @@
         let auth = null;
         let db = null;
 
+        // مدة الجلسة الافتراضية: بعد 30 دقيقة بدون استخدام يطلب تسجيل الدخول من جديد
+        const AUTH_SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+        const AUTH_LAST_ACTIVITY_KEY = 'monitoring_auth_last_activity_v1';
+
+        function markAuthActivity() {
+            try { localStorage.setItem(AUTH_LAST_ACTIVITY_KEY, String(Date.now())); } catch (e) {}
+        }
+
+        function isAuthSessionExpired() {
+            try {
+                const last = parseInt(localStorage.getItem(AUTH_LAST_ACTIVITY_KEY) || '0', 10);
+                if (!last) return false;
+                return (Date.now() - last) > AUTH_SESSION_TIMEOUT_MS;
+            } catch (e) { return false; }
+        }
+
+        function clearAuthSessionMarker() {
+            try { localStorage.removeItem(AUTH_LAST_ACTIVITY_KEY); } catch (e) {}
+        }
+
+        ['click', 'keydown', 'input', 'mousemove', 'touchstart'].forEach(evt => {
+            window.addEventListener(evt, () => {
+                if (auth && auth.currentUser) markAuthActivity();
+            }, { passive: true });
+        });
+
+        setInterval(async () => {
+            if (auth && auth.currentUser && isAuthSessionExpired()) {
+                clearAuthSessionMarker();
+                await signOut(auth);
+                showLoginAfterAuthError();
+            }
+        }, 60000);
+
         function setLoginError(message) {
             const el = document.getElementById('login-error');
             if (el) el.textContent = message || '';
@@ -1492,6 +1532,7 @@
             const email = username.includes('@') ? username : `${username}@monitoring.local`;
             try {
                 setLoginError('');
+                markAuthActivity();
                 await signInWithEmailAndPassword(auth, email, password);
             } catch (error) {
                 console.error(error);
@@ -1500,6 +1541,7 @@
         };
 
         window.logoutMonitoring = async function() {
+            clearAuthSessionMarker();
             if (auth) await signOut(auth);
             window.currentSchoolId = null;
             location.reload();
@@ -1518,6 +1560,13 @@
                     return;
                 }
                 try {
+                    if (isAuthSessionExpired()) {
+                        clearAuthSessionMarker();
+                        await signOut(auth);
+                        showLoginAfterAuthError();
+                        return;
+                    }
+                    markAuthActivity();
                     await openAppForUser(user);
                 } catch (error) {
                     console.error(error);
@@ -2701,6 +2750,17 @@
                                 return String(a.subject || '').localeCompare(String(b.subject || ''), 'ar');
                             })
                         }));
+                },
+
+                getExamDisplayRows() {
+                    const rows = [];
+                    this.getExamsGroupedByDate().forEach(group => {
+                        rows.push({ type: 'day', key: 'day-' + group.date, date: group.date, count: group.exams.length });
+                        group.exams.forEach(exam => {
+                            rows.push({ type: 'exam', key: 'exam-' + exam.id, exam });
+                        });
+                    });
+                    return rows;
                 },
 
                 formatDateArabic(dateStr) {
