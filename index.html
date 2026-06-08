@@ -334,7 +334,7 @@
                                     <td class="px-4 py-3 font-mono text-xs text-slate-600 dark:text-slate-300" x-text="teacher.phone"></td>
                                     <td class="px-4 py-3 text-center">
                                         <label class="relative inline-flex items-center justify-center cursor-pointer">
-                                            <input type="checkbox" x-model="teacher.inControl" @change="saveTeachers(); runSmartDistribution()" class="sr-only peer">
+                                            <input type="checkbox" x-model="teacher.inControl" @change="saveTeachers(); runSmartDistribution(true)" class="sr-only peer">
                                             <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:-translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-red-500"></div>
                                         </label>
                                     </td>
@@ -895,13 +895,13 @@
                         <div>
                             <label class="block text-xs font-bold text-slate-500 mb-2">عدد مراقبي الدور في كل فترة امتحان</label>
                             <div class="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 w-full shadow-sm">
-                                <button type="button" @click="if(smartSettings.floorObservers > 0) { smartSettings.floorObservers--; saveAppData(); runSmartDistribution(); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
+                                <button type="button" @click="if(smartSettings.floorObservers > 0) { smartSettings.floorObservers--; saveAppData(); runSmartDistribution(true); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
                                 <div class="flex-1 text-center flex items-center justify-center gap-2">
                                     <i class="fa-solid fa-users-viewfinder text-primary-500 text-lg"></i>
                                     <span class="font-extrabold text-lg text-slate-800 dark:text-white font-mono" x-text="smartSettings.floorObservers"></span>
                                     <span class="text-xs text-slate-400">مراقب دور</span>
                                 </div>
-                                <button type="button" @click="if(smartSettings.floorObservers < 5) { smartSettings.floorObservers++; saveAppData(); runSmartDistribution(); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">+</button>
+                                <button type="button" @click="if(smartSettings.floorObservers < 5) { smartSettings.floorObservers++; saveAppData(); runSmartDistribution(true); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">+</button>
                             </div>
                         </div>
 
@@ -909,13 +909,13 @@
                         <div>
                             <label class="block text-xs font-bold text-slate-500 mb-2">عدد مراقبي الاحتياط العام لكل فترة</label>
                             <div class="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 w-full shadow-sm">
-                                <button type="button" @click="if(smartSettings.backupObservers > 0) { smartSettings.backupObservers--; saveAppData(); runSmartDistribution(); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
+                                <button type="button" @click="if(smartSettings.backupObservers > 0) { smartSettings.backupObservers--; saveAppData(); runSmartDistribution(true); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
                                 <div class="flex-1 text-center flex items-center justify-center gap-2">
                                     <i class="fa-solid fa-circle-exclamation text-primary-500 text-lg"></i>
                                     <span class="font-extrabold text-lg text-slate-800 dark:text-white font-mono" x-text="smartSettings.backupObservers"></span>
                                     <span class="text-xs text-slate-400">احتياطي</span>
                                 </div>
-                                <button type="button" @click="if(smartSettings.backupObservers < 5) { smartSettings.backupObservers++; saveAppData(); runSmartDistribution(); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">+</button>
+                                <button type="button" @click="if(smartSettings.backupObservers < 5) { smartSettings.backupObservers++; saveAppData(); runSmartDistribution(true); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">+</button>
                             </div>
                         </div>
                     </div>
@@ -1859,7 +1859,7 @@
                             }
                             this.safeSaveLocalSnapshot(this.getSerializableState());
                             this.syncControlBridgeData();
-                            if (this.exams.length > 0 && this.assignments.length === 0) this.runSmartDistribution();
+                            if (this.exams.length > 0 && this.assignments.length === 0) this.runSmartDistribution(true);
                             if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('متصل بالسحابة', 'success');
                         } else {
                             // يوزر/مدرسة جديدة: ننشئ بيانات افتراضية مستقلة لهذه المدرسة فقط.
@@ -1959,7 +1959,7 @@
                             this.selectedDailyExamId = this.exams[0].id;
                             this.saveAppData();
                         }
-                        this.runSmartDistribution();
+                        this.runSmartDistribution(true);
                     }
                 },
 
@@ -2016,13 +2016,13 @@
                         this.showToast('تمت إضافة المعلم بنجاح.');
                     }
                     this.saveTeachers();
-                    this.runSmartDistribution();
+                    this.runSmartDistribution(true);
                     this.teacherModalOpen = false;
                 },
                 deleteTeacher(id) {
                     this.teachers = this.teachers.filter(t => t.id !== id);
                     this.saveTeachers();
-                    this.runSmartDistribution();
+                    this.runSmartDistribution(true);
                     this.showToast('تم حذف المعلم.', 'error');
                 },
                 getTeacherName(id) {
@@ -2133,7 +2133,7 @@
 
                             this.teachers = uniqueImported.map((t, i) => ({ ...t, id: i + 1 }));
                             this.saveTeachers();
-                            this.runSmartDistribution();
+                            this.runSmartDistribution(true);
                             this.showToast(`تم استيراد ${uniqueImported.length} معلماً بنجاح من ملف الإكسل.`);
                             if (missingRows.length) {
                                 this.showToast(`تم تجاهل بعض الصفوف الناقصة: ${missingRows.slice(0, 8).join(', ')}`, 'error');
@@ -2298,7 +2298,7 @@
                                 subjectCounts: JSON.parse(JSON.stringify(this.classForm.subjectCounts || {}))
                             };
                             this.saveAppData();
-                            this.runSmartDistribution();
+                            this.runSmartDistribution(true);
                             this.showToast('تم تعديل الصف واللجنة بنجاح.');
                         }
                     } else {
@@ -2312,7 +2312,7 @@
                             subjectCounts: JSON.parse(JSON.stringify(this.classForm.subjectCounts || {}))
                         });
                         this.saveAppData();
-                        this.runSmartDistribution();
+                        this.runSmartDistribution(true);
                         this.showToast('تم تسجيل الصف واللجنة المقابلة.');
                     }
                     this.resetClassForm();
@@ -2324,7 +2324,7 @@
                     this.exams = this.exams.map(e => ({ ...e, selectedClasses: e.selectedClasses.filter(clsId => clsId != id) }));
                     this.assignments = this.assignments.filter(a => a.classId != id);
                     this.saveAppData();
-                    this.runSmartDistribution();
+                    this.runSmartDistribution(true);
                     this.showToast('تم حذف الصف واللجنة.', 'error');
                 },
                 startClassDrag(id) {
@@ -2350,7 +2350,7 @@
                     this.ensureAllGrade11OptionalRows();
                     this.saveAppData();
                     this.prepareControlBridgeData();
-                    this.runSmartDistribution();
+                    this.runSmartDistribution(true);
                     this.showToast('تم تحديث ترتيب اللجان وحفظه بنجاح.');
                 },
                 endClassDrag() {
@@ -2706,7 +2706,7 @@
                     // حتى يستطيع المستخدم اختيار صفوف/لجان جديدة وإضافتها لليوم نفسه بسرعة.
                     this.resetExamForm({ keepDate: true, keepPeriod: true, keepDuration: true, keepObservers: true });
                     this.saveAppData();
-                    this.runSmartDistribution();
+                    this.runSmartDistribution(true);
                 },
                 deleteExam(id) {
                     if (this.examForm && this.examForm.id == id) this.resetExamForm();
@@ -2714,7 +2714,7 @@
                     this.assignments = this.assignments.filter(a => a.examId !== id);
                     if (this.selectedDailyExamId == id) this.selectedDailyExamId = this.exams.length ? this.exams[0].id : null;
                     this.saveAppData();
-                    this.runSmartDistribution();
+                    this.runSmartDistribution(true);
                     this.showToast('تم حذف يوم الامتحان المستهدف.', 'error');
                 },
                 clearExams() {
@@ -2796,13 +2796,13 @@
                     });
                     this.subjectRestForm = { date: '', specialities: [] };
                     this.saveAppData();
-                    this.runSmartDistribution();
+                    this.runSmartDistribution(true);
                     this.showToast('تمت إضافة استبعاد التخصصات المختارة بنجاح.');
                 },
                 deleteSubjectRestriction(id) {
                     this.subjectRestrictions = this.subjectRestrictions.filter(r => r.id !== id);
                     this.saveAppData();
-                    this.runSmartDistribution();
+                    this.runSmartDistribution(true);
                     this.showToast('تم إزالة استبعاد التخصص.', 'error');
                 },
                 addTeacherRestriction() {
@@ -2826,13 +2826,13 @@
                     });
                     this.teacherRestForm = { date: '', teacherIds: [], reason: '' };
                     this.saveAppData();
-                    this.runSmartDistribution();
+                    this.runSmartDistribution(true);
                     this.showToast('تم استبعاد المعلمين المختارين بالتاريخ بنجاح.');
                 },
                 deleteTeacherRestriction(id) {
                     this.teacherRestrictions = this.teacherRestrictions.filter(r => r.id !== id);
                     this.saveAppData();
-                    this.runSmartDistribution();
+                    this.runSmartDistribution(true);
                     this.showToast('تم إزالة شرط الاستبعاد للفرد.', 'error');
                 },
 
@@ -3107,7 +3107,7 @@
                         const finalDayGap = getDayGap();
                         this.distributing = false;
                         this.distributionSuccess = true;
-                        this.showToast('تم التوزيع بنجاح.');
+                        if (!silent) this.showToast('تم التوزيع بنجاح.');
                     }, 1000);
                 },
 
