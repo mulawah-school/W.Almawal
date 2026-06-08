@@ -979,8 +979,8 @@
                         <label class="block text-xs font-bold text-slate-500 mb-1">اختر يوم الامتحان لمراجعته</label>
                         <select x-model="selectedDailyExamId" @change="saveAppData()" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500">
                             <option value="">-- اختر يوماً من الجدول --</option>
-                            <template x-for="exam in exams" :key="exam.id">
-                                <option :value="exam.id" x-text="formatDateArabic(exam.date) + ' - ' + exam.subject + ' (' + exam.period + ')'"></option>
+                            <template x-for="day in getDailyExamDays()" :key="day.date">
+                                <option :value="day.date" x-text="formatDateArabic(day.date) + ' - ' + day.exams.length + ' اختبار/مجموعة' + ' | ' + day.exams.map(e => e.subject + ' (' + e.period + ')').join('، ')"></option>
                             </template>
                         </select>
                     </div>
@@ -999,7 +999,7 @@
                         </div>
                         <div class="text-center">
                             <h2 class="text-lg font-bold text-slate-900 dark:text-white">كشف المراقبة اليومي للفترات</h2>
-                            <p class="text-xs text-slate-500" x-text="selectedDailyExamId ? formatDateArabic(exams.find(e => e.id == selectedDailyExamId)?.date) : 'الرجاء اختيار تاريخ من القائمة أعلاه'"></p>
+                            <p class="text-xs text-slate-500" x-text="getSelectedDailyDate() ? formatDateArabic(getSelectedDailyDate()) : 'الرجاء اختيار تاريخ من القائمة أعلاه'"></p>
                         </div>
                         <div class="text-left font-mono text-[10px] text-slate-400">
                             مُولد آلياً بواسطة مُراقب الذكي<br>
@@ -1008,86 +1008,103 @@
                     </div>
 
                     <!-- Selected Day Info Summary -->
-                    <template x-if="selectedDailyExamId">
+                    <template x-if="getSelectedDailyExams().length">
                         <div class="mb-4">
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
-                                <div><span class="text-xs text-slate-400">المادة الدراسية:</span> <strong class="text-sm block text-slate-800 dark:text-white" x-text="exams.find(e => e.id == selectedDailyExamId)?.subject"></strong></div>
-                                <div><span class="text-xs text-slate-400">الفترة المحددة:</span> <strong class="text-sm block text-slate-800 dark:text-white" x-text="exams.find(e => e.id == selectedDailyExamId)?.period"></strong></div>
-                                <div><span class="text-xs text-slate-400">مدة الامتحان:</span> <strong class="text-sm block text-slate-800 dark:text-white" x-text="exams.find(e => e.id == selectedDailyExamId)?.duration + ' ساعات'"></strong></div>
+                            <div class="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
+                                <div class="text-xs text-slate-400 mb-2">اختبارات هذا اليوم مجمعة في كشف واحد حسب جدول الاختبارات المدرج:</div>
+                                <div class="flex flex-wrap gap-2">
+                                    <template x-for="exam in getSelectedDailyExams()" :key="'summary-' + exam.id">
+                                        <span class="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-cyan-50 text-cyan-700 dark:bg-cyan-950/30 dark:text-cyan-300 text-xs font-bold">
+                                            <span x-text="exam.subject"></span>
+                                            <span class="text-slate-400">|</span>
+                                            <span x-text="exam.period"></span>
+                                            <span class="text-slate-400">|</span>
+                                            <span x-text="exam.duration + ' س'"></span>
+                                        </span>
+                                    </template>
+                                </div>
                             </div>
 
                             <!-- List of Committees and Observers -->
-                            <h4 class="font-bold text-md mb-3 text-slate-900 dark:text-white mt-6 border-b border-slate-200 dark:border-slate-700 pb-2"><i class="fa-solid fa-list-check text-primary-500 ml-1"></i> توزيع المراقبين على اللجان والصفوف</h4>
-                            <div class="space-y-4">
-                                <template x-for="clsId in exams.find(e => e.id == selectedDailyExamId)?.selectedClasses" :key="clsId">
-                                    <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
-                                        <div class="bg-slate-50 dark:bg-slate-850 px-4 py-3 flex justify-between items-center border-b border-slate-200 dark:border-slate-700">
-                                            <div class="flex items-center gap-2">
-                                                <span class="bg-primary-600 text-white font-bold text-xs px-2.5 py-1 rounded" x-text="getClassName(clsId)"></span>
-                                                <span class="font-bold text-sm text-slate-800 dark:text-slate-100" x-text="'اللجنة: ' + getCommitteeNameByClass(clsId)"></span>
-                                            </div>
-                                            <div class="text-xs text-slate-400 flex flex-col sm:flex-row sm:gap-3">
-                                                <span>المراقبين المطلوبين: <strong class="text-slate-700 dark:text-slate-200 font-mono" x-text="exams.find(e => e.id == selectedDailyExamId)?.observersNeeded"></strong></span>
-                                                <span>النظاميون: <strong class="text-slate-700 dark:text-slate-200 font-mono" x-text="getClassRegularCount(clsId)"></strong></span>
-                                                <span>الدارسون: <strong class="text-slate-700 dark:text-slate-200 font-mono" x-text="getClassAdultCount(clsId)"></strong></span>
-                                            </div>
+                            <h4 class="font-bold text-md mb-3 text-slate-900 dark:text-white mt-6 border-b border-slate-200 dark:border-slate-700 pb-2"><i class="fa-solid fa-list-check text-primary-500 ml-1"></i> توزيع واحد لليوم على اللجان والصفوف</h4>
+                            <div class="space-y-5">
+                                <template x-for="exam in getSelectedDailyExams()" :key="'exam-block-' + exam.id">
+                                    <div class="rounded-2xl border border-cyan-100 dark:border-cyan-900 bg-cyan-50/20 dark:bg-cyan-950/10 p-3">
+                                        <div class="mb-3 flex flex-wrap items-center gap-2 text-xs font-bold text-cyan-700 dark:text-cyan-300">
+                                            <i class="fa-solid fa-calendar-check"></i>
+                                            <span x-text="exam.subject"></span>
+                                            <span class="text-slate-400">-</span>
+                                            <span x-text="exam.period"></span>
+                                            <span class="text-slate-400">-</span>
+                                            <span x-text="'المدة: ' + exam.duration + ' ساعات'"></span>
                                         </div>
-                                        <div class="p-4">
-                                            <!-- Teachers assigned for this specific class/committee on this day -->
-                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                <template x-for="assignment in getDailyClassAssignments(selectedDailyExamId, clsId)" :key="assignment.id">
-                                                    <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-850/50 border border-slate-100 dark:border-slate-800">
-                                                        <div>
-                                                            <div class="font-bold text-sm text-slate-800 dark:text-white" x-text="assignment.teacherName"></div>
-                                                            <div class="text-xs text-slate-500 font-mono mt-0.5" x-text="assignment.teacherPhone"></div>
+                                        <div class="space-y-4">
+                                            <template x-for="clsId in exam.selectedClasses" :key="exam.id + '-' + clsId">
+                                                <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                                                    <div class="bg-slate-50 dark:bg-slate-850 px-4 py-3 flex justify-between items-center border-b border-slate-200 dark:border-slate-700">
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="bg-primary-600 text-white font-bold text-xs px-2.5 py-1 rounded" x-text="getClassName(clsId)"></span>
+                                                            <span class="font-bold text-sm text-slate-800 dark:text-slate-100" x-text="'اللجنة: ' + getCommitteeNameByClass(clsId)"></span>
                                                         </div>
-                                                        <!-- Send Notification Button -->
-                                                        <button @click="sendWhatsAppNotification(assignment)" class="no-print bg-green-600 hover:bg-green-700 text-white text-xs px-2.5 py-1.5 rounded-md flex items-center gap-1.5 transition-all">
-                                                            <i class="fa-brands fa-whatsapp text-sm"></i>
-                                                            <span>واتساب</span>
-                                                        </button>
+                                                        <div class="text-xs text-slate-400 flex flex-col sm:flex-row sm:gap-3">
+                                                            <span>المراقبين المطلوبين: <strong class="text-slate-700 dark:text-slate-200 font-mono" x-text="exam.observersNeeded"></strong></span>
+                                                            <span>العدد: <strong class="text-slate-700 dark:text-slate-200 font-mono" x-text="getExamClassCountText(clsId, exam.subject)"></strong></span>
+                                                        </div>
                                                     </div>
-                                                </template>
-                                                <div x-show="getDailyClassAssignments(selectedDailyExamId, clsId).length === 0" class="col-span-2 text-center py-4 text-xs text-red-500 bg-red-50/50 dark:bg-red-900/10 rounded-lg">لم يتم توزيع أي مراقبين لهذه اللجنة بعد. يرجى الضغط على زر التوزيع الذكي.</div>
-                                            </div>
+                                                    <div class="p-4">
+                                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                            <template x-for="assignment in getDailyClassAssignments(exam.id, clsId)" :key="assignment.id">
+                                                                <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-850/50 border border-slate-100 dark:border-slate-800">
+                                                                    <div>
+                                                                        <div class="font-bold text-sm text-slate-800 dark:text-white" x-text="assignment.teacherName"></div>
+                                                                        <div class="text-xs text-slate-500 font-mono mt-0.5" x-text="assignment.teacherPhone"></div>
+                                                                    </div>
+                                                                    <button @click="sendWhatsAppNotification(assignment)" class="no-print bg-green-600 hover:bg-green-700 text-white text-xs px-2.5 py-1.5 rounded-md flex items-center gap-1.5 transition-all">
+                                                                        <i class="fa-brands fa-whatsapp text-sm"></i>
+                                                                        <span>واتساب</span>
+                                                                    </button>
+                                                                </div>
+                                                            </template>
+                                                            <div x-show="getDailyClassAssignments(exam.id, clsId).length === 0" class="col-span-2 text-center py-4 text-xs text-red-500 bg-red-50/50 dark:bg-red-900/10 rounded-lg">لم يتم توزيع أي مراقبين لهذه اللجنة بعد. يرجى الضغط على زر التوزيع الذكي.</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </template>
                                         </div>
                                     </div>
                                 </template>
                             </div>
 
-                            <!-- Additional Duty Observers and Backups -->
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                                <!-- Floor Observers (مراقبي الدور) -->
                                 <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-yellow-50/20 dark:bg-yellow-950/10">
-                                    <h4 class="font-bold text-xs text-yellow-600 dark:text-yellow-400 mb-2 uppercase tracking-wider"><i class="fa-solid fa-users-viewfinder ml-1"></i> مراقبو الدور المكلفين</h4>
+                                    <h4 class="font-bold text-xs text-yellow-600 dark:text-yellow-400 mb-2 uppercase tracking-wider"><i class="fa-solid fa-users-viewfinder ml-1"></i> مراقبو الدور المكلفين لليوم</h4>
                                     <div class="space-y-2">
-                                        <template x-for="tName in getDailyFloorObservers(selectedDailyExamId)" :key="tName">
-                                            <div class="p-2 bg-white dark:bg-slate-900 rounded border border-slate-200/50 text-xs font-semibold flex justify-between items-center">
-                                                <span x-text="tName"></span>
+                                        <template x-for="item in getDailyFloorObserversForDay(getSelectedDailyDate())" :key="item.id">
+                                            <div class="p-2 bg-white dark:bg-slate-900 rounded border border-slate-200/50 text-xs font-semibold flex justify-between items-center gap-2">
+                                                <span x-text="item.teacherName + ' - ' + item.subject + ' (' + item.period + ')'"></span>
                                                 <span class="text-[10px] text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded font-bold">مراقب دور</span>
                                             </div>
                                         </template>
-                                        <div x-show="getDailyFloorObservers(selectedDailyExamId).length === 0" class="text-xs text-slate-400 py-2">لا يوجد مكلفين بمراقبة الدور أو لم يتم التوزيع بعد.</div>
+                                        <div x-show="getDailyFloorObserversForDay(getSelectedDailyDate()).length === 0" class="text-xs text-slate-400 py-2">لا يوجد مكلفين بمراقبة الدور أو لم يتم التوزيع بعد.</div>
                                     </div>
                                 </div>
 
-                                <!-- Backup/Standby Observers (الاحتياط) -->
                                 <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-orange-50/20 dark:bg-orange-950/10">
-                                    <h4 class="font-bold text-xs text-orange-600 dark:text-orange-400 mb-2 uppercase tracking-wider"><i class="fa-solid fa-circle-exclamation ml-1"></i> مراقبو الاحتياط العام</h4>
+                                    <h4 class="font-bold text-xs text-orange-600 dark:text-orange-400 mb-2 uppercase tracking-wider"><i class="fa-solid fa-circle-exclamation ml-1"></i> مراقبو الاحتياط العام لليوم</h4>
                                     <div class="space-y-2">
-                                        <template x-for="tName in getDailyBackupObservers(selectedDailyExamId)" :key="tName">
-                                            <div class="p-2 bg-white dark:bg-slate-900 rounded border border-slate-200/50 text-xs font-semibold flex justify-between items-center">
-                                                <span x-text="tName"></span>
+                                        <template x-for="item in getDailyBackupObserversForDay(getSelectedDailyDate())" :key="item.id">
+                                            <div class="p-2 bg-white dark:bg-slate-900 rounded border border-slate-200/50 text-xs font-semibold flex justify-between items-center gap-2">
+                                                <span x-text="item.teacherName + ' - ' + item.subject + ' (' + item.period + ')'"></span>
                                                 <span class="text-[10px] text-orange-600 bg-orange-100 px-2 py-0.5 rounded font-bold">احتياط</span>
                                             </div>
                                         </template>
-                                        <div x-show="getDailyBackupObservers(selectedDailyExamId).length === 0" class="text-xs text-slate-400 py-2">لا يوجد احتياطي مكلف أو لم يتم التوزيع بعد.</div>
+                                        <div x-show="getDailyBackupObserversForDay(getSelectedDailyDate()).length === 0" class="text-xs text-slate-400 py-2">لا يوجد احتياطي مكلف أو لم يتم التوزيع بعد.</div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </template>
-                    <template x-if="!selectedDailyExamId">
+                    <template x-if="!getSelectedDailyExams().length">
                         <div class="text-center py-20 text-slate-400">يرجى تحديد يوم امتحان من القائمة أعلاه لعرض الجدول اليومي وتوزيع اللجان والطباعة.</div>
                     </template>
                 </div>
@@ -1275,7 +1292,7 @@
                     <i class="fa-brands fa-whatsapp text-green-500 text-2xl animate-pulse"></i>
                     <div>
                         <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">بوابة الإرسال الجماعي لواتساب</h3>
-                        <p class="text-xs text-slate-400 font-semibold" x-text="selectedDailyExamId ? formatDateArabic(exams.find(e => e.id == selectedDailyExamId)?.date) : ''"></p>
+                        <p class="text-xs text-slate-400 font-semibold" x-text="getSelectedDailyDate() ? formatDateArabic(getSelectedDailyDate()) : ''"></p>
                     </div>
                 </div>
                 <button @click="batchWhatsAppModalOpen = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i class="fa-solid fa-xmark text-lg"></i></button>
@@ -3162,6 +3179,7 @@
                             id: a.id,
                             teacherName: t ? t.name : 'غير محدد',
                             teacherPhone: t ? t.phone : '',
+                            examId: a.examId,
                             className: this.getClassName(classId),
                             committeeName: this.getCommitteeNameByClass(classId)
                         };
@@ -3174,6 +3192,46 @@
                 getDailyBackupObservers(examId) {
                     const list = this.assignments.filter(a => a.examId == examId && a.role === 'backup');
                     return list.map(a => this.getTeacherName(a.teacherId));
+                },
+                getDailyExamDays() {
+                    return this.getExamsGroupedByDate();
+                },
+                getSelectedDailyDate() {
+                    if (!this.selectedDailyExamId) return '';
+                    const key = String(this.selectedDailyExamId);
+                    const byId = this.exams.find(e => String(e.id) === key);
+                    if (byId) return byId.date || '';
+                    const byDate = this.exams.find(e => String(e.date) === key);
+                    return byDate ? byDate.date : '';
+                },
+                getSelectedDailyExams() {
+                    const date = this.getSelectedDailyDate();
+                    if (!date) return [];
+                    const group = this.getExamsGroupedByDate().find(g => g.date === date);
+                    return group ? group.exams : [];
+                },
+                getDailyRoleObserversForDay(date, role) {
+                    if (!date) return [];
+                    const dayExamIds = new Set(this.exams.filter(e => e.date === date).map(e => String(e.id)));
+                    return this.assignments
+                        .filter(a => a.role === role && dayExamIds.has(String(a.examId)))
+                        .map(a => {
+                            const t = this.teachers.find(teacher => teacher.id == a.teacherId);
+                            const exam = this.exams.find(e => e.id == a.examId);
+                            return {
+                                id: a.id,
+                                teacherName: t ? t.name : 'غير محدد',
+                                teacherPhone: t ? t.phone : '',
+                                subject: exam ? exam.subject : '',
+                                period: exam ? exam.period : ''
+                            };
+                        });
+                },
+                getDailyFloorObserversForDay(date) {
+                    return this.getDailyRoleObserversForDay(date, 'floor');
+                },
+                getDailyBackupObserversForDay(date) {
+                    return this.getDailyRoleObserversForDay(date, 'backup');
                 },
 
                 getTeacherDutyDaysCount(teacherId) {
@@ -3264,67 +3322,71 @@
                 },
 
                 // Global WhatsApp batch sender controller
-                openBatchWhatsAppModal(examId) {
-                    if (!examId) {
-                        this.showToast('الرجاء تحديد موعد اختبار أولاً', 'error');
+                openBatchWhatsAppModal(dayKey) {
+                    if (!dayKey) {
+                        this.showToast('الرجاء تحديد يوم اختبار أولاً', 'error');
                         return;
                     }
-                    
-                    const exam = this.exams.find(e => e.id == examId);
-                    if (!exam) return;
+
+                    const selectedDate = (() => {
+                        const key = String(dayKey);
+                        const byId = this.exams.find(e => String(e.id) === key);
+                        if (byId) return byId.date;
+                        return key;
+                    })();
+                    const dayExams = this.getExamsGroupedByDate().find(g => g.date === selectedDate)?.exams || [];
+                    if (dayExams.length === 0) return;
 
                     this.batchQueue = [];
                     this.batchProgress = 0;
                     this.batchSending = false;
 
-                    // 1. Regular committee observers
-                    exam.selectedClasses.forEach(clsId => {
-                        const assigns = this.getDailyClassAssignments(examId, clsId);
-                        assigns.forEach(a => {
-                            this.batchQueue.push({
-                                id: a.id,
-                                teacherName: a.teacherName,
-                                teacherPhone: a.teacherPhone,
-                                role: 'regular',
-                                roleText: `اللجنة: ${a.committeeName}`,
-                                message: `الأستاذ الفاضل/ة: ${a.teacherName}. نود إبلاغكم بتكليفكم بمراقبة اختبار اليوم (${exam.subject}) في ${a.className} - لجنة: ${a.committeeName}. يرجى التواجد قبل اللجنة بـ 15 دقيقة.`,
-                                status: 'idle'
+                    dayExams.forEach(exam => {
+                        const examId = exam.id;
+                        (exam.selectedClasses || []).forEach(clsId => {
+                            const assigns = this.getDailyClassAssignments(examId, clsId);
+                            assigns.forEach(a => {
+                                this.batchQueue.push({
+                                    id: a.id,
+                                    teacherName: a.teacherName,
+                                    teacherPhone: a.teacherPhone,
+                                    role: 'regular',
+                                    roleText: `${exam.subject} - ${a.committeeName}`,
+                                    message: `الأستاذ الفاضل/ة: ${a.teacherName}. نود إبلاغكم بتكليفكم بمراقبة اختبار اليوم (${exam.subject}) فترة ${exam.period} في ${a.className} - لجنة: ${a.committeeName}. يرجى التواجد قبل اللجنة بـ 15 دقيقة.`,
+                                    status: 'idle'
+                                });
                             });
                         });
-                    });
 
-                    // 2. Floor Observers
-                    const floorAssigns = this.assignments.filter(a => a.examId == examId && a.role === 'floor');
-                    floorAssigns.forEach(a => {
-                        const t = this.teachers.find(teacher => teacher.id == a.teacherId);
-                        if (t) {
-                            this.batchQueue.push({
-                                id: a.id,
-                                teacherName: t.name,
-                                teacherPhone: t.phone,
-                                role: 'floor',
-                                roleText: 'مراقب دور',
-                                message: `الأستاذ الفاضل/ة: ${t.name}. نود إبلاغكم بتكليفكم بمراقبة (الدور) في اختبار اليوم المادة: ${exam.subject}. يرجى التنسيق مع إدارة المدرسة.`,
-                                status: 'idle'
-                            });
-                        }
-                    });
+                        this.assignments.filter(a => a.examId == examId && a.role === 'floor').forEach(a => {
+                            const t = this.teachers.find(teacher => teacher.id == a.teacherId);
+                            if (t) {
+                                this.batchQueue.push({
+                                    id: a.id,
+                                    teacherName: t.name,
+                                    teacherPhone: t.phone,
+                                    role: 'floor',
+                                    roleText: `مراقب دور - ${exam.subject}`,
+                                    message: `الأستاذ الفاضل/ة: ${t.name}. نود إبلاغكم بتكليفكم بمراقبة الدور في اختبار اليوم لمادة ${exam.subject} فترة ${exam.period}. يرجى التنسيق مع إدارة المدرسة.`,
+                                    status: 'idle'
+                                });
+                            }
+                        });
 
-                    // 3. Backup Observers
-                    const backupAssigns = this.assignments.filter(a => a.examId == examId && a.role === 'backup');
-                    backupAssigns.forEach(a => {
-                        const t = this.teachers.find(teacher => teacher.id == a.teacherId);
-                        if (t) {
-                            this.batchQueue.push({
-                                id: a.id,
-                                teacherName: t.name,
-                                teacherPhone: t.phone,
-                                role: 'backup',
-                                roleText: 'احتياط عام',
-                                message: `الأستاذ الفاضل/ة: ${t.name}. نود إبلاغكم بتكليفكم كمراقب (احتياط عام) في اختبار اليوم لمادة: ${exam.subject}. يرجى التواجد بغرفة الاحتياط.`,
-                                status: 'idle'
-                            });
-                        }
+                        this.assignments.filter(a => a.examId == examId && a.role === 'backup').forEach(a => {
+                            const t = this.teachers.find(teacher => teacher.id == a.teacherId);
+                            if (t) {
+                                this.batchQueue.push({
+                                    id: a.id,
+                                    teacherName: t.name,
+                                    teacherPhone: t.phone,
+                                    role: 'backup',
+                                    roleText: `احتياط عام - ${exam.subject}`,
+                                    message: `الأستاذ الفاضل/ة: ${t.name}. نود إبلاغكم بتكليفكم كمراقب احتياط عام في اختبار اليوم لمادة ${exam.subject} فترة ${exam.period}. يرجى التواجد بغرفة الاحتياط.`,
+                                    status: 'idle'
+                                });
+                            }
+                        });
                     });
 
                     this.batchWhatsAppModalOpen = true;
@@ -3405,10 +3467,10 @@
 
                 // Trigger individual WhatsApp Web instance
                 sendWhatsAppNotification(assign) {
-                    const exam = this.exams.find(e => e.id == this.selectedDailyExamId);
+                    const exam = this.exams.find(e => e.id == assign.examId) || this.getSelectedDailyExams()[0];
                     if (!exam) return;
 
-                    const msg = `الأستاذ الفاضل/ة: ${assign.teacherName}. نود إبلاغكم بأنه تم تكليفكم بمراقبة اختبار (${exam.subject}) اليوم في ${assign.className} - لجنة: ${assign.committeeName}. بالتوفيق.`;
+                    const msg = `الأستاذ الفاضل/ة: ${assign.teacherName}. نود إبلاغكم بأنه تم تكليفكم بمراقبة اختبار (${exam.subject}) فترة ${exam.period} اليوم في ${assign.className} - لجنة: ${assign.committeeName}. بالتوفيق.`;
                     
                     // Format telephone without extra characters
                     const cleanedPhone = assign.teacherPhone.replace('+', '');
