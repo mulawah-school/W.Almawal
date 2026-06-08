@@ -544,7 +544,7 @@
                                     </div>
 
                                     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 p-4">
-                                        <template x-for="slotIndex in [0,1,2,3]" :key="slotIndex">
+                                        <template x-for="slotIndex in [0,1,2,3,4,5]" :key="slotIndex">
                                             <div class="rounded-xl border border-amber-100 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/10 p-3 space-y-2">
                                                 <div class="text-[11px] font-extrabold text-amber-700 dark:text-amber-300" x-text="'الخيار ' + (slotIndex + 1)"></div>
                                                 <select :value="getGrade11OptionalSlot(cls.id, slotIndex).subject" @change="updateGrade11OptionalSlot(cls.id, slotIndex, 'subject', $event.target.value)" class="w-full px-2 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500">
@@ -2162,7 +2162,7 @@
                     if (!rows || typeof rows !== 'object') return normalized;
                     Object.keys(rows).forEach(classId => {
                         const arr = Array.isArray(rows[classId]) ? rows[classId] : [];
-                        normalized[classId] = [0,1,2,3].map(i => ({
+                        normalized[classId] = [0,1,2,3,4,5].map(i => ({
                             subject: String((arr[i] && arr[i].subject) || '').trim(),
                             regularCount: Number((arr[i] && (arr[i].regularCount ?? arr[i].count)) || 0),
                             adultCount: 0
@@ -2172,9 +2172,9 @@
                 },
                 ensureGrade11OptionalRow(classId) {
                     const key = String(classId);
-                    if (!Array.isArray(this.grade11OptionalRows[key]) || this.grade11OptionalRows[key].length !== 4) {
+                    if (!Array.isArray(this.grade11OptionalRows[key]) || this.grade11OptionalRows[key].length !== 6) {
                         const old = Array.isArray(this.grade11OptionalRows[key]) ? this.grade11OptionalRows[key] : [];
-                        this.grade11OptionalRows[key] = [0,1,2,3].map(i => ({
+                        this.grade11OptionalRows[key] = [0,1,2,3,4,5].map(i => ({
                             subject: String((old[i] && old[i].subject) || '').trim(),
                             regularCount: Number((old[i] && (old[i].regularCount ?? old[i].count)) || 0),
                             adultCount: 0
@@ -2195,7 +2195,7 @@
                         const subjects = Object.keys(legacy).filter(Boolean);
                         if (subjects.length === 0) return;
                         this.ensureGrade11OptionalRow(cls.id);
-                        subjects.slice(0, 4).forEach((subject, i) => {
+                        subjects.slice(0, 6).forEach((subject, i) => {
                             const row = legacy[subject] || {};
                             const exists = this.grade11OptionalRows[String(cls.id)].some(slot => slot.subject === subject);
                             if (!exists) {
