@@ -901,12 +901,12 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <!-- Unified Floor Observers Counter Selector -->
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 mb-2">عدد مراقبي الدور في كل فترة امتحان</label>
+                            <label class="block text-xs font-bold text-slate-500 mb-2">عدد مراقبي الدور الثابت لكل يوم</label>
                             <div class="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 w-full shadow-sm">
                                 <button type="button" @click="if(smartSettings.floorObservers > 0) { smartSettings.floorObservers--; saveAppData(); runSmartDistribution(true); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
                                 <div class="flex-1 text-center flex items-center justify-center gap-2">
                                     <i class="fa-solid fa-users-viewfinder text-primary-500 text-lg"></i>
-                                    <span class="font-extrabold text-lg text-slate-800 dark:text-white font-mono" x-text="smartSettings.floorObservers"></span>
+                                    <span class="font-extrabold text-lg text-slate-800 dark:text-white font-mono" x-text="1"></span>
                                     <span class="text-xs text-slate-400">مراقب دور</span>
                                 </div>
                                 <button type="button" @click="if(smartSettings.floorObservers < 5) { smartSettings.floorObservers++; saveAppData(); runSmartDistribution(true); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">+</button>
@@ -915,12 +915,12 @@
 
                         <!-- Unified Standby Observers Counter Selector -->
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 mb-2">عدد مراقبي الاحتياط العام لكل فترة</label>
+                            <label class="block text-xs font-bold text-slate-500 mb-2">عدد مراقبي الاحتياط الثابت لكل يوم</label>
                             <div class="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 w-full shadow-sm">
                                 <button type="button" @click="if(smartSettings.backupObservers > 0) { smartSettings.backupObservers--; saveAppData(); runSmartDistribution(true); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
                                 <div class="flex-1 text-center flex items-center justify-center gap-2">
                                     <i class="fa-solid fa-circle-exclamation text-primary-500 text-lg"></i>
-                                    <span class="font-extrabold text-lg text-slate-800 dark:text-white font-mono" x-text="smartSettings.backupObservers"></span>
+                                    <span class="font-extrabold text-lg text-slate-800 dark:text-white font-mono" x-text="2"></span>
                                     <span class="text-xs text-slate-400">احتياطي</span>
                                 </div>
                                 <button type="button" @click="if(smartSettings.backupObservers < 5) { smartSettings.backupObservers++; saveAppData(); runSmartDistribution(true); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">+</button>
@@ -1027,52 +1027,42 @@
 
                             <!-- List of Committees and Observers -->
                             <h4 class="font-bold text-md mb-3 text-slate-900 dark:text-white mt-6 border-b border-slate-200 dark:border-slate-700 pb-2"><i class="fa-solid fa-list-check text-primary-500 ml-1"></i> توزيع واحد لليوم على اللجان والصفوف</h4>
-                            <div class="space-y-5">
-                                <template x-for="exam in getSelectedDailyExams()" :key="'exam-block-' + exam.id">
-                                    <div class="rounded-2xl border border-cyan-100 dark:border-cyan-900 bg-cyan-50/20 dark:bg-cyan-950/10 p-3">
-                                        <div class="mb-3 flex flex-wrap items-center gap-2 text-xs font-bold text-cyan-700 dark:text-cyan-300">
-                                            <i class="fa-solid fa-calendar-check"></i>
-                                            <span x-text="exam.subject"></span>
-                                            <span class="text-slate-400">-</span>
-                                            <span x-text="exam.period"></span>
-                                            <span class="text-slate-400">-</span>
-                                            <span x-text="'المدة: ' + exam.duration + ' ساعات'"></span>
+                            <div class="space-y-4">
+                                <template x-for="row in getDailyMergedCommitteeRows(getSelectedDailyDate())" :key="row.id">
+                                    <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                                        <div class="bg-slate-50 dark:bg-slate-850 px-4 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="bg-primary-600 text-white font-bold text-xs px-2.5 py-1 rounded" x-text="row.className"></span>
+                                                <span class="font-bold text-sm text-slate-800 dark:text-slate-100" x-text="'اللجنة: ' + row.committeeName"></span>
+                                                <span class="text-xs text-cyan-700 dark:text-cyan-300 font-bold" x-text="row.subjects.join('، ')"></span>
+                                            </div>
+                                            <div class="text-xs text-slate-400 flex flex-col sm:flex-row sm:gap-3">
+                                                <span>الفترة: <strong class="text-slate-700 dark:text-slate-200" x-text="row.period"></strong></span>
+                                                <span>المدة: <strong class="text-slate-700 dark:text-slate-200" x-text="row.durations.join('، ')"></strong></span>
+                                                <span>المراقبون: <strong class="text-slate-700 dark:text-slate-200 font-mono" x-text="row.observersNeeded"></strong></span>
+                                                <span>العدد: <strong class="text-slate-700 dark:text-slate-200" x-text="row.counts.join(' | ')"></strong></span>
+                                            </div>
                                         </div>
-                                        <div class="space-y-4">
-                                            <template x-for="clsId in exam.selectedClasses" :key="exam.id + '-' + clsId">
-                                                <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
-                                                    <div class="bg-slate-50 dark:bg-slate-850 px-4 py-3 flex justify-between items-center border-b border-slate-200 dark:border-slate-700">
-                                                        <div class="flex items-center gap-2">
-                                                            <span class="bg-primary-600 text-white font-bold text-xs px-2.5 py-1 rounded" x-text="getClassName(clsId)"></span>
-                                                            <span class="font-bold text-sm text-slate-800 dark:text-slate-100" x-text="'اللجنة: ' + getCommitteeNameByClass(clsId)"></span>
+                                        <div class="p-4">
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <template x-for="assignment in getDailyMergedClassAssignments(row)" :key="assignment.id">
+                                                    <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-850/50 border border-slate-100 dark:border-slate-800">
+                                                        <div>
+                                                            <div class="font-bold text-sm text-slate-800 dark:text-white" x-text="assignment.teacherName"></div>
+                                                            <div class="text-xs text-slate-500 font-mono mt-0.5" x-text="assignment.teacherPhone"></div>
                                                         </div>
-                                                        <div class="text-xs text-slate-400 flex flex-col sm:flex-row sm:gap-3">
-                                                            <span>المراقبين المطلوبين: <strong class="text-slate-700 dark:text-slate-200 font-mono" x-text="exam.observersNeeded"></strong></span>
-                                                            <span>العدد: <strong class="text-slate-700 dark:text-slate-200 font-mono" x-text="getExamClassCountText(clsId, exam.subject)"></strong></span>
-                                                        </div>
+                                                        <button @click="sendWhatsAppNotification(assignment)" class="no-print bg-green-600 hover:bg-green-700 text-white text-xs px-2.5 py-1.5 rounded-md flex items-center gap-1.5 transition-all">
+                                                            <i class="fa-brands fa-whatsapp text-sm"></i>
+                                                            <span>واتساب</span>
+                                                        </button>
                                                     </div>
-                                                    <div class="p-4">
-                                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                            <template x-for="assignment in getDailyClassAssignments(exam.id, clsId)" :key="assignment.id">
-                                                                <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-850/50 border border-slate-100 dark:border-slate-800">
-                                                                    <div>
-                                                                        <div class="font-bold text-sm text-slate-800 dark:text-white" x-text="assignment.teacherName"></div>
-                                                                        <div class="text-xs text-slate-500 font-mono mt-0.5" x-text="assignment.teacherPhone"></div>
-                                                                    </div>
-                                                                    <button @click="sendWhatsAppNotification(assignment)" class="no-print bg-green-600 hover:bg-green-700 text-white text-xs px-2.5 py-1.5 rounded-md flex items-center gap-1.5 transition-all">
-                                                                        <i class="fa-brands fa-whatsapp text-sm"></i>
-                                                                        <span>واتساب</span>
-                                                                    </button>
-                                                                </div>
-                                                            </template>
-                                                            <div x-show="getDailyClassAssignments(exam.id, clsId).length === 0" class="col-span-2 text-center py-4 text-xs text-red-500 bg-red-50/50 dark:bg-red-900/10 rounded-lg">لم يتم توزيع أي مراقبين لهذه اللجنة بعد. يرجى الضغط على زر التوزيع الذكي.</div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </template>
+                                                </template>
+                                                <div x-show="getDailyMergedClassAssignments(row).length === 0" class="col-span-2 text-center py-4 text-xs text-red-500 bg-red-50/50 dark:bg-red-900/10 rounded-lg">لم يتم توزيع أي مراقبين لهذه اللجنة بعد. يرجى الضغط على زر التوزيع الذكي.</div>
+                                            </div>
                                         </div>
                                     </div>
                                 </template>
+                                <div x-show="getDailyMergedCommitteeRows(getSelectedDailyDate()).length === 0" class="text-center py-6 text-xs text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-xl">لا توجد لجان لهذا اليوم.</div>
                             </div>
 
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
@@ -1689,7 +1679,7 @@
                 subjectRestForm: { date: '', specialities: [] },
                 teacherRestForm: { date: '', teacherIds: [], reason: '' },
                 
-                smartSettings: { floorObservers: 1, backupObservers: 1 },
+                smartSettings: { floorObservers: 1, backupObservers: 2 },
                 distributing: false,
                 distributionSuccess: false,
                 selectedDailyExamId: null,
@@ -1817,8 +1807,8 @@
                     if (Object.prototype.hasOwnProperty.call(parsed, 'teacherRestrictions')) this.teacherRestrictions = Array.isArray(parsed.teacherRestrictions) ? parsed.teacherRestrictions : [];
                     if (parsed.smartSettings && typeof parsed.smartSettings === 'object') {
                         this.smartSettings = {
-                            floorObservers: Number(parsed.smartSettings.floorObservers || 0),
-                            backupObservers: Number(parsed.smartSettings.backupObservers || 0)
+                            floorObservers: 1,
+                            backupObservers: 2
                         };
                     }
                     if (Object.prototype.hasOwnProperty.call(parsed, 'selectedDailyExamId')) this.selectedDailyExamId = parsed.selectedDailyExamId;
@@ -2954,19 +2944,35 @@
                         };
 
                         const slots = [];
+                        const seenCommitteeSlots = new Set();
+                        const seenDailyFloorSlots = new Set();
+                        const seenDailyBackupSlots = new Set();
                         sortedExams.forEach(exam => {
                             const classList = Array.isArray(exam.selectedClasses) ? exam.selectedClasses : [];
                             const obsNeeded = parseInt(exam.observersNeeded || 0);
                             classList.forEach(classId => {
+                                // دمج اللجنة نفسها إذا تكررت في نفس التاريخ مهما تعددت المواد أو الفترات، حتى لا تتكرر اللجنة في كشف اليوم.
+                                const committeeKey = [exam.date || '', String(classId)].join('|');
+                                if (seenCommitteeSlots.has(committeeKey)) return;
+                                seenCommitteeSlots.add(committeeKey);
                                 for (let i = 0; i < obsNeeded; i++) {
                                     slots.push({ exam, classId, role: 'observer', roleKey: 'regular', duration: parseFloat(exam.duration || 0) });
                                 }
                             });
-                            for (let f = 0; f < parseInt(this.smartSettings.floorObservers || 0); f++) {
-                                slots.push({ exam, classId: null, role: 'floor', roleKey: 'floor', duration: parseFloat(exam.duration || 0) });
+
+                            // مراقب الدور والاحتياط يكونان مرة واحدة فقط لكل يوم، وليس مرة لكل مادة/اختبار في اليوم نفسه.
+                            const dayKey = exam.date || '';
+                            if (!seenDailyFloorSlots.has(dayKey)) {
+                                seenDailyFloorSlots.add(dayKey);
+                                for (let f = 0; f < 1; f++) {
+                                    slots.push({ exam, classId: null, role: 'floor', roleKey: 'floor', duration: parseFloat(exam.duration || 0) });
+                                }
                             }
-                            for (let b = 0; b < parseInt(this.smartSettings.backupObservers || 0); b++) {
-                                slots.push({ exam, classId: null, role: 'backup', roleKey: 'backup', duration: parseFloat(exam.duration || 0) });
+                            if (!seenDailyBackupSlots.has(dayKey)) {
+                                seenDailyBackupSlots.add(dayKey);
+                                for (let b = 0; b < 2; b++) {
+                                    slots.push({ exam, classId: null, role: 'backup', roleKey: 'backup', duration: parseFloat(exam.duration || 0) });
+                                }
                             }
                         });
 
@@ -2992,7 +2998,23 @@
                         };
 
                         const chooseMostBalancedTeacher = (slot) => {
-                            const available = workingTeachers.filter(t => isTeacherAvailableForExam(t, slot.exam));
+                            const available = workingTeachers.filter(t => {
+                                if (!isTeacherAvailableForExam(t, slot.exam)) return false;
+                                if (slot.role === 'floor' || slot.role === 'backup') {
+                                    // مراقب الدور والاحتياط تكليف يومي، لذلك لا يجمع معه أي تكليف آخر في اليوم نفسه متى أمكن.
+                                    const hasAnyDutySameDay = this.assignments.some(a => {
+                                        if (String(a.teacherId) !== String(t.id)) return false;
+                                        const assignedExam = this.exams.find(e => e.id == a.examId);
+                                        return assignedExam && assignedExam.date === slot.exam.date;
+                                    });
+                                    return !hasAnyDutySameDay;
+                                }
+                                return true;
+                            });
+                            if (available.length === 0 && (slot.role === 'floor' || slot.role === 'backup')) {
+                                // احتياط آمن إذا كان عدد المعلمين لا يكفي لفصل الدور/الاحتياط عن جميع لجان اليوم.
+                                workingTeachers.filter(t => isTeacherAvailableForExam(t, slot.exam)).forEach(t => available.push(t));
+                            }
                             if (available.length === 0) return null;
 
                             available.sort((a, b) => {
@@ -3210,28 +3232,110 @@
                     const group = this.getExamsGroupedByDate().find(g => g.date === date);
                     return group ? group.exams : [];
                 },
-                getDailyRoleObserversForDay(date, role) {
+
+                getDailyMergedCommitteeRows(date) {
                     if (!date) return [];
-                    const dayExamIds = new Set(this.exams.filter(e => e.date === date).map(e => String(e.id)));
-                    return this.assignments
-                        .filter(a => a.role === role && dayExamIds.has(String(a.examId)))
+                    const dayExams = (this.exams || []).filter(exam => exam.date === date);
+                    const rowsMap = new Map();
+
+                    dayExams.forEach(exam => {
+                        (exam.selectedClasses || []).forEach(classId => {
+                            // الدمج حسب التاريخ واللجنة فقط؛ لا نكرر اللجنة إذا تكررت في أكثر من مادة/فترة في اليوم نفسه.
+                            const key = [date, String(classId)].join('|');
+                            if (!rowsMap.has(key)) {
+                                rowsMap.set(key, {
+                                    id: key,
+                                    date,
+                                    classId,
+                                    examIds: [],
+                                    subjects: [],
+                                    periods: [],
+                                    durations: [],
+                                    counts: [],
+                                    observersNeeded: 0,
+                                    className: this.getClassName(classId),
+                                    committeeName: this.getCommitteeNameByClass(classId)
+                                });
+                            }
+                            const row = rowsMap.get(key);
+                            row.examIds.push(exam.id);
+                            if (exam.subject && !row.subjects.includes(exam.subject)) row.subjects.push(exam.subject);
+                            if (exam.period && !row.periods.includes(exam.period)) row.periods.push(exam.period);
+                            const durationText = `${exam.duration || 0} س`;
+                            if (!row.durations.includes(durationText)) row.durations.push(durationText);
+                            const countText = `${exam.subject || 'مادة'}: ${this.getExamClassCountText(classId, exam.subject)}`;
+                            if (!row.counts.includes(countText)) row.counts.push(countText);
+                            row.observersNeeded = Math.max(row.observersNeeded || 0, parseInt(exam.observersNeeded || 0));
+                        });
+                    });
+
+                    return Array.from(rowsMap.values()).sort((a, b) => {
+                        return String(a.committeeName || '').localeCompare(String(b.committeeName || ''), 'ar', { numeric: true });
+                    }).map(row => ({
+                        ...row,
+                        period: row.periods.join('، ')
+                    }));
+                },
+
+                getDailyMergedClassAssignments(row) {
+                    if (!row) return [];
+                    const examIdSet = new Set((row.examIds || []).map(id => String(id)));
+                    const seenTeachers = new Set();
+                    const list = (this.assignments || [])
+                        .filter(a => a.role === 'observer' && String(a.classId) === String(row.classId) && examIdSet.has(String(a.examId)))
+                        .filter(a => {
+                            const key = String(a.teacherId);
+                            if (seenTeachers.has(key)) return false;
+                            seenTeachers.add(key);
+                            return true;
+                        })
                         .map(a => {
                             const t = this.teachers.find(teacher => teacher.id == a.teacherId);
-                            const exam = this.exams.find(e => e.id == a.examId);
                             return {
                                 id: a.id,
                                 teacherName: t ? t.name : 'غير محدد',
                                 teacherPhone: t ? t.phone : '',
-                                subject: exam ? exam.subject : '',
-                                period: exam ? exam.period : ''
+                                examId: a.examId,
+                                className: row.className,
+                                committeeName: row.committeeName
                             };
                         });
+                    const limit = parseInt(row.observersNeeded || 0);
+                    return limit > 0 ? list.slice(0, limit) : list;
+                },
+
+                getDailyRoleObserversForDay(date, role, maxCount) {
+                    if (!date) return [];
+                    const dayExams = (this.exams || []).filter(exam => exam.date === date);
+                    const dayExamIds = new Set(dayExams.map(exam => String(exam.id)));
+                    const daySubjects = [...new Set(dayExams.map(exam => exam.subject).filter(Boolean))].join('، ') || 'اختبارات اليوم';
+                    const dayPeriods = [...new Set(dayExams.map(exam => exam.period).filter(Boolean))].join('، ');
+                    const seenTeachers = new Set();
+                    const list = [];
+                    (this.assignments || [])
+                        .filter(a => a.role === role && dayExamIds.has(String(a.examId)))
+                        .forEach(a => {
+                            const key = String(a.teacherId);
+                            if (seenTeachers.has(key)) return;
+                            const t = this.teachers.find(teacher => teacher.id == a.teacherId);
+                            if (!t) return;
+                            seenTeachers.add(key);
+                            list.push({
+                                id: a.id,
+                                teacherName: t.name,
+                                teacherPhone: t.phone,
+                                subject: daySubjects,
+                                period: dayPeriods,
+                                examId: a.examId
+                            });
+                        });
+                    return list.slice(0, maxCount);
                 },
                 getDailyFloorObserversForDay(date) {
-                    return this.getDailyRoleObserversForDay(date, 'floor');
+                    return this.getDailyRoleObserversForDay(date, 'floor', 1);
                 },
                 getDailyBackupObserversForDay(date) {
-                    return this.getDailyRoleObserversForDay(date, 'backup');
+                    return this.getDailyRoleObserversForDay(date, 'backup', 2);
                 },
 
                 getTeacherDutyDaysCount(teacherId) {
@@ -3277,9 +3381,7 @@
                             _totalHours: this.getTeacherTotalHours(t.id)
                         }))
                         .sort((a, b) => {
-                            // الترتيب في الإحصائيات: من أكبر عدد أيام مراقبة فعلية إلى الأقل
                             if (b._dutyCount !== a._dutyCount) return b._dutyCount - a._dutyCount;
-                            // عند تساوي الأيام نرتب حسب الساعات الأعلى، مع بقاء ميزان الساعات الدقيق في الحساب
                             if (b._totalHours !== a._totalHours) return b._totalHours - a._totalHours;
                             if (b._assignmentCount !== a._assignmentCount) return b._assignmentCount - a._assignmentCount;
                             return a.name.localeCompare(b.name, 'ar');
@@ -3318,74 +3420,65 @@
                 getAverageDutiesPerTeacher() {
                     const working = this.teachers.filter(t => !t.inControl).length;
                     if (working === 0) return 0;
-                    return (this.assignments.length / working).toFixed(1);
+                    const committeeAssignments = this.assignments.filter(a => a.role === 'observer').length;
+                    return (committeeAssignments / working).toFixed(1);
                 },
 
                 // Global WhatsApp batch sender controller
-                openBatchWhatsAppModal(dayKey) {
-                    if (!dayKey) {
+                openBatchWhatsAppModal(examIdOrDate) {
+                    const date = this.getSelectedDailyDate() || String(examIdOrDate || '');
+                    if (!date) {
                         this.showToast('الرجاء تحديد يوم اختبار أولاً', 'error');
                         return;
                     }
-
-                    const selectedDate = (() => {
-                        const key = String(dayKey);
-                        const byId = this.exams.find(e => String(e.id) === key);
-                        if (byId) return byId.date;
-                        return key;
-                    })();
-                    const dayExams = this.getExamsGroupedByDate().find(g => g.date === selectedDate)?.exams || [];
-                    if (dayExams.length === 0) return;
+                    const dayExams = (this.exams || []).filter(exam => exam.date === date || String(exam.id) === String(examIdOrDate));
+                    const targetDate = dayExams[0]?.date || date;
+                    const examsForDay = (this.exams || []).filter(exam => exam.date === targetDate);
+                    if (!examsForDay.length) {
+                        this.showToast('لا توجد اختبارات في هذا اليوم.', 'error');
+                        return;
+                    }
 
                     this.batchQueue = [];
                     this.batchProgress = 0;
                     this.batchSending = false;
 
-                    dayExams.forEach(exam => {
-                        const examId = exam.id;
-                        (exam.selectedClasses || []).forEach(clsId => {
-                            const assigns = this.getDailyClassAssignments(examId, clsId);
-                            assigns.forEach(a => {
-                                this.batchQueue.push({
-                                    id: a.id,
-                                    teacherName: a.teacherName,
-                                    teacherPhone: a.teacherPhone,
-                                    role: 'regular',
-                                    roleText: `${exam.subject} - ${a.committeeName}`,
-                                    message: `الأستاذ الفاضل/ة: ${a.teacherName}. نود إبلاغكم بتكليفكم بمراقبة اختبار اليوم (${exam.subject}) فترة ${exam.period} في ${a.className} - لجنة: ${a.committeeName}. يرجى التواجد قبل اللجنة بـ 15 دقيقة.`,
-                                    status: 'idle'
-                                });
+                    const rows = this.getDailyMergedCommitteeRows(targetDate);
+                    rows.forEach(row => {
+                        this.getDailyMergedClassAssignments(row).forEach(a => {
+                            this.batchQueue.push({
+                                id: a.id,
+                                teacherName: a.teacherName,
+                                teacherPhone: a.teacherPhone,
+                                role: 'regular',
+                                roleText: `${row.subjects.join('، ')} - ${a.committeeName}`,
+                                message: `الأستاذ الفاضل/ة: ${a.teacherName}. نود إبلاغكم بتكليفكم بمراقبة اختبار اليوم (${row.subjects.join('، ')}) فترة ${row.period} في ${a.className} - لجنة: ${a.committeeName}. يرجى التواجد قبل اللجنة بـ 15 دقيقة.`,
+                                status: 'idle'
                             });
                         });
+                    });
 
-                        this.assignments.filter(a => a.examId == examId && a.role === 'floor').forEach(a => {
-                            const t = this.teachers.find(teacher => teacher.id == a.teacherId);
-                            if (t) {
-                                this.batchQueue.push({
-                                    id: a.id,
-                                    teacherName: t.name,
-                                    teacherPhone: t.phone,
-                                    role: 'floor',
-                                    roleText: `مراقب دور - ${exam.subject}`,
-                                    message: `الأستاذ الفاضل/ة: ${t.name}. نود إبلاغكم بتكليفكم بمراقبة الدور في اختبار اليوم لمادة ${exam.subject} فترة ${exam.period}. يرجى التنسيق مع إدارة المدرسة.`,
-                                    status: 'idle'
-                                });
-                            }
+                    this.getDailyFloorObserversForDay(targetDate).forEach(item => {
+                        this.batchQueue.push({
+                            id: item.id,
+                            teacherName: item.teacherName,
+                            teacherPhone: item.teacherPhone,
+                            role: 'floor',
+                            roleText: 'مراقب دور - اختبارات اليوم',
+                            message: `الأستاذ الفاضل/ة: ${item.teacherName}. نود إبلاغكم بتكليفكم بمراقبة الدور في اختبارات اليوم (${item.subject}) فترة ${item.period}. يرجى التنسيق مع إدارة المدرسة.`,
+                            status: 'idle'
                         });
+                    });
 
-                        this.assignments.filter(a => a.examId == examId && a.role === 'backup').forEach(a => {
-                            const t = this.teachers.find(teacher => teacher.id == a.teacherId);
-                            if (t) {
-                                this.batchQueue.push({
-                                    id: a.id,
-                                    teacherName: t.name,
-                                    teacherPhone: t.phone,
-                                    role: 'backup',
-                                    roleText: `احتياط عام - ${exam.subject}`,
-                                    message: `الأستاذ الفاضل/ة: ${t.name}. نود إبلاغكم بتكليفكم كمراقب احتياط عام في اختبار اليوم لمادة ${exam.subject} فترة ${exam.period}. يرجى التواجد بغرفة الاحتياط.`,
-                                    status: 'idle'
-                                });
-                            }
+                    this.getDailyBackupObserversForDay(targetDate).forEach(item => {
+                        this.batchQueue.push({
+                            id: item.id,
+                            teacherName: item.teacherName,
+                            teacherPhone: item.teacherPhone,
+                            role: 'backup',
+                            roleText: 'احتياط عام - اختبارات اليوم',
+                            message: `الأستاذ الفاضل/ة: ${item.teacherName}. نود إبلاغكم بتكليفكم كمراقب احتياط عام في اختبارات اليوم (${item.subject}) فترة ${item.period}. يرجى التواجد بغرفة الاحتياط.`,
+                            status: 'idle'
                         });
                     });
 
