@@ -543,11 +543,11 @@
                                         </div>
                                     </div>
 
-                                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 p-4">
+                                    <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 p-3">
                                         <template x-for="slotIndex in [0,1,2,3,4,5]" :key="slotIndex">
-                                            <div class="rounded-xl border border-amber-100 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/10 p-3 space-y-2">
-                                                <div class="text-[11px] font-extrabold text-amber-700 dark:text-amber-300" x-text="'الخيار ' + (slotIndex + 1)"></div>
-                                                <select :value="getGrade11OptionalSlot(cls.id, slotIndex).subject" @change="updateGrade11OptionalSlot(cls.id, slotIndex, 'subject', $event.target.value)" class="w-full px-2 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500">
+                                            <div class="rounded-lg border border-amber-100 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/10 p-2 space-y-1.5">
+                                                <div class="text-[10px] font-extrabold text-amber-700 dark:text-amber-300" x-text="'الخيار ' + (slotIndex + 1)"></div>
+                                                <select :value="getGrade11OptionalSlot(cls.id, slotIndex).subject" @change="updateGrade11OptionalSlot(cls.id, slotIndex, 'subject', $event.target.value)" class="w-full px-2 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] focus:outline-none focus:ring-2 focus:ring-amber-500">
                                                     <option value="">اختر المادة...</option>
                                                     <template x-for="subject in grade11OptionalSubjects" :key="subject">
                                                         <option :value="subject" x-text="subject"></option>
@@ -555,7 +555,7 @@
                                                 </select>
                                                 <div>
                                                     <label class="block text-[10px] font-bold text-slate-500 mb-1">عدد الطلاب</label>
-                                                    <input type="number" min="0" :value="getGrade11OptionalSlot(cls.id, slotIndex).regularCount" @input="updateGrade11OptionalSlot(cls.id, slotIndex, 'regularCount', $event.target.value)" class="w-full px-2 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500">
+                                                    <input type="number" min="0" :value="getGrade11OptionalSlot(cls.id, slotIndex).regularCount" @input="updateGrade11OptionalSlot(cls.id, slotIndex, 'regularCount', $event.target.value)" class="w-full px-2 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] focus:outline-none focus:ring-2 focus:ring-amber-500">
                                                 </div>
                                             </div>
                                         </template>
@@ -846,12 +846,20 @@
                         <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-white dark:bg-slate-800">
                             <h4 class="text-xs font-extrabold text-slate-400 mb-3 uppercase tracking-wider">استبعاد التخصصات بالتاريخ</h4>
                             <div class="space-y-2">
-                                <template x-for="rest in subjectRestrictions" :key="rest.id">
-                                    <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-900 text-xs">
-                                        <span class="font-semibold text-slate-800 dark:text-slate-100">
-                                            مادة <strong x-text="rest.speciality"></strong> مستبعدة يوم <strong x-text="formatDateArabic(rest.date)"></strong>
-                                        </span>
-                                        <button @click="deleteSubjectRestriction(rest.id)" class="text-red-500 hover:text-red-700 p-1"><i class="fa-solid fa-trash-can"></i></button>
+                                <template x-for="group in getSubjectRestrictionsGroupedByDate()" :key="group.date">
+                                    <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 text-xs border border-slate-100 dark:border-slate-700">
+                                        <div class="flex items-center justify-between gap-2 mb-2">
+                                            <span class="font-extrabold text-slate-800 dark:text-slate-100" x-text="formatDateArabic(group.date)"></span>
+                                            <button @click="deleteSubjectRestrictionsByDate(group.date)" class="text-red-500 hover:text-red-700 p-1" title="حذف استثناءات هذا التاريخ"><i class="fa-solid fa-trash-can"></i></button>
+                                        </div>
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <template x-for="item in group.items" :key="item.id">
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 font-bold">
+                                                    <span x-text="item.speciality"></span>
+                                                    <button @click="deleteSubjectRestriction(item.id)" class="text-red-400 hover:text-red-700" title="حذف هذه المادة"><i class="fa-solid fa-xmark"></i></button>
+                                                </span>
+                                            </template>
+                                        </div>
                                     </div>
                                 </template>
                                 <div x-show="subjectRestrictions.length === 0" class="text-xs text-slate-400 py-3 text-center">لا توجد استثناءات تخصص نشطة.</div>
@@ -935,7 +943,7 @@
                     <i class="fa-solid fa-circle-check text-xl mt-0.5"></i>
                     <div>
                         <h4 class="font-bold">اكتمل التوزيع الذكي بنجاح!</h4>
-                        <p class="text-xs mt-1">تم توزيع المراقبة لعدد <span class="font-bold font-mono" x-text="exams.length"></span> أيام امتحانات بنسبة توازن <span class="font-bold">98.5%</span> للعدالة في توزيع ساعات العمل والاحتياطي ومراقبي الدور بين جميع المعلمين المتاحين.</p>
+                        <p class="text-xs mt-1">تم توزيع المراقبة لعدد <span class="font-bold font-mono" x-text="exams.length"></span> أيام امتحانات بنسبة توازن <span class="font-bold">98.5%</span> للعدالة في دخول اللجان أولًا ثم ساعات المراقبة، مع فصل الاحتياط ومراقبي الدور عن حساب الأيام والساعات.</p>
                     </div>
                 </div>
             </section>
@@ -1116,14 +1124,14 @@
                 </div>
 
                 <!-- Comprehensive Teacher Duty Table -->
-                <h3 class="text-md font-bold mb-3 text-slate-900 dark:text-white flex items-center gap-2"><i class="fa-solid fa-chart-line text-primary-500"></i> كشف ساعات وأيام المراقبة لكل معلم</h3>
+                <h3 class="text-md font-bold mb-3 text-slate-900 dark:text-white flex items-center gap-2"><i class="fa-solid fa-chart-line text-primary-500"></i> كشف أيام وساعات دخول اللجان لكل معلم</h3>
                 <div class="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden mb-8">
                     <table class="w-full text-right text-sm">
                         <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                             <tr>
                                 <th class="px-4 py-3 font-semibold">المعلم</th>
                                 <th class="px-4 py-3 font-semibold text-center">عدد أيام المراقبة الفعلية</th>
-                                <th class="px-4 py-3 font-semibold text-center">إجمالي ساعات العمل</th>
+                                <th class="px-4 py-3 font-semibold text-center">إجمالي ساعات المراقبة الفعلية</th>
                                 <th class="px-4 py-3 font-semibold text-center">عدد مرات الدور</th>
                                 <th class="px-4 py-3 font-semibold text-center">عدد مرات الاحتياط</th>
                                 <th class="px-4 py-3 font-semibold">اللجان التي كُلف بها</th>
@@ -2805,6 +2813,26 @@
                     this.runSmartDistribution(true);
                     this.showToast('تم إزالة استبعاد التخصص.', 'error');
                 },
+                getSubjectRestrictionsGroupedByDate() {
+                    const groups = {};
+                    (this.subjectRestrictions || []).forEach(rest => {
+                        if (!rest || !rest.date) return;
+                        if (!groups[rest.date]) groups[rest.date] = [];
+                        groups[rest.date].push(rest);
+                    });
+                    return Object.keys(groups)
+                        .sort((a, b) => new Date(a) - new Date(b))
+                        .map(date => ({
+                            date,
+                            items: groups[date].sort((a, b) => String(a.speciality || '').localeCompare(String(b.speciality || ''), 'ar'))
+                        }));
+                },
+                deleteSubjectRestrictionsByDate(date) {
+                    this.subjectRestrictions = (this.subjectRestrictions || []).filter(r => r.date !== date);
+                    this.saveAppData();
+                    this.runSmartDistribution(true);
+                    this.showToast('تم حذف جميع استثناءات المواد لهذا التاريخ.', 'error');
+                },
                 addTeacherRestriction() {
                     const selectedTeacherIds = Array.isArray(this.teacherRestForm.teacherIds) ? this.teacherRestForm.teacherIds : [];
                     if (!this.teacherRestForm.date || selectedTeacherIds.length === 0 || !this.teacherRestForm.reason) {
@@ -2898,12 +2926,14 @@
                         const isTeacherAvailableForExam = (teacher, exam, ignoreAssignmentId = null) => {
                             if (!teacher || teacher.inControl || !exam) return false;
                             if (hasRestrictionOnDate(teacher, exam.date)) return false;
-                            const alreadyInSameExam = this.assignments.some(a =>
-                                a.examId == exam.id &&
-                                String(a.teacherId) === String(teacher.id) &&
-                                (ignoreAssignmentId === null || a.id !== ignoreAssignmentId)
-                            );
-                            return !alreadyInSameExam;
+                            const targetPeriod = String(exam.period || '');
+                            const alreadyInSamePeriod = this.assignments.some(a => {
+                                if (String(a.teacherId) !== String(teacher.id)) return false;
+                                if (ignoreAssignmentId !== null && a.id === ignoreAssignmentId) return false;
+                                const assignedExam = this.exams.find(e => e.id == a.examId);
+                                return assignedExam && assignedExam.date === exam.date && String(assignedExam.period || '') === targetPeriod;
+                            });
+                            return !alreadyInSamePeriod;
                         };
 
                         const slots = [];
@@ -2925,6 +2955,9 @@
 
                         // توزيع الساعات بدقة: نعالج الاختبارات الأطول أولًا ثم نرجع نرتب الناتج زمنيًا في النهاية.
                         slots.sort((a, b) => {
+                            const rolePriority = { observer: 1, floor: 2, backup: 3 };
+                            const roleDiff = (rolePriority[a.role] || 9) - (rolePriority[b.role] || 9);
+                            if (roleDiff !== 0) return roleDiff;
                             const dur = (b.duration || 0) - (a.duration || 0);
                             if (dur !== 0) return dur;
                             const d = new Date(a.exam.date) - new Date(b.exam.date);
@@ -2946,26 +2979,28 @@
                             if (available.length === 0) return null;
 
                             available.sort((a, b) => {
-                                // الميزان الأهم: إجمالي الساعات بعد إضافة هذا التكليف.
-                                const hourA = (teacherHours[a.id] || 0) + (slot.duration || 0);
-                                const hourB = (teacherHours[b.id] || 0) + (slot.duration || 0);
-                                if (hourA !== hourB) return hourA - hourB;
-
-                                // ثم عدد أيام المراقبة الحقيقية: التاريخ يُحسب مرة واحدة حتى لو كان للمعلم أكثر من فترة في نفس اليوم.
-                                const dayA = projectedDayCount(a.id, slot.exam.date);
-                                const dayB = projectedDayCount(b.id, slot.exam.date);
-                                if (dayA !== dayB) return dayA - dayB;
-
-                                // ثم عدد التكليفات التفصيلية.
-                                const dutyA = (teacherDutyCount[a.id] || 0) + 1;
-                                const dutyB = (teacherDutyCount[b.id] || 0) + 1;
-                                if (dutyA !== dutyB) return dutyA - dutyB;
-
-                                // ثم نوع الدور حتى لا يتكرر الدور والاحتياط على نفس الأشخاص.
                                 const roleDiff = (teacherRoleCounts[slot.roleKey]?.[a.id] || 0) - (teacherRoleCounts[slot.roleKey]?.[b.id] || 0);
+
+                                // للجان فقط: العدالة الأولى حسب عدد أيام دخول اللجان، ثم ساعات المراقبة الفعلية.
+                                if (slot.role === 'observer') {
+                                    const dayA = projectedDayCount(a.id, slot.exam.date);
+                                    const dayB = projectedDayCount(b.id, slot.exam.date);
+                                    if (dayA !== dayB) return dayA - dayB;
+
+                                    const hourA = (teacherHours[a.id] || 0) + (slot.duration || 0);
+                                    const hourB = (teacherHours[b.id] || 0) + (slot.duration || 0);
+                                    if (hourA !== hourB) return hourA - hourB;
+
+                                    const dutyA = (teacherDutyCount[a.id] || 0) + 1;
+                                    const dutyB = (teacherDutyCount[b.id] || 0) + 1;
+                                    if (dutyA !== dutyB) return dutyA - dutyB;
+                                } else {
+                                    // الاحتياط ومراقب الدور لا يدخلان في أيام/ساعات المراقبة، لذلك نوازنهما بعدد مرات الدور نفسه فقط.
+                                    if (roleDiff !== 0) return roleDiff;
+                                }
+
                                 if (roleDiff !== 0) return roleDiff;
 
-                                // من فرصه أقل بسبب الاستثناءات يأخذ أولوية بسيطة عند التساوي الكامل.
                                 const availabilityDiff = (teacherAvailableExams[a.id] || 0) - (teacherAvailableExams[b.id] || 0);
                                 if (availabilityDiff !== 0) return availabilityDiff;
 
@@ -2983,9 +3018,11 @@
                                 teacherId: teacher.id,
                                 role: slot.role
                             });
-                            teacherDutyCount[teacher.id] += 1;
-                            teacherHours[teacher.id] += (slot.duration || 0);
-                            teacherDutyDates[teacher.id].add(slot.exam.date);
+                            if (slot.role === 'observer') {
+                                teacherDutyCount[teacher.id] += 1;
+                                teacherHours[teacher.id] += (slot.duration || 0);
+                                teacherDutyDates[teacher.id].add(slot.exam.date);
+                            }
                             teacherRoleCounts[slot.roleKey][teacher.id] += 1;
                         };
 
@@ -3009,10 +3046,12 @@
                                 const ex = getExamById(a.examId);
                                 if (!ex || teacherHours[a.teacherId] === undefined) return;
                                 const duration = parseFloat(ex.duration || 0);
-                                teacherHours[a.teacherId] += duration;
-                                teacherDutyCount[a.teacherId] += 1;
-                                teacherDutyDates[a.teacherId].add(ex.date);
-                                if (a.role === 'observer') teacherRoleCounts.regular[a.teacherId] += 1;
+                                if (a.role === 'observer') {
+                                    teacherHours[a.teacherId] += duration;
+                                    teacherDutyCount[a.teacherId] += 1;
+                                    teacherDutyDates[a.teacherId].add(ex.date);
+                                    teacherRoleCounts.regular[a.teacherId] += 1;
+                                }
                                 if (a.role === 'floor') teacherRoleCounts.floor[a.teacherId] += 1;
                                 if (a.role === 'backup') teacherRoleCounts.backup[a.teacherId] += 1;
                             });
@@ -3033,17 +3072,20 @@
 
                         rebuildCounters();
 
-                        // مراجعة ثانية: نقل تكليف من الأعلى ساعات إلى الأقل ساعات إذا كان النقل يحسن الميزان فعلًا.
+                        // مراجعة ثانية: نقل مراقبة لجنة فقط من الأعلى أيامًا/ساعات إلى الأقل إذا كان النقل يحسن الميزان فعلًا.
                         let changed = true;
                         let guard = 0;
                         while (changed && guard < 5000) {
                             guard++;
                             changed = false;
+                            const currentDayGap = getDayGap();
                             const currentGap = getHourGap();
                             const teachersByHoursDesc = activeTeachers().sort((a, b) => {
+                                const d = (teacherDutyDates[b.id]?.size || 0) - (teacherDutyDates[a.id]?.size || 0);
+                                if (d !== 0) return d;
                                 const h = (teacherHours[b.id] || 0) - (teacherHours[a.id] || 0);
                                 if (h !== 0) return h;
-                                return (teacherDutyDates[b.id]?.size || 0) - (teacherDutyDates[a.id]?.size || 0);
+                                return a.name.localeCompare(b.name, 'ar');
                             });
                             const teachersByHoursAsc = [...teachersByHoursDesc].reverse();
 
@@ -3054,7 +3096,7 @@
                                     if ((teacherHours[high.id] || 0) <= (teacherHours[low.id] || 0)) continue;
 
                                     const highAssignments = this.assignments
-                                        .filter(a => String(a.teacherId) === String(high.id))
+                                        .filter(a => String(a.teacherId) === String(high.id) && a.role === 'observer')
                                         .sort((a, b) => {
                                             const exA = getExamById(a.examId);
                                             const exB = getExamById(b.examId);
@@ -3075,8 +3117,9 @@
                                         const oldTeacherId = assignment.teacherId;
                                         assignment.teacherId = low.id;
                                         rebuildCounters();
+                                        const newDayGap = getDayGap();
                                         const newGap = getHourGap();
-                                        if (newGap <= currentGap) {
+                                        if (newDayGap <= currentDayGap && newGap <= currentGap) {
                                             changed = true;
                                             break outerLoop;
                                         } else {
@@ -3135,18 +3178,18 @@
 
                 getTeacherDutyDaysCount(teacherId) {
                     const dates = new Set();
-                    this.assignments.filter(a => a.teacherId == teacherId).forEach(a => {
+                    this.assignments.filter(a => a.teacherId == teacherId && a.role === 'observer').forEach(a => {
                         const ex = this.exams.find(e => e.id == a.examId);
                         if (ex && ex.date) dates.add(ex.date);
                     });
                     return dates.size;
                 },
                 getTeacherAssignmentCount(teacherId) {
-                    return this.assignments.filter(a => a.teacherId == teacherId).length;
+                    return this.assignments.filter(a => a.teacherId == teacherId && a.role === 'observer').length;
                 },
                 getTeacherTotalHours(teacherId) {
                     let hours = 0;
-                    this.assignments.filter(a => a.teacherId == teacherId).forEach(a => {
+                    this.assignments.filter(a => a.teacherId == teacherId && a.role === 'observer').forEach(a => {
                         const ex = this.exams.find(e => e.id == a.examId);
                         if (ex) hours += parseFloat(ex.duration || 0);
                     });
@@ -3163,12 +3206,6 @@
                     this.assignments.filter(a => a.teacherId == teacherId && a.role === 'observer').forEach(a => {
                         const commName = this.getCommitteeNameByClass(a.classId);
                         if (!list.includes(commName)) list.push(commName);
-                    });
-                    this.assignments.filter(a => a.teacherId == teacherId && a.role === 'floor').forEach(a => {
-                        if (!list.includes('مراقب دور')) list.push('مراقب دور');
-                    });
-                    this.assignments.filter(a => a.teacherId == teacherId && a.role === 'backup').forEach(a => {
-                        if (!list.includes('احتياط عام')) list.push('احتياط عام');
                     });
                     return list;
                 },
