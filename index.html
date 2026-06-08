@@ -725,10 +725,7 @@
                                                 </td>
                                             </template>
                                             <template x-if="row.type === 'exam'">
-                                                <td class="px-4 py-3 font-semibold text-slate-500 dark:text-slate-400">
-                                                    <div class="text-xs">نفس اليوم</div>
-                                                    <div class="text-[10px] text-slate-400 font-mono" x-text="row.exam.date"></div>
-                                                </td>
+                                                <td class="px-4 py-3 font-semibold text-slate-500 dark:text-slate-400"></td>
                                             </template>
                                             <template x-if="row.type === 'exam'">
                                                 <td class="px-4 py-3">
@@ -1828,6 +1825,23 @@
                     }
                 },
 
+                safeLocalSet(key, value) {
+                    try {
+                        if (key) localStorage.setItem(key, value);
+                        return true;
+                    } catch (e) {
+                        console.warn('تعذر الحفظ المحلي، سيتم الاعتماد على Firebase', e);
+                        return false;
+                    }
+                },
+
+                safeSaveLocalSnapshot(state) {
+                    const scopedAppKey = this.getScopedStorageKey(this.appStorageKey);
+                    const scopedTeachersKey = this.getScopedStorageKey(this.teachersStorageKey);
+                    this.safeLocalSet(scopedAppKey, JSON.stringify(state || this.getSerializableState()));
+                    this.safeLocalSet(scopedTeachersKey, JSON.stringify(this.teachers));
+                },
+
                 async loadCloudData() {
                     if (!window.currentSchoolId || !window.monitoringFirebase) return;
                     try {
@@ -1843,10 +1857,7 @@
                             if (this.exams.length > 0 && (!this.selectedDailyExamId || !this.exams.some(e => e.id == this.selectedDailyExamId))) {
                                 this.selectedDailyExamId = this.exams[0].id;
                             }
-                            const scopedAppKey = this.getScopedStorageKey(this.appStorageKey);
-                            const scopedTeachersKey = this.getScopedStorageKey(this.teachersStorageKey);
-                            if (scopedAppKey) localStorage.setItem(scopedAppKey, JSON.stringify(this.getSerializableState()));
-                            if (scopedTeachersKey) localStorage.setItem(scopedTeachersKey, JSON.stringify(this.teachers));
+                            this.safeSaveLocalSnapshot(this.getSerializableState());
                             this.syncControlBridgeData();
                             if (this.exams.length > 0 && this.assignments.length === 0) this.runSmartDistribution();
                             if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('متصل بالسحابة', 'success');
@@ -1857,10 +1868,7 @@
                             if (this.exams.length > 0 && (!this.selectedDailyExamId || !this.exams.some(e => e.id == this.selectedDailyExamId))) {
                                 this.selectedDailyExamId = this.exams[0].id;
                             }
-                            const scopedAppKey = this.getScopedStorageKey(this.appStorageKey);
-                            const scopedTeachersKey = this.getScopedStorageKey(this.teachersStorageKey);
-                            if (scopedAppKey) localStorage.setItem(scopedAppKey, JSON.stringify(this.getSerializableState()));
-                            if (scopedTeachersKey) localStorage.setItem(scopedTeachersKey, JSON.stringify(this.teachers));
+                            this.safeSaveLocalSnapshot(this.getSerializableState());
                             await this.saveCloudDataNow();
                             if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('متصل بالسحابة', 'success');
                         }
@@ -1874,18 +1882,10 @@
                 },
 
                 saveAppData() {
-                    try {
-                        const state = this.getSerializableState();
-                        const scopedAppKey = this.getScopedStorageKey(this.appStorageKey);
-                        const scopedTeachersKey = this.getScopedStorageKey(this.teachersStorageKey);
-                        if (scopedAppKey) localStorage.setItem(scopedAppKey, JSON.stringify(state));
-                        if (scopedTeachersKey) localStorage.setItem(scopedTeachersKey, JSON.stringify(this.teachers));
-                        this.syncControlBridgeData();
-                        this.scheduleCloudSave();
-                    } catch (e) {
-                        console.warn('تعذر حفظ بيانات برنامج التوزيع', e);
-                        this.showToast('تعذر حفظ البيانات في المتصفح.', 'error');
-                    }
+                    const state = this.getSerializableState();
+                    this.safeSaveLocalSnapshot(state);
+                    this.syncControlBridgeData();
+                    this.scheduleCloudSave();
                 },
 
                 saveTeachers() {
@@ -1937,7 +1937,7 @@
                 syncControlBridgeData() {
                     try {
                         const data = this.exportControlBridgeData();
-                        localStorage.setItem('monitoring_control_bridge_v1', JSON.stringify(data));
+                        this.safeLocalSet('monitoring_control_bridge_v1', JSON.stringify(data));
                         window.monitoringDistributionBridge = data;
                     } catch (e) {
                         console.warn('تعذر تجهيز بيانات الربط مع الكنترول', e);
