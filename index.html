@@ -632,7 +632,7 @@
                                         <div class="flex items-center justify-between gap-2 mb-2">
                                             <div>
                                                 <span class="text-xs font-extrabold text-indigo-700 dark:text-indigo-300">اختيار سريع حسب الصف</span>
-                                                <p class="text-[11px] text-slate-500 mt-0.5">اختَر تاريخ الاختبار والمادة أولاً، ثم اضغط الصف. الصف الحادي عشر يختار كل لجانه في المواد الأساسية، ويختار فقط لجان المادة المسجلة في قسم المواد الاختيارية.</p>
+                                                <p class="text-[11px] text-slate-500 mt-0.5">اختَر التاريخ والمادة والفترة والمدة وعدد المراقبين، ثم اضغط الصف لإضافة لجانه. يمكنك إضافة أكثر من مادة أو أكثر من مجموعة في نفس التاريخ وستظهر مدمجة تحت اليوم نفسه.</p>
                                             </div>
                                             <button type="button" @click="clearSelectedClasses()" class="text-[11px] font-bold text-red-600 hover:text-red-700">مسح الاختيار</button>
                                         </div>
@@ -710,40 +710,56 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <template x-for="exam in exams" :key="exam.id">
-                                        <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50">
-                                            <td class="px-4 py-3 font-semibold text-slate-900 dark:text-white">
-                                                <div x-text="formatDateArabic(exam.date)"></div>
-                                                <div class="text-[10px] text-slate-400 font-mono" x-text="exam.date"></div>
-                                            </td>
-                                            <td class="px-4 py-3">
-                                                <div class="font-bold text-slate-800 dark:text-slate-100" x-text="exam.subject"></div>
-                                                <div class="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                                                    <i class="fa-regular fa-clock"></i>
-                                                    <span x-text="exam.period"></span> 
-                                                    <span class="text-slate-300 dark:text-slate-600">|</span> 
-                                                    <span>مدة: <span x-text="exam.duration"></span> س</span>
-                                                </div>
-                                            </td>
-                                            <td class="px-4 py-3">
-                                                <div class="flex flex-wrap gap-1">
-                                                    <template x-for="clsId in exam.selectedClasses" :key="clsId">
-                                                        <span class="text-[10px] bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 px-2 py-0.5 rounded" x-text="getClassName(clsId) + ' (' + getExamClassCountText(clsId, exam.subject) + ')' "></span>
-                                                    </template>
-                                                </div>
-                                            </td>
-                                            <td class="px-4 py-3 text-center font-bold text-primary-600 dark:text-primary-400" x-text="exam.observersNeeded"></td>
-                                            <td class="px-4 py-3 text-center">
-                                                <div class="flex items-center justify-center gap-2">
-                                                    <button @click="openEditExam(exam)" class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors" title="تعديل">
-                                                        <i class="fa-solid fa-pen-to-square"></i>
-                                                    </button>
-                                                    <button @click="deleteExam(exam.id)" class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="حذف">
-                                                        <i class="fa-solid fa-trash-can"></i>
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
+                                    <template x-for="dayGroup in getExamsGroupedByDate()" :key="dayGroup.date">
+                                        <template>
+                                            <tr class="bg-indigo-50/70 dark:bg-indigo-950/30 border-b border-indigo-100 dark:border-indigo-900">
+                                                <td colspan="5" class="px-4 py-3">
+                                                    <div class="flex flex-wrap items-center justify-between gap-2">
+                                                        <div class="font-extrabold text-indigo-800 dark:text-indigo-200">
+                                                            <i class="fa-solid fa-calendar-day ml-1"></i>
+                                                            <span x-text="formatDateArabic(dayGroup.date)"></span>
+                                                            <span class="text-[11px] text-indigo-500 font-mono mr-2" x-text="dayGroup.date"></span>
+                                                        </div>
+                                                        <div class="text-xs font-bold text-indigo-600 dark:text-indigo-300" x-text="'عدد مجموعات الاختبار في هذا اليوم: ' + dayGroup.exams.length"></div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            <template x-for="exam in dayGroup.exams" :key="exam.id">
+                                                <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50">
+                                                    <td class="px-4 py-3 font-semibold text-slate-500 dark:text-slate-400">
+                                                        <div class="text-xs">نفس اليوم</div>
+                                                        <div class="text-[10px] text-slate-400 font-mono" x-text="exam.date"></div>
+                                                    </td>
+                                                    <td class="px-4 py-3">
+                                                        <div class="font-bold text-slate-800 dark:text-slate-100" x-text="exam.subject"></div>
+                                                        <div class="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                                                            <i class="fa-regular fa-clock"></i>
+                                                            <span x-text="exam.period"></span>
+                                                            <span class="text-slate-300 dark:text-slate-600">|</span>
+                                                            <span>مدة: <span x-text="exam.duration"></span> س</span>
+                                                        </div>
+                                                    </td>
+                                                    <td class="px-4 py-3">
+                                                        <div class="flex flex-wrap gap-1">
+                                                            <template x-for="clsId in exam.selectedClasses" :key="clsId">
+                                                                <span class="text-[10px] bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 px-2 py-0.5 rounded" x-text="getClassName(clsId) + ' (' + getExamClassCountText(clsId, exam.subject) + ')' "></span>
+                                                            </template>
+                                                        </div>
+                                                    </td>
+                                                    <td class="px-4 py-3 text-center font-bold text-primary-600 dark:text-primary-400" x-text="exam.observersNeeded"></td>
+                                                    <td class="px-4 py-3 text-center">
+                                                        <div class="flex items-center justify-center gap-2">
+                                                            <button @click="openEditExam(exam)" class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors" title="تعديل">
+                                                                <i class="fa-solid fa-pen-to-square"></i>
+                                                            </button>
+                                                            <button @click="deleteExam(exam.id)" class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="حذف">
+                                                                <i class="fa-solid fa-trash-can"></i>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </template>
                                     </template>
                                     <tr x-show="exams.length === 0">
                                         <td colspan="5" class="text-center py-12 text-slate-400">لا يوجد أي امتحانات مبرمجة حالياً. يرجى استخدام النموذج لإضافة أيام اختبار.</td>
@@ -2567,8 +2583,12 @@
                     this.showToast('تم مسح اختيار الفصول واللجان.', 'error');
                 },
 
-                resetExamForm() {
-                    this.examForm = { id: null, date: '', period: '08:00 ص', subject: '', duration: 2, observersNeeded: 1, selectedClasses: [] };
+                resetExamForm(options = {}) {
+                    const keepDate = options.keepDate ? (this.examForm.date || '') : '';
+                    const keepPeriod = options.keepPeriod ? (this.examForm.period || '08:00 ص') : '08:00 ص';
+                    const keepDuration = options.keepDuration ? Number(this.examForm.duration || 2) : 2;
+                    const keepObservers = options.keepObservers ? Number(this.examForm.observersNeeded || 1) : 1;
+                    this.examForm = { id: null, date: keepDate, period: keepPeriod, subject: '', duration: keepDuration, observersNeeded: keepObservers, selectedClasses: [] };
                     this.quickGradeSelection = [];
                 },
                 openEditExam(exam) {
@@ -2633,7 +2653,9 @@
                             this.selectedDailyExamId = newId;
                         }
                     }
-                    this.resetExamForm();
+                    // عند إضافة أكثر من مادة في نفس التاريخ، نبقي التاريخ والفترة والمدة وعدد المراقبين كما هي
+                    // حتى يستطيع المستخدم اختيار صفوف/لجان جديدة وإضافتها لليوم نفسه بسرعة.
+                    this.resetExamForm({ keepDate: true, keepPeriod: true, keepDuration: true, keepObservers: true });
                     this.saveAppData();
                     this.runSmartDistribution();
                 },
@@ -2652,6 +2674,33 @@
                     this.selectedDailyExamId = null;
                     this.saveAppData();
                     this.showToast('تم تفريغ كافة أيام وجدول الاختبارات.', 'error');
+                },
+
+                getExamsGroupedByDate() {
+                    const groups = {};
+                    const periodOrder = (period) => {
+                        const p = String(period || '');
+                        if (p.includes('8') || p.includes('08')) return 1;
+                        if (p.includes('10')) return 2;
+                        if (p.includes('11')) return 3;
+                        return 9;
+                    };
+                    (this.exams || []).forEach(exam => {
+                        const dateKey = exam.date || 'بدون تاريخ';
+                        if (!groups[dateKey]) groups[dateKey] = { date: dateKey, exams: [] };
+                        groups[dateKey].exams.push(exam);
+                    });
+                    return Object.values(groups)
+                        .sort((a, b) => new Date(a.date) - new Date(b.date))
+                        .map(group => ({
+                            ...group,
+                            exams: group.exams.sort((a, b) => {
+                                const pa = periodOrder(a.period);
+                                const pb = periodOrder(b.period);
+                                if (pa !== pb) return pa - pb;
+                                return String(a.subject || '').localeCompare(String(b.subject || ''), 'ar');
+                            })
+                        }));
                 },
 
                 formatDateArabic(dateStr) {
