@@ -901,7 +901,7 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <!-- Unified Floor Observers Counter Selector -->
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 mb-2">عدد مراقبي الدور الثابت لكل يوم</label>
+                            <label class="block text-xs font-bold text-slate-500 mb-2">عدد مراقبي الدور في كل فترة امتحان</label>
                             <div class="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 w-full shadow-sm">
                                 <button type="button" @click="if(smartSettings.floorObservers > 0) { smartSettings.floorObservers--; saveAppData(); runSmartDistribution(true); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
                                 <div class="flex-1 text-center flex items-center justify-center gap-2">
@@ -915,7 +915,7 @@
 
                         <!-- Unified Standby Observers Counter Selector -->
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 mb-2">عدد مراقبي الاحتياط الثابت لكل يوم</label>
+                            <label class="block text-xs font-bold text-slate-500 mb-2">عدد مراقبي الاحتياط العام لكل فترة</label>
                             <div class="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 w-full shadow-sm">
                                 <button type="button" @click="if(smartSettings.backupObservers > 0) { smartSettings.backupObservers--; saveAppData(); runSmartDistribution(true); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
                                 <div class="flex-1 text-center flex items-center justify-center gap-2">
@@ -1010,72 +1010,96 @@
                     <!-- Selected Day Info Summary -->
                     <template x-if="getSelectedDailyExams().length">
                         <div class="mb-4">
-                            <div class="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
-                                <div class="text-xs text-slate-400 mb-2">اختبارات هذا اليوم مجمعة في كشف واحد حسب جدول الاختبارات المدرج:</div>
-                                <div class="flex flex-wrap gap-2">
-                                    <template x-for="exam in getSelectedDailyExams()" :key="'summary-' + exam.id">
-                                        <span class="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-cyan-50 text-cyan-700 dark:bg-cyan-950/30 dark:text-cyan-300 text-xs font-bold">
-                                            <span x-text="exam.subject"></span>
-                                            <span class="text-slate-400">|</span>
-                                            <span x-text="exam.period"></span>
-                                            <span class="text-slate-400">|</span>
-                                            <span x-text="exam.duration + ' س'"></span>
-                                        </span>
-                                    </template>
+                            <!-- جدول اختبارات اليوم -->
+                            <div class="mb-6 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+                                <div class="bg-cyan-50 dark:bg-cyan-950/30 px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2">
+                                    <i class="fa-solid fa-calendar-day text-cyan-600"></i>
+                                    <h4 class="font-extrabold text-sm text-slate-900 dark:text-white">اختبارات اليوم حسب جدول الاختبارات المدرج</h4>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-right text-xs border-collapse">
+                                        <thead class="bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300">
+                                            <tr>
+                                                <th class="px-3 py-2 border border-slate-200 dark:border-slate-700 font-extrabold">م</th>
+                                                <th class="px-3 py-2 border border-slate-200 dark:border-slate-700 font-extrabold">المادة</th>
+                                                <th class="px-3 py-2 border border-slate-200 dark:border-slate-700 font-extrabold">مدة الاختبار</th>
+                                                <th class="px-3 py-2 border border-slate-200 dark:border-slate-700 font-extrabold">الفترة الزمنية من</th>
+                                                <th class="px-3 py-2 border border-slate-200 dark:border-slate-700 font-extrabold">إلى</th>
+                                                <th class="px-3 py-2 border border-slate-200 dark:border-slate-700 font-extrabold">عدد اللجان</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="(exam, idx) in getSelectedDailyExams()" :key="'exam-table-' + exam.id">
+                                                <tr class="bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                                    <td class="px-3 py-2 border border-slate-200 dark:border-slate-700 text-center font-bold" x-text="idx + 1"></td>
+                                                    <td class="px-3 py-2 border border-slate-200 dark:border-slate-700 font-bold" x-text="exam.subject"></td>
+                                                    <td class="px-3 py-2 border border-slate-200 dark:border-slate-700 text-center" x-text="formatDurationText(exam.duration)"></td>
+                                                    <td class="px-3 py-2 border border-slate-200 dark:border-slate-700 text-center font-mono" x-text="getExamStartTimeText(exam.period)"></td>
+                                                    <td class="px-3 py-2 border border-slate-200 dark:border-slate-700 text-center font-mono" x-text="getExamEndTimeText(exam)"></td>
+                                                    <td class="px-3 py-2 border border-slate-200 dark:border-slate-700 text-center font-bold" x-text="(exam.selectedClasses || []).length"></td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
 
-                            <!-- List of Committees and Observers -->
-                            <h4 class="font-bold text-md mb-3 text-slate-900 dark:text-white mt-6 border-b border-slate-200 dark:border-slate-700 pb-2"><i class="fa-solid fa-list-check text-primary-500 ml-1"></i> توزيع واحد لليوم على اللجان والصفوف</h4>
-                            <div class="space-y-4">
-                                <template x-for="row in getDailyMergedCommitteeRows(getSelectedDailyDate())" :key="row.id">
-                                    <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
-                                        <div class="bg-slate-50 dark:bg-slate-850 px-4 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700">
-                                            <div class="flex flex-wrap items-center gap-2">
-                                                <span class="bg-primary-600 text-white font-bold text-xs px-2.5 py-1 rounded" x-text="row.className"></span>
-                                                <span class="font-bold text-sm text-slate-800 dark:text-slate-100" x-text="'اللجنة: ' + row.committeeName"></span>
-                                                <span class="text-xs text-cyan-700 dark:text-cyan-300 font-bold" x-text="row.subjects.join('، ')"></span>
-                                            </div>
-                                            <div class="text-xs text-slate-400 flex flex-col sm:flex-row sm:gap-3">
-                                                <span>الفترة: <strong class="text-slate-700 dark:text-slate-200" x-text="row.period"></strong></span>
-                                                <span>المدة: <strong class="text-slate-700 dark:text-slate-200" x-text="row.durations.join('، ')"></strong></span>
-                                                <span>المراقبون: <strong class="text-slate-700 dark:text-slate-200 font-mono" x-text="row.observersNeeded"></strong></span>
-                                                <span>العدد: <strong class="text-slate-700 dark:text-slate-200" x-text="row.counts.join(' | ')"></strong></span>
-                                            </div>
-                                        </div>
-                                        <div class="p-4">
-                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                <template x-for="assignment in getDailyMergedClassAssignments(row)" :key="assignment.id">
-                                                    <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-850/50 border border-slate-100 dark:border-slate-800">
-                                                        <div>
-                                                            <div class="font-bold text-sm text-slate-800 dark:text-white" x-text="assignment.teacherName"></div>
-                                                            <div class="text-xs text-slate-500 font-mono mt-0.5" x-text="assignment.teacherPhone"></div>
-                                                        </div>
-                                                        <button @click="sendWhatsAppNotification(assignment)" class="no-print bg-green-600 hover:bg-green-700 text-white text-xs px-2.5 py-1.5 rounded-md flex items-center gap-1.5 transition-all">
+                            <!-- جدول كشف المراقبة اليومية -->
+                            <div class="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+                                <div class="bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                    <h4 class="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                                        <i class="fa-solid fa-table-list text-emerald-600"></i>
+                                        كشف المراقبة اليومية الموحّد
+                                    </h4>
+                                    <span class="text-[11px] text-slate-500 dark:text-slate-400">تم دمج اللجان المتكررة في اليوم نفسه، والاحتياط ومراقب الدور ثابتان لليوم كاملًا.</span>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-right text-xs border-collapse">
+                                        <thead class="bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300">
+                                            <tr>
+                                                <th class="px-3 py-2 border border-slate-200 dark:border-slate-700 font-extrabold text-center w-12">م</th>
+                                                <th class="px-3 py-2 border border-slate-200 dark:border-slate-700 font-extrabold">رقم القاعة</th>
+                                                <th class="px-3 py-2 border border-slate-200 dark:border-slate-700 font-extrabold">الصف</th>
+                                                <th class="px-3 py-2 border border-slate-200 dark:border-slate-700 font-extrabold">المادة</th>
+                                                <th class="px-3 py-2 border border-slate-200 dark:border-slate-700 font-extrabold">المعلم المراقب</th>
+                                                <th class="px-3 py-2 border border-slate-200 dark:border-slate-700 font-extrabold no-print">إرسال</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="(row, idx) in getDailyScheduleRows(getSelectedDailyDate())" :key="row.id">
+                                                <tr class="bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                                    <td class="px-3 py-2 border border-slate-200 dark:border-slate-700 text-center font-bold" x-text="idx + 1"></td>
+                                                    <td class="px-3 py-2 border border-slate-200 dark:border-slate-700 font-bold" x-text="row.committeeName"></td>
+                                                    <td class="px-3 py-2 border border-slate-200 dark:border-slate-700" x-text="row.className"></td>
+                                                    <td class="px-3 py-2 border border-slate-200 dark:border-slate-700" x-text="row.subjectText"></td>
+                                                    <td class="px-3 py-2 border border-slate-200 dark:border-slate-700 font-bold" x-text="row.teacherName"></td>
+                                                    <td class="px-3 py-2 border border-slate-200 dark:border-slate-700 no-print">
+                                                        <button x-show="row.assignment" @click="sendWhatsAppNotification(row.assignment)" class="bg-green-600 hover:bg-green-700 text-white text-[11px] px-2.5 py-1.5 rounded-md inline-flex items-center gap-1.5 transition-all">
                                                             <i class="fa-brands fa-whatsapp text-sm"></i>
                                                             <span>واتساب</span>
                                                         </button>
-                                                    </div>
-                                                </template>
-                                                <div x-show="getDailyMergedClassAssignments(row).length === 0" class="col-span-2 text-center py-4 text-xs text-red-500 bg-red-50/50 dark:bg-red-900/10 rounded-lg">لم يتم توزيع أي مراقبين لهذه اللجنة بعد. يرجى الضغط على زر التوزيع الذكي.</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </template>
-                                <div x-show="getDailyMergedCommitteeRows(getSelectedDailyDate()).length === 0" class="text-center py-6 text-xs text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-xl">لا توجد لجان لهذا اليوم.</div>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            <tr x-show="getDailyScheduleRows(getSelectedDailyDate()).length === 0">
+                                                <td colspan="6" class="text-center py-8 text-slate-400 border border-slate-200 dark:border-slate-700">لا توجد بيانات مراقبة لهذا اليوم. يرجى تشغيل التوزيع الذكي.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
 
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
                                 <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-yellow-50/20 dark:bg-yellow-950/10">
-                                    <h4 class="font-bold text-xs text-yellow-600 dark:text-yellow-400 mb-2 uppercase tracking-wider"><i class="fa-solid fa-users-viewfinder ml-1"></i> مراقبو الدور المكلفين لليوم</h4>
+                                    <h4 class="font-bold text-xs text-yellow-600 dark:text-yellow-400 mb-2 uppercase tracking-wider"><i class="fa-solid fa-users-viewfinder ml-1"></i> مراقب الدور المكلف لليوم</h4>
                                     <div class="space-y-2">
                                         <template x-for="item in getDailyFloorObserversForDay(getSelectedDailyDate())" :key="item.id">
                                             <div class="p-2 bg-white dark:bg-slate-900 rounded border border-slate-200/50 text-xs font-semibold flex justify-between items-center gap-2">
-                                                <span x-text="item.teacherName + ' - ' + item.subject + ' (' + item.period + ')'"></span>
+                                                <span x-text="item.teacherName"></span>
                                                 <span class="text-[10px] text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded font-bold">مراقب دور</span>
                                             </div>
                                         </template>
-                                        <div x-show="getDailyFloorObserversForDay(getSelectedDailyDate()).length === 0" class="text-xs text-slate-400 py-2">لا يوجد مكلفين بمراقبة الدور أو لم يتم التوزيع بعد.</div>
+                                        <div x-show="getDailyFloorObserversForDay(getSelectedDailyDate()).length === 0" class="text-xs text-slate-400 py-2">لا يوجد مراقب دور أو لم يتم التوزيع بعد.</div>
                                     </div>
                                 </div>
 
@@ -1084,7 +1108,7 @@
                                     <div class="space-y-2">
                                         <template x-for="item in getDailyBackupObserversForDay(getSelectedDailyDate())" :key="item.id">
                                             <div class="p-2 bg-white dark:bg-slate-900 rounded border border-slate-200/50 text-xs font-semibold flex justify-between items-center gap-2">
-                                                <span x-text="item.teacherName + ' - ' + item.subject + ' (' + item.period + ')'"></span>
+                                                <span x-text="item.teacherName"></span>
                                                 <span class="text-[10px] text-orange-600 bg-orange-100 px-2 py-0.5 rounded font-bold">احتياط</span>
                                             </div>
                                         </template>
@@ -2792,6 +2816,45 @@
                     return `${dayName}، ${dayNum} ${monthName} ${year}`;
                 },
 
+                parseExamStartMinutes(period) {
+                    const p = String(period || '').trim();
+                    const match = p.match(/(\d{1,2})(?::(\d{2}))?/);
+                    if (!match) return 8 * 60;
+                    let hour = parseInt(match[1], 10);
+                    const minute = parseInt(match[2] || '0', 10);
+                    if ((p.includes('م') || p.toLowerCase().includes('pm')) && hour < 12) hour += 12;
+                    if ((p.includes('ص') || p.toLowerCase().includes('am')) && hour === 12) hour = 0;
+                    return hour * 60 + minute;
+                },
+
+                formatMinutesAsArabicTime(totalMinutes) {
+                    let minutes = Math.round(Number(totalMinutes || 0));
+                    minutes = ((minutes % 1440) + 1440) % 1440;
+                    const hour24 = Math.floor(minutes / 60);
+                    const minute = minutes % 60;
+                    const suffix = hour24 >= 12 ? 'م' : 'ص';
+                    let hour12 = hour24 % 12;
+                    if (hour12 === 0) hour12 = 12;
+                    return `${String(hour12).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${suffix}`;
+                },
+
+                getExamStartTimeText(period) {
+                    return this.formatMinutesAsArabicTime(this.parseExamStartMinutes(period));
+                },
+
+                getExamEndTimeText(exam) {
+                    if (!exam) return '';
+                    const start = this.parseExamStartMinutes(exam.period);
+                    const durationHours = parseFloat(exam.duration || 0);
+                    return this.formatMinutesAsArabicTime(start + (durationHours * 60));
+                },
+
+                formatDurationText(duration) {
+                    const value = Number(duration || 0);
+                    if (!value) return '—';
+                    return Number.isInteger(value) ? `${value} ساعة` : `${value} ساعة`;
+                },
+
                 addSubjectRestriction() {
                     const selectedSpecialities = Array.isArray(this.subjectRestForm.specialities) ? this.subjectRestForm.specialities : [];
                     if (!this.subjectRestForm.date || selectedSpecialities.length === 0) {
@@ -3281,7 +3344,7 @@
                     if (!row) return [];
                     const examIdSet = new Set((row.examIds || []).map(id => String(id)));
                     const seenTeachers = new Set();
-                    const list = (this.assignments || [])
+                    return (this.assignments || [])
                         .filter(a => a.role === 'observer' && String(a.classId) === String(row.classId) && examIdSet.has(String(a.examId)))
                         .filter(a => {
                             const key = String(a.teacherId);
@@ -3300,8 +3363,36 @@
                                 committeeName: row.committeeName
                             };
                         });
-                    const limit = parseInt(row.observersNeeded || 0);
-                    return limit > 0 ? list.slice(0, limit) : list;
+                },
+
+                getDailyScheduleRows(date) {
+                    if (!date) return [];
+                    const rows = [];
+                    this.getDailyMergedCommitteeRows(date).forEach(committeeRow => {
+                        const assignments = this.getDailyMergedClassAssignments(committeeRow);
+                        if (assignments.length === 0) {
+                            rows.push({
+                                id: committeeRow.id + '|empty',
+                                committeeName: committeeRow.committeeName,
+                                className: committeeRow.className,
+                                subjectText: (committeeRow.subjects || []).join('، '),
+                                teacherName: 'لم يتم التوزيع',
+                                assignment: null
+                            });
+                        } else {
+                            assignments.forEach((assignment, index) => {
+                                rows.push({
+                                    id: committeeRow.id + '|' + assignment.teacherName + '|' + index,
+                                    committeeName: committeeRow.committeeName,
+                                    className: committeeRow.className,
+                                    subjectText: (committeeRow.subjects || []).join('، '),
+                                    teacherName: assignment.teacherName,
+                                    assignment
+                                });
+                            });
+                        }
+                    });
+                    return rows;
                 },
 
                 getDailyRoleObserversForDay(date, role, maxCount) {
