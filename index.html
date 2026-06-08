@@ -990,7 +990,7 @@
                         <select x-model="selectedDailyExamId" @change="saveAppData()" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500">
                             <option value="">-- اختر يوماً من الجدول --</option>
                             <template x-for="day in getDailyExamDays()" :key="day.date">
-                                <option :value="day.date" x-text="formatDateArabic(day.date) + ' - ' + day.exams.length + ' اختبار/مجموعة' + ' | ' + day.exams.map(e => e.subject + ' (' + e.period + ')').join('، ')"></option>
+                                <option :value="day.date" x-text="formatDateArabic(day.date)"></option>
                             </template>
                         </select>
                     </div>
