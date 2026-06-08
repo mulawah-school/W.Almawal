@@ -928,6 +928,16 @@
                         </div>
                     </div>
 
+                    <div class="mt-4 p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                        <label class="flex items-start gap-3 cursor-pointer select-none">
+                            <input type="checkbox" x-model="smartSettings.preventRepeatSameCommittee" @change="saveAppData(); runSmartDistribution(true)" class="mt-1 w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500">
+                            <div>
+                                <div class="text-sm font-extrabold text-slate-800 dark:text-white">عدم تكرار دخول المعلم لنفس اللجنة طوال الامتحانات</div>
+                                <p class="text-[11px] text-slate-500 mt-1 leading-5">عند تفعيل هذا الخيار يحاول النظام ألا يضع المعلم في نفس رقم القاعة/اللجنة أكثر من مرة خلال كل جدول الامتحانات، مع استمرار منع الجمع في نفس الفترة.</p>
+                            </div>
+                        </label>
+                    </div>
+
                     <div class="mt-6 flex flex-col items-center justify-center border-t border-slate-200 dark:border-slate-600 pt-6">
                         <button @click="runSmartDistribution()" class="w-full sm:w-auto px-8 py-3 bg-gradient-to-r from-primary-600 to-emerald-500 hover:from-primary-700 hover:to-emerald-600 active:scale-95 text-white font-bold text-md rounded-xl shadow-lg shadow-primary-500/30 flex items-center justify-center gap-3 transition-all">
                             <i class="fa-solid fa-shuffle text-xl animate-spin" x-show="distributing"></i>
@@ -1703,7 +1713,7 @@
                 subjectRestForm: { date: '', specialities: [] },
                 teacherRestForm: { date: '', teacherIds: [], reason: '' },
                 
-                smartSettings: { floorObservers: 1, backupObservers: 2 },
+                smartSettings: { floorObservers: 1, backupObservers: 2, preventRepeatSameCommittee: false },
                 distributing: false,
                 distributionSuccess: false,
                 selectedDailyExamId: null,
@@ -1832,7 +1842,9 @@
                     if (parsed.smartSettings && typeof parsed.smartSettings === 'object') {
                         this.smartSettings = {
                             floorObservers: 1,
-                            backupObservers: 2
+                            backupObservers: 2,
+                            preventRepeatSameCommittee: false,
+                            ...parsed.smartSettings
                         };
                     }
                     if (Object.prototype.hasOwnProperty.call(parsed, 'selectedDailyExamId')) this.selectedDailyExamId = parsed.selectedDailyExamId;
@@ -2993,7 +3005,7 @@
                             return false;
                         };
 
-                        const isTeacherAvailableForExam = (teacher, exam, ignoreAssignmentId = null) => {
+                        const isTeacherAvailableForExam = (teacher, exam, ignoreAssignmentId = null, targetClassId = null, targetRole = 'observer') => {
                             if (!teacher || teacher.inControl || !exam) return false;
                             if (hasRestrictionOnDate(teacher, exam.date)) return false;
                             const targetPeriod = String(exam.period || '');
@@ -3003,7 +3015,19 @@
                                 const assignedExam = this.exams.find(e => e.id == a.examId);
                                 return assignedExam && assignedExam.date === exam.date && String(assignedExam.period || '') === targetPeriod;
                             });
-                            return !alreadyInSamePeriod;
+                            if (alreadyInSamePeriod) return false;
+
+                            // خيار اختياري: لا يدخل المعلم نفس اللجنة/القاعة أكثر من مرة طوال جدول الامتحانات.
+                            if (this.smartSettings?.preventRepeatSameCommittee && targetRole === 'observer' && targetClassId !== null && targetClassId !== undefined) {
+                                const repeatedSameCommittee = this.assignments.some(a => {
+                                    if (String(a.teacherId) !== String(teacher.id)) return false;
+                                    if (ignoreAssignmentId !== null && a.id === ignoreAssignmentId) return false;
+                                    return a.role === 'observer' && String(a.classId) === String(targetClassId);
+                                });
+                                if (repeatedSameCommittee) return false;
+                            }
+
+                            return true;
                         };
 
                         const slots = [];
@@ -3062,7 +3086,7 @@
 
                         const chooseMostBalancedTeacher = (slot) => {
                             const available = workingTeachers.filter(t => {
-                                if (!isTeacherAvailableForExam(t, slot.exam)) return false;
+                                if (!isTeacherAvailableForExam(t, slot.exam, null, slot.classId, slot.role)) return false;
                                 if (slot.role === 'floor' || slot.role === 'backup') {
                                     // مراقب الدور والاحتياط تكليف يومي، لذلك لا يجمع معه أي تكليف آخر في اليوم نفسه متى أمكن.
                                     const hasAnyDutySameDay = this.assignments.some(a => {
@@ -3076,7 +3100,7 @@
                             });
                             if (available.length === 0 && (slot.role === 'floor' || slot.role === 'backup')) {
                                 // احتياط آمن إذا كان عدد المعلمين لا يكفي لفصل الدور/الاحتياط عن جميع لجان اليوم.
-                                workingTeachers.filter(t => isTeacherAvailableForExam(t, slot.exam)).forEach(t => available.push(t));
+                                workingTeachers.filter(t => isTeacherAvailableForExam(t, slot.exam, null, slot.classId, slot.role)).forEach(t => available.push(t));
                             }
                             if (available.length === 0) return null;
 
@@ -3207,7 +3231,7 @@
 
                                     for (const assignment of highAssignments) {
                                         const exam = getExamById(assignment.examId);
-                                        if (!exam || !isTeacherAvailableForExam(low, exam, assignment.id)) continue;
+                                        if (!exam || !isTeacherAvailableForExam(low, exam, assignment.id, assignment.classId, assignment.role)) continue;
 
                                         const duration = parseFloat(exam.duration || 0);
                                         const highAfter = (teacherHours[high.id] || 0) - duration;
