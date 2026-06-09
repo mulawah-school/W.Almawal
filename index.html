@@ -1201,8 +1201,8 @@
                 <!-- Comprehensive Teacher Duty Matrix -->
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
                     <div>
-                        <h3 class="text-md font-bold text-slate-900 dark:text-white flex items-center gap-2"><i class="fa-solid fa-table-cells-large text-primary-500"></i> كشف عام لجميع المعلمين حسب اللجان والصفوف</h3>
-                        <p class="text-xs text-slate-500 mt-1">الأسماء في العمود الأول، واللجان مع الصفوف في الصف العلوي، وتظهر علامة صح عند دخول المعلم لتلك اللجنة خلال الامتحانات.</p>
+                        <h3 class="text-md font-bold text-slate-900 dark:text-white flex items-center gap-2"><i class="fa-solid fa-table-cells-large text-primary-500"></i> كشف عام للمعلمين حسب اللجان والصفوف <span class="text-[11px] text-red-500">(بدون أعضاء الكنترول)</span></h3>
+                        <p class="text-xs text-slate-500 mt-1">الأسماء في العمود الأول، واللجان مع الصفوف في الصف العلوي، وتظهر علامة صح عند دخول المعلم لتلك اللجنة خلال الامتحانات. لا يشمل الكشف أعضاء الكنترول.</p>
                     </div>
                     <button @click="printTeacherDutySummary()" class="no-print bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all">
                         <i class="fa-solid fa-print"></i>
@@ -1211,7 +1211,7 @@
                 </div>
                 <div id="teacher-duty-summary-print" class="print-area border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden mb-8 bg-white dark:bg-slate-800">
                     <div class="hidden print:block text-center p-4 border-b border-slate-200">
-                        <h2 class="text-xl font-extrabold">كشف عام لجميع المعلمين حسب اللجان والصفوف</h2>
+                        <h2 class="text-xl font-extrabold">كشف عام للمعلمين حسب اللجان والصفوف - بدون أعضاء الكنترول</h2>
                         <p class="text-sm mt-1">✓ تعني أن المعلم دخل هذه اللجنة خلال فترة الامتحانات</p>
                     </div>
                     <div class="overflow-x-auto">
@@ -1234,7 +1234,7 @@
                                     <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50">
                                         <td class="px-3 py-2 text-right sticky right-0 z-10 bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700">
                                             <div class="font-bold text-slate-900 dark:text-white" x-text="t.name"></div>
-                                            <div class="text-[10px] text-slate-500" x-text="t.speciality + (t.inControl ? ' - كنترول/مستبعد' : '')"></div>
+                                            <div class="text-[10px] text-slate-500" x-text="t.speciality"></div>
                                         </td>
                                         <template x-for="col in getGeneralDutyMatrixColumns()" :key="t.id + '-' + col.classId">
                                             <td class="px-2 py-2 border-r border-slate-100 dark:border-slate-700 align-middle">
@@ -1247,7 +1247,7 @@
                                     </tr>
                                 </template>
                                 <tr x-show="getAllTeachersSortedByDutyDays().length === 0 || getGeneralDutyMatrixColumns().length === 0">
-                                    <td :colspan="getGeneralDutyMatrixColumns().length + 3" class="text-center py-8 text-slate-400">لا توجد بيانات توزيع أو لجان لعرض الكشف العام.</td>
+                                    <td :colspan="getGeneralDutyMatrixColumns().length + 3" class="text-center py-8 text-slate-400">لا توجد بيانات توزيع أو لجان لعرض الكشف العام، أو جميع المعلمين الظاهرين من أعضاء الكنترول.</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -3583,6 +3583,7 @@
 
                 getAllTeachersSortedByDutyDays() {
                     return (this.teachers || [])
+                        .filter(t => !t.inControl)
                         .map(t => ({
                             ...t,
                             _dutyCount: this.getTeacherDutyDaysCount(t.id),
@@ -3804,7 +3805,7 @@
                     const rows = this.getAllTeachersSortedByDutyDays().map(t => {
                         const cells = columns.map(col => this.hasTeacherObserverInCommittee(t.id, col.classId) ? '<td class="check">✓</td>' : '<td></td>').join('');
                         return `<tr>
-                            <td class="teacher"><strong>${t.name || ''}</strong><br><span>${t.speciality || ''}${t.inControl ? ' - كنترول/مستبعد' : ''}</span></td>
+                            <td class="teacher"><strong>${t.name || ''}</strong><br><span>${t.speciality || ''}</span></td>
                             ${cells}
                             <td class="center"><strong>${this.getTeacherDutyDaysCount(t.id)}</strong></td>
                             <td class="center">${this.getTeacherTotalHours(t.id)}</td>
@@ -3834,7 +3835,7 @@
                         <div class="header">
                             <div class="small">${directorate}</div>
                             <div class="small">${schoolName}</div>
-                            <h1>كشف عام لجميع المعلمين حسب اللجان والصفوف</h1>
+                            <h1>كشف عام للمعلمين حسب اللجان والصفوف - بدون أعضاء الكنترول</h1>
                             <div class="small">✓ تعني أن المعلم دخل هذه اللجنة خلال فترة الامتحانات</div>
                         </div>
                         <table>
