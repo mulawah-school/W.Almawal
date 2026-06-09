@@ -45,9 +45,43 @@
         .drag-handle { cursor: grab; }
         .drag-handle:active { cursor: grabbing; }
 
+        @page {
+            size: A4 landscape;
+            margin: 6mm;
+        }
+
         @media print {
+            html, body {
+                width: 297mm !important;
+                min-height: 210mm !important;
+                overflow: visible !important;
+                background: #fff !important;
+            }
             .no-print { display: none !important; }
-            .print-area { width: 100% !important; max-width: 100% !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; }
+            .print-area {
+                width: 100% !important;
+                max-width: 100% !important;
+                box-shadow: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                border: 0 !important;
+                overflow: visible !important;
+            }
+            .print-area table {
+                width: 100% !important;
+                font-size: 9px !important;
+                page-break-inside: auto !important;
+            }
+            .print-area th, .print-area td {
+                padding: 2px 3px !important;
+                line-height: 1.25 !important;
+            }
+            .print-area tr, .print-area tbody, .print-area thead {
+                page-break-inside: avoid !important;
+            }
+            .print-area .overflow-x-auto {
+                overflow: visible !important;
+            }
         }
     </style>
     <script>
