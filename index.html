@@ -1164,47 +1164,61 @@
                     </div>
                 </div>
 
-                <!-- Comprehensive Teacher Duty Table -->
-                <h3 class="text-md font-bold mb-3 text-slate-900 dark:text-white flex items-center gap-2"><i class="fa-solid fa-chart-line text-primary-500"></i> كشف أيام وساعات دخول اللجان لكل معلم</h3>
-                <div class="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden mb-8">
-                    <table class="w-full text-right text-sm">
-                        <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
-                            <tr>
-                                <th class="px-4 py-3 font-semibold">المعلم</th>
-                                <th class="px-4 py-3 font-semibold text-center">عدد أيام المراقبة الفعلية</th>
-                                <th class="px-4 py-3 font-semibold text-center">إجمالي ساعات المراقبة الفعلية</th>
-                                <th class="px-4 py-3 font-semibold text-center">عدد مرات الدور</th>
-                                <th class="px-4 py-3 font-semibold text-center">عدد مرات الاحتياط</th>
-                                <th class="px-4 py-3 font-semibold">اللجان التي كُلف بها</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="t in getTeachersSortedByDuties()" :key="t.id">
-                                <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50">
-                                    <td class="px-4 py-3">
-                                        <div class="font-bold text-slate-900 dark:text-white" x-text="t.name"></div>
-                                        <div class="text-[10px] text-slate-500" x-text="t.speciality"></div>
-                                    </td>
-                                    <td class="px-4 py-3 text-center font-bold" x-text="getTeacherDutyDaysCount(t.id)"></td>
-                                    <td class="px-4 py-3 text-center">
-                                        <span class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 font-bold" x-text="getTeacherTotalHours(t.id) + ' ساعة'"></span>
-                                    </td>
-                                    <td class="px-4 py-3 text-center font-mono" x-text="getTeacherFloorCount(t.id)"></td>
-                                    <td class="px-4 py-3 text-center font-mono" x-text="getTeacherBackupCount(t.id)"></td>
-                                    <td class="px-4 py-3">
-                                        <div class="flex flex-wrap gap-1 max-w-[300px]">
-                                            <template x-for="committee in getTeacherCommitteesList(t.id)" :key="committee">
-                                                <span class="text-[9px] bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-1.5 py-0.5 rounded" x-text="committee"></span>
-                                            </template>
-                                            <div x-show="getTeacherCommitteesList(t.id).length === 0" class="text-slate-400 text-xs">لم يكلف بعد</div>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
+                <!-- Comprehensive Teacher Duty Matrix -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                    <div>
+                        <h3 class="text-md font-bold text-slate-900 dark:text-white flex items-center gap-2"><i class="fa-solid fa-table-cells-large text-primary-500"></i> كشف عام لجميع المعلمين حسب اللجان والصفوف</h3>
+                        <p class="text-xs text-slate-500 mt-1">الأسماء في العمود الأول، واللجان مع الصفوف في الصف العلوي، وتظهر علامة صح عند دخول المعلم لتلك اللجنة خلال الامتحانات.</p>
+                    </div>
+                    <button @click="printTeacherDutySummary()" class="no-print bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all">
+                        <i class="fa-solid fa-print"></i>
+                        طباعة كشف اللجان للمعلمين
+                    </button>
                 </div>
-
+                <div id="teacher-duty-summary-print" class="print-area border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden mb-8 bg-white dark:bg-slate-800">
+                    <div class="hidden print:block text-center p-4 border-b border-slate-200">
+                        <h2 class="text-xl font-extrabold">كشف عام لجميع المعلمين حسب اللجان والصفوف</h2>
+                        <p class="text-sm mt-1">✓ تعني أن المعلم دخل هذه اللجنة خلال فترة الامتحانات</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-center text-[11px] border-collapse">
+                            <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                                <tr>
+                                    <th class="px-3 py-3 font-semibold sticky right-0 z-10 bg-slate-50 dark:bg-slate-700 min-w-[210px] text-right">اسم المعلم</th>
+                                    <template x-for="col in getGeneralDutyMatrixColumns()" :key="col.classId">
+                                        <th class="px-2 py-2 font-semibold min-w-[78px] border-r border-slate-200 dark:border-slate-700 align-middle">
+                                            <div class="font-extrabold text-slate-900 dark:text-white" x-text="col.committeeName"></div>
+                                            <div class="text-[10px] text-slate-500 mt-0.5" x-text="col.className"></div>
+                                        </th>
+                                    </template>
+                                    <th class="px-2 py-2 font-semibold min-w-[75px] border-r border-slate-200 dark:border-slate-700">أيام المراقبة</th>
+                                    <th class="px-2 py-2 font-semibold min-w-[70px] border-r border-slate-200 dark:border-slate-700">الساعات</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="t in getAllTeachersSortedByDutyDays()" :key="t.id">
+                                    <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50">
+                                        <td class="px-3 py-2 text-right sticky right-0 z-10 bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700">
+                                            <div class="font-bold text-slate-900 dark:text-white" x-text="t.name"></div>
+                                            <div class="text-[10px] text-slate-500" x-text="t.speciality + (t.inControl ? ' - كنترول/مستبعد' : '')"></div>
+                                        </td>
+                                        <template x-for="col in getGeneralDutyMatrixColumns()" :key="t.id + '-' + col.classId">
+                                            <td class="px-2 py-2 border-r border-slate-100 dark:border-slate-700 align-middle">
+                                                <span x-show="hasTeacherObserverInCommittee(t.id, col.classId)" class="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 font-extrabold text-lg">✓</span>
+                                                <span x-show="!hasTeacherObserverInCommittee(t.id, col.classId)" class="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-100 dark:border-slate-700 text-slate-300"> </span>
+                                            </td>
+                                        </template>
+                                        <td class="px-2 py-2 text-center font-extrabold text-emerald-700 dark:text-emerald-300 border-r border-slate-100 dark:border-slate-700" x-text="getTeacherDutyDaysCount(t.id)"></td>
+                                        <td class="px-2 py-2 text-center font-bold border-r border-slate-100 dark:border-slate-700" x-text="getTeacherTotalHours(t.id)"></td>
+                                    </tr>
+                                </template>
+                                <tr x-show="getAllTeachersSortedByDutyDays().length === 0 || getGeneralDutyMatrixColumns().length === 0">
+                                    <td :colspan="getGeneralDutyMatrixColumns().length + 3" class="text-center py-8 text-slate-400">لا توجد بيانات توزيع أو لجان لعرض الكشف العام.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
 
                 <!-- Daily Available Unassigned Teachers Report -->
                 <h3 class="text-md font-bold mb-3 text-slate-900 dark:text-white flex items-center gap-2">
@@ -3486,6 +3500,68 @@
                     });
                     return list;
                 },
+                getTeacherDutyDaysDetails(teacherId) {
+                    const byDate = {};
+                    (this.assignments || [])
+                        .filter(a => a.teacherId == teacherId && a.role === 'observer')
+                        .forEach(a => {
+                            const ex = (this.exams || []).find(e => e.id == a.examId);
+                            if (!ex || !ex.date) return;
+                            if (!byDate[ex.date]) byDate[ex.date] = { date: ex.date, subjects: new Set(), committees: new Set() };
+                            if (ex.subject) byDate[ex.date].subjects.add(ex.subject);
+                            const commName = this.getCommitteeNameByClass(a.classId) || this.getClassName(a.classId) || 'لجنة غير محددة';
+                            byDate[ex.date].committees.add(commName);
+                        });
+                    return Object.values(byDate)
+                        .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+                        .map(day => ({
+                            date: day.date,
+                            subjects: Array.from(day.subjects).join('، ') || '-',
+                            committees: Array.from(day.committees).join('، ') || '-'
+                        }));
+                },
+                getGeneralDutyMatrixColumns() {
+                    const ids = [];
+                    (this.exams || []).forEach(exam => {
+                        (exam.selectedClasses || []).forEach(classId => {
+                            const key = String(classId);
+                            if (!ids.includes(key)) ids.push(key);
+                        });
+                    });
+                    if (ids.length === 0) {
+                        (this.schoolClasses || []).forEach(cls => {
+                            const key = String(cls.id);
+                            if (!ids.includes(key)) ids.push(key);
+                        });
+                    }
+                    return ids.map(classId => {
+                        const cls = (this.schoolClasses || []).find(c => String(c.id) === String(classId));
+                        return {
+                            classId,
+                            className: cls ? cls.className : this.getClassName(classId),
+                            committeeName: cls ? cls.committeeName : this.getCommitteeNameByClass(classId)
+                        };
+                    }).sort((a, b) => String(a.committeeName || '').localeCompare(String(b.committeeName || ''), 'ar', { numeric: true }));
+                },
+                hasTeacherObserverInCommittee(teacherId, classId) {
+                    return (this.assignments || []).some(a => String(a.teacherId) === String(teacherId) && a.role === 'observer' && String(a.classId) === String(classId));
+                },
+
+                getAllTeachersSortedByDutyDays() {
+                    return (this.teachers || [])
+                        .map(t => ({
+                            ...t,
+                            _dutyCount: this.getTeacherDutyDaysCount(t.id),
+                            _totalHours: this.getTeacherTotalHours(t.id),
+                            _assignmentCount: this.getTeacherAssignmentCount(t.id)
+                        }))
+                        .sort((a, b) => {
+                            if (b._dutyCount !== a._dutyCount) return b._dutyCount - a._dutyCount;
+                            if (b._totalHours !== a._totalHours) return b._totalHours - a._totalHours;
+                            if (b._assignmentCount !== a._assignmentCount) return b._assignmentCount - a._assignmentCount;
+                            return a.name.localeCompare(b.name, 'ar');
+                        });
+                },
                 getTeachersSortedByDuties() {
                     return this.teachers
                         .filter(t => !t.inControl)
@@ -3686,6 +3762,55 @@
                     
                     window.open(waUrl, '_blank');
                     this.showToast(`تم تجهيز الرسالة وفتح نافذة واتساب للمعلم ${assign.teacherName}`);
+                },
+
+                printTeacherDutySummary() {
+                    const columns = this.getGeneralDutyMatrixColumns();
+                    const headerCells = columns.map(col => `<th><div class="committee">${col.committeeName || ''}</div><div class="class-name">${col.className || ''}</div></th>`).join('');
+                    const rows = this.getAllTeachersSortedByDutyDays().map(t => {
+                        const cells = columns.map(col => this.hasTeacherObserverInCommittee(t.id, col.classId) ? '<td class="check">✓</td>' : '<td></td>').join('');
+                        return `<tr>
+                            <td class="teacher"><strong>${t.name || ''}</strong><br><span>${t.speciality || ''}${t.inControl ? ' - كنترول/مستبعد' : ''}</span></td>
+                            ${cells}
+                            <td class="center"><strong>${this.getTeacherDutyDaysCount(t.id)}</strong></td>
+                            <td class="center">${this.getTeacherTotalHours(t.id)}</td>
+                        </tr>`;
+                    }).join('');
+                    const schoolName = (this.schoolSettings && this.schoolSettings.schoolName) ? this.schoolSettings.schoolName : '';
+                    const directorate = (this.schoolSettings && this.schoolSettings.directorate) ? this.schoolSettings.directorate : '';
+                    const w = window.open('', '_blank');
+                    if (!w) { this.showToast('تعذر فتح نافذة الطباعة. يرجى السماح بالنوافذ المنبثقة.'); return; }
+                    w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>كشف عام للمعلمين حسب اللجان</title>
+                    <style>
+                        body{font-family:Arial,Tahoma,sans-serif;direction:rtl;margin:14px;color:#111827;}
+                        .header{text-align:center;margin-bottom:12px;line-height:1.7;}
+                        .header .small{font-size:12px;color:#475569;}
+                        h1{font-size:18px;margin:5px 0 2px;font-weight:800;}
+                        table{width:100%;border-collapse:collapse;font-size:10.5px;}
+                        th,td{border:1px solid #111827;padding:5px 4px;text-align:center;vertical-align:middle;}
+                        th{background:#f1f5f9;font-weight:800;white-space:nowrap;}
+                        .teacher{text-align:right;min-width:145px;white-space:normal;}
+                        .teacher span{color:#64748b;font-size:9.5px;}
+                        .committee{font-weight:800;}
+                        .class-name{font-size:9.5px;color:#475569;margin-top:2px;}
+                        .check{font-size:18px;font-weight:900;color:#047857;}
+                        .center{text-align:center;}
+                        @page{size:A4 landscape;margin:7mm;}
+                    </style></head><body>
+                        <div class="header">
+                            <div class="small">${directorate}</div>
+                            <div class="small">${schoolName}</div>
+                            <h1>كشف عام لجميع المعلمين حسب اللجان والصفوف</h1>
+                            <div class="small">✓ تعني أن المعلم دخل هذه اللجنة خلال فترة الامتحانات</div>
+                        </div>
+                        <table>
+                            <thead><tr><th>اسم المعلم</th>${headerCells}<th>أيام المراقبة</th><th>الساعات</th></tr></thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                    </body></html>`);
+                    w.document.close();
+                    w.focus();
+                    setTimeout(() => w.print(), 300);
                 },
 
                 printDailySchedule() {
