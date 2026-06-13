@@ -725,6 +725,53 @@
         // جدول الامتحانات حسب التاريخ لاستخدامه في توزيع المراقبين
         const EXAM_SCHEDULE = {};
 
+        // دوال موحدة وآمنة للتاريخ: تمنع انهيار الصفحة عند وجود تاريخ قديم بصيغة 1/5 أو 1/5/2026.
+        const CONTROL_DEFAULT_DATE = "2026-05-17";
+        const toEnglishDigits = (value) => String(value || '')
+            .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+            .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
+        const padDatePart = (value) => String(Number(value || 0)).padStart(2, '0');
+        const isValidControlDateParts = (year, month, day) => {
+            const y = Number(year), m = Number(month), d = Number(day);
+            if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return false;
+            if (y < 2000 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return false;
+            const parsed = new Date(`${y}-${padDatePart(m)}-${padDatePart(d)}T00:00:00`);
+            return !Number.isNaN(parsed.getTime()) && parsed.getFullYear() === y && parsed.getMonth() + 1 === m && parsed.getDate() === d;
+        };
+        const normalizeControlDateKey = (value, fallback = CONTROL_DEFAULT_DATE) => {
+            const fallbackSafe = /^\d{4}-\d{2}-\d{2}$/.test(String(fallback || '')) ? String(fallback) : CONTROL_DEFAULT_DATE;
+            let raw = toEnglishDigits(value).trim();
+            if (!raw) return fallbackSafe;
+            raw = raw.replace(/[.]/g, '/').replace(/\s+/g, '');
+
+            let match = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+            if (match && isValidControlDateParts(match[1], match[2], match[3])) {
+                return `${match[1]}-${padDatePart(match[2])}-${padDatePart(match[3])}`;
+            }
+
+            match = raw.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+            if (match && isValidControlDateParts(match[1], match[2], match[3])) {
+                return `${match[1]}-${padDatePart(match[2])}-${padDatePart(match[3])}`;
+            }
+
+            // صيغة عربية شائعة: 1/5 أو 1/5/2026، وتُفسر كيوم/شهر/سنة.
+            match = raw.match(/^(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?$/);
+            if (match) {
+                let year = match[3] || fallbackSafe.slice(0, 4);
+                if (String(year).length === 2) year = `20${year}`;
+                if (isValidControlDateParts(year, match[2], match[1])) {
+                    return `${year}-${padDatePart(match[2])}-${padDatePart(match[1])}`;
+                }
+            }
+
+            return fallbackSafe;
+        };
+        const isSafeFirestoreDateKey = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+        const getSafeCurrentDate = (value, fallback = CONTROL_DEFAULT_DATE) => {
+            const normalized = normalizeControlDateKey(value, fallback);
+            return isSafeFirestoreDateKey(normalized) ? normalized : CONTROL_DEFAULT_DATE;
+        };
+
         const getStoredSmartBridge = () => {
             try {
                 if (window.monitoringDistributionBridge && window.monitoringDistributionBridge.version === 'monitoring_control_bridge_v1') return window.monitoringDistributionBridge;
@@ -749,12 +796,14 @@
         const getArabicDayNameFromDate = (dateStr) => {
             if (!dateStr) return '';
             const days = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
-            const d = new Date(String(dateStr) + 'T00:00:00');
-            return days[d.getDay()] || '';
+            const safeDate = getSafeCurrentDate(dateStr, CONTROL_DEFAULT_DATE);
+            const d = new Date(String(safeDate) + 'T00:00:00');
+            return Number.isNaN(d.getTime()) ? '' : (days[d.getDay()] || '');
         };
         const formatDateForControlStats = (dateStr) => {
             if (!dateStr) return '';
-            const d = new Date(String(dateStr) + 'T00:00:00');
+            const safeDate = getSafeCurrentDate(dateStr, CONTROL_DEFAULT_DATE);
+            const d = new Date(String(safeDate) + 'T00:00:00');
             if (Number.isNaN(d.getTime())) return String(dateStr);
             return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}م`;
         };
@@ -1251,6 +1300,88 @@
             }
             return [];
         };
+
+
+        // دمج لجان التاريخ المولدة تلقائياً مع البيانات المحفوظة سابقاً بدون كسر الواجهة.
+        // إصلاح جذري: عرّفناها كـ function hoisted وربطناها بـ window حتى لا تظهر رسالة
+        // mergeAutoSessionsWithSaved is not defined عند تغيير التاريخ أو عند تحميل بيانات Firebase.
+        function mergeAutoSessionsWithSaved(autoRows = [], savedRows = []) {
+            try {
+                const autos = Array.isArray(autoRows) ? autoRows.filter(Boolean) : [];
+                const saved = Array.isArray(savedRows) ? savedRows.filter(Boolean) : [];
+                const safeText = (value) => {
+                    try {
+                        return String(value ?? '')
+                            .replace(/[\u0660-\u0669]/g, d => '0123456789'['٠١٢٣٤٥٦٧٨٩'.indexOf(d)] || d)
+                            .replace(/[\u06F0-\u06F9]/g, d => '0123456789'['۰۱۲۳۴۵۶۷۸۹'.indexOf(d)] || d)
+                            .replace(/\u0640/g, '')
+                            .replace(/[أإآٱ]/g, 'ا')
+                            .replace(/ة/g, 'ه')
+                            .replace(/ى/g, 'ي')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+                    } catch (e) { return ''; }
+                };
+                const keyPart = (value) => safeText(value).toLowerCase();
+                const makeKeys = (row = {}) => {
+                    const id = keyPart(row.id);
+                    const grade = keyPart(row.grade || row.className);
+                    const room = keyPart(row.room || row.committeeName);
+                    const subject = keyPart(row.subject || row.subjectText);
+                    const period = keyPart(row.period);
+                    return [
+                        id,
+                        `${period}|${grade}|${room}|${subject}`,
+                        `${period}|${grade}|${room}`,
+                        `${grade}|${room}|${subject}`,
+                        `${grade}|${room}`
+                    ].filter(key => key && key.replace(/\|/g, '').trim() !== '');
+                };
+                const savedByKey = new Map();
+                saved.forEach((row) => {
+                    makeKeys(row).forEach((key) => {
+                        if (key && !savedByKey.has(key)) savedByKey.set(key, row);
+                    });
+                });
+                const usedSaved = new Set();
+                const merged = autos.map((autoRow, index) => {
+                    const match = makeKeys(autoRow).map(key => savedByKey.get(key)).find(Boolean) || null;
+                    if (match) usedSaved.add(match);
+                    const keepSaved = match || {};
+                    return {
+                        ...keepSaved,
+                        ...autoRow,
+                        id: autoRow.id || keepSaved.id || `auto-session-${Date.now()}-${index}`,
+                        room: autoRow.room || keepSaved.room || '',
+                        grade: autoRow.grade || keepSaved.grade || '',
+                        count: autoRow.count ?? keepSaved.count ?? '',
+                        gradeLevel: autoRow.gradeLevel || keepSaved.gradeLevel || String(autoRow.grade || keepSaved.grade || '').split('/')[0] || '',
+                        subject: autoRow.subject || keepSaved.subject || '',
+                        period: autoRow.period || keepSaved.period || 'الفترة الأولى',
+                        registeredNormal: keepSaved.registeredNormal !== undefined && keepSaved.registeredNormal !== '' ? keepSaved.registeredNormal : (autoRow.registeredNormal ?? autoRow.count ?? ''),
+                        registeredAdults: keepSaved.registeredAdults ?? autoRow.registeredAdults ?? '',
+                        absentNormal: keepSaved.absentNormal ?? autoRow.absentNormal ?? '',
+                        absentAdults: keepSaved.absentAdults ?? autoRow.absentAdults ?? '',
+                        receiver: keepSaved.receiver || autoRow.receiver || '',
+                        proctorName: keepSaved.proctorName || autoRow.proctorName || '',
+                        absenteesNames: keepSaved.absenteesNames || autoRow.absenteesNames || ''
+                    };
+                });
+                saved.forEach((row) => {
+                    if (!usedSaved.has(row)) {
+                        const hasImportantData = ['receiver','absentNormal','absentAdults','absenteesNames','registeredAdults','proctorName']
+                            .some(field => String(row?.[field] ?? '').trim() !== '');
+                        if (hasImportantData && (row?.id || row?.grade || row?.room)) merged.push(row);
+                    }
+                });
+                return (typeof ensureSpecialCommitteeSession === 'function') ? ensureSpecialCommitteeSession(merged) : merged;
+            } catch (mergeError) {
+                console.error('فشل الدمج الآمن للجان التاريخ، سيتم استخدام الصفوف التلقائية فقط:', mergeError);
+                const fallback = Array.isArray(autoRows) && autoRows.length ? autoRows : (Array.isArray(savedRows) ? savedRows : []);
+                return (typeof ensureSpecialCommitteeSession === 'function') ? ensureSpecialCommitteeSession(fallback) : fallback;
+            }
+        }
+        window.mergeAutoSessionsWithSaved = mergeAutoSessionsWithSaved;
 
         const subjectForSessionByDate = (date, session) => {
             if (String(session.grade || '') === SPECIAL_COMMITTEE_GRADE) return "";
@@ -3987,7 +4118,11 @@
             const [activeTab, setActiveTab] = useState('home');
             const [currentDate, setCurrentDate] = useState(() => {
                 const savedExamDate = localStorage.getItem("savedExamDate");
-                return savedExamDate || "2026-05-17";
+                const normalizedDate = getSafeCurrentDate(savedExamDate, CONTROL_DEFAULT_DATE);
+                if (savedExamDate !== normalizedDate) {
+                    try { localStorage.setItem("savedExamDate", normalizedDate); } catch (e) {}
+                }
+                return normalizedDate;
             });
             const [dayName, setDayName] = useState('الأحد');
             const [searchQuery, setSearchQuery] = useState('');
@@ -4022,9 +4157,14 @@
                     refreshSmartBridge();
                     const autoRows = buildExamSessionsForDate(currentDate);
                     if (autoRows.length) {
-                        setSessionsData(prev => mergeAutoSessionsWithSaved(autoRows, prev || []));
-                        setProctoringExtra(buildFirstPeriodExtraFromAssignments(currentDate, null));
-                        setSecondPeriodProctoring(buildSecondPeriodProctoringFromAssignments(currentDate));
+                        try {
+                            setSessionsData(prev => (window.mergeAutoSessionsWithSaved || mergeAutoSessionsWithSaved)(autoRows, prev || []));
+                            setProctoringExtra(buildFirstPeriodExtraFromAssignments(currentDate, null));
+                            setSecondPeriodProctoring(buildSecondPeriodProctoringFromAssignments(currentDate));
+                        } catch (dateMergeError) {
+                            console.error('تعذر دمج بيانات التاريخ تلقائياً، تم استخدام الصفوف الآمنة:', dateMergeError);
+                            setSessionsData(sanitizeSessionsData(autoRows, currentDate, false));
+                        }
                     }
                 }, 900);
                 return () => clearTimeout(t);
@@ -4129,8 +4269,8 @@
             }, []);
 
             // توليد الشعب الرسمية الـ 29 مع إعدادات ممتحنيها الافتراضية + اللجنة الخاصة
-            const generateDefaultSessions = () => {
-                const examSessions = buildExamSessionsForDate(currentDate);
+            const generateDefaultSessionsForDate = (dateToBuild = currentDate) => {
+                const examSessions = buildExamSessionsForDate(dateToBuild);
                 if (examSessions.length > 0) return examSessions;
                 const config = [
                     { room: "1", grade: "5/1", count: 36 },
@@ -4181,86 +4321,240 @@
                 }));
             };
 
-            const [sessionsData, setSessionsData] = useState(() => {
-                const saved = localStorage.getItem(`exam_sessions_${currentDate}`);
-                const initial = cleanSessionProctorNames(saved ? JSON.parse(saved) : generateDefaultSessions());
-                return ensureSpecialCommitteeSession(initial).map(row => row.grade === SPECIAL_COMMITTEE_GRADE ? {
+
+            const generateDefaultSessions = () => generateDefaultSessionsForDate(currentDate);
+
+            // حماية جذرية من الصفحة البيضاء: أي بيانات تالفة من localStorage أو Firebase يتم إصلاحها قبل دخولها إلى React.
+            const asPlainObject = (value, fallback = {}) => (value && typeof value === 'object' && !Array.isArray(value)) ? value : fallback;
+            const safeJSONParse = (raw, fallback) => {
+                try {
+                    if (!raw || typeof raw !== 'string') return fallback;
+                    const parsed = JSON.parse(raw);
+                    return parsed === undefined || parsed === null ? fallback : parsed;
+                } catch (error) {
+                    console.warn('تم تجاهل بيانات محلية تالفة حتى لا تختفي الشاشة:', error);
+                    return fallback;
+                }
+            };
+            const safeLocalJSON = (key, fallback) => safeJSONParse(localStorage.getItem(key), fallback);
+            const toSafeText = (value, fallback = '') => value === undefined || value === null ? fallback : String(value);
+            const toFixedArray = (value, length, factory) => Array.from({ length }, (_, i) => {
+                const source = Array.isArray(value) ? value[i] : undefined;
+                return factory(source, i);
+            });
+            const stripUndefinedDeep = (value) => {
+                if (value === undefined) return null;
+                if (value === null) return null;
+                if (Array.isArray(value)) return value.map(item => stripUndefinedDeep(item));
+                if (typeof value === 'object') {
+                    const out = {};
+                    Object.entries(value).forEach(([key, val]) => {
+                        if (val !== undefined) out[key] = stripUndefinedDeep(val);
+                    });
+                    return out;
+                }
+                return value;
+            };
+
+            const defaultEnvelopeData = () => ({
+                hour: '',
+                minute: '30',
+                rows: Array.from({ length: 10 }, () => ({ subject: '', minute: '30', hour: '', gradeLabel: '' })),
+                members: Array.from({ length: 5 }, () => '')
+            });
+            const sanitizeEnvelopeData = (value) => {
+                const src = asPlainObject(value, {});
+                return {
+                    ...defaultEnvelopeData(),
+                    ...src,
+                    hour: toSafeText(src.hour),
+                    minute: toSafeText(src.minute, '30'),
+                    meetingHour: toSafeText(src.meetingHour || src.hour || ''),
+                    meetingMinute: toSafeText(src.meetingMinute || src.minute || '30', '30'),
+                    rows: toFixedArray(src.rows, 10, (row) => {
+                        const r = asPlainObject(row, {});
+                        return {
+                            subject: toSafeText(r.subject),
+                            minute: toSafeText(r.minute, '30'),
+                            hour: toSafeText(r.hour),
+                            gradeLabel: toSafeText(r.gradeLabel)
+                        };
+                    }),
+                    members: toFixedArray(src.members, 5, (m) => toSafeText(m))
+                };
+            };
+
+            const defaultDailyReportNotes = () => ({
+                registered: Array(9).fill(''),
+                absentReg: Array(9).fill(''),
+                absentAdult: Array(9).fill(''),
+                absentees: Array.from({ length: 14 }, () => ({ name: '', grade: '', subject: '', isReg: false, isAdult: false })),
+                paperStatus: 'كافية',
+                processingNotes: '',
+                cheatingStatus: 'لا توجد',
+                cheatingDetails: '',
+                complaints: '',
+                teacherAttendance: 'الجميع حاضر',
+                visitors: Array.from({ length: 4 }, () => ({ name: '', job: '' })),
+                otherNotes: ''
+            });
+            const sanitizeDailyReportNotes = (value) => {
+                const src = asPlainObject(value, {});
+                return {
+                    ...defaultDailyReportNotes(),
+                    ...src,
+                    registered: toFixedArray(src.registered, 9, (v) => toSafeText(v)),
+                    absentReg: toFixedArray(src.absentReg, 9, (v) => toSafeText(v)),
+                    absentAdult: toFixedArray(src.absentAdult, 9, (v) => toSafeText(v)),
+                    absentees: toFixedArray(src.absentees, 14, (item) => {
+                        const a = asPlainObject(item, {});
+                        return {
+                            name: toSafeText(a.name),
+                            grade: toSafeText(a.grade),
+                            subject: toSafeText(a.subject),
+                            isReg: !!a.isReg,
+                            isAdult: !!a.isAdult
+                        };
+                    }),
+                    visitors: toFixedArray(src.visitors, 4, (item) => {
+                        const v = asPlainObject(item, {});
+                        return { name: toSafeText(v.name), job: toSafeText(v.job) };
+                    }),
+                    paperStatus: toSafeText(src.paperStatus, 'كافية'),
+                    processingNotes: toSafeText(src.processingNotes),
+                    cheatingStatus: toSafeText(src.cheatingStatus, 'لا توجد'),
+                    cheatingDetails: toSafeText(src.cheatingDetails),
+                    complaints: toSafeText(src.complaints),
+                    teacherAttendance: toSafeText(src.teacherAttendance, 'الجميع حاضر'),
+                    otherNotes: toSafeText(src.otherNotes)
+                };
+            };
+
+            const sanitizeSessionsData = (value, dateToBuild = currentDate, cleanNames = true) => {
+                const fallback = generateDefaultSessionsForDate(dateToBuild);
+                const sourceRows = Array.isArray(value) && value.length ? value : fallback;
+                const normalized = sourceRows.map((row, index) => {
+                    const src = asPlainObject(row, {});
+                    const grade = toSafeText(src.grade || src.className || '');
+                    const room = toSafeText(src.room || src.committeeName || '');
+                    const count = src.count ?? src.registeredNormal ?? '';
+                    return {
+                        ...src,
+                        id: toSafeText(src.id || grade || room || `${dateToBuild}-${index}`),
+                        room,
+                        grade,
+                        count,
+                        gradeLevel: toSafeText(src.gradeLevel || String(grade).split('/')[0] || ''),
+                        subject: toSafeText(src.subject),
+                        registeredNormal: src.registeredNormal ?? count,
+                        registeredAdults: src.registeredAdults ?? '',
+                        absentNormal: src.absentNormal ?? '',
+                        absentAdults: src.absentAdults ?? '',
+                        receiver: toSafeText(src.receiver),
+                        proctorName: toSafeText(src.proctorName),
+                        absenteesNames: toSafeText(src.absenteesNames)
+                    };
+                });
+                const rows = cleanNames ? cleanSessionProctorNames(normalized) : normalized;
+                return ensureSpecialCommitteeSession(rows).map(row => row.grade === SPECIAL_COMMITTEE_GRADE ? {
                     ...row,
                     room: row.room || SPECIAL_COMMITTEE_ROOM,
                     count: row.count || SPECIAL_COMMITTEE_COUNT,
                     registeredNormal: row.registeredNormal || SPECIAL_COMMITTEE_COUNT,
-                    proctorName: ''
-                } : { ...row, proctorName: '' });
-            });
+                    proctorName: cleanNames ? '' : toSafeText(row.proctorName)
+                } : row);
+            };
 
-            const [envelopeData, setEnvelopeData] = useState(() => {
-                const saved = localStorage.getItem(`exam_envelopes_${currentDate}`);
-                return saved ? JSON.parse(saved) : {
-                    hour: '',
-                    minute: '30',
-                    rows: Array.from({ length: 10 }, () => ({ subject: '', minute: '30', hour: '' })),
-                    members: Array.from({ length: 5 }, () => '')
-                };
-            });
-
-            const [dailyReportNotes, setDailyReportNotes] = useState(() => {
-                const saved = localStorage.getItem(`exam_daily_notes_${currentDate}`);
-                if (saved) {
-                    const parsed = JSON.parse(saved);
-                    return {
-                        ...parsed,
-                        absentees: Array.from({ length: 14 }, (_, i) => ({
-                            name: parsed.absentees?.[i]?.name || '',
-                            grade: parsed.absentees?.[i]?.grade || '',
-                            subject: parsed.absentees?.[i]?.subject || '',
-                            isReg: false,
-                            isAdult: false
-                        }))
-                    };
-                }
+            const sanitizeProctoringExtraPreserve = (value) => {
+                const src = asPlainObject(value, {});
                 return {
-                    registered: Array(9).fill(''),
-                    absentReg: Array(9).fill(''),
-                    absentAdult: Array(9).fill(''),
-                    absentees: Array.from({ length: 14 }, () => ({ name: '', grade: '', subject: '', isReg: false, isAdult: false })),
-                    paperStatus: 'كافية',
-                    processingNotes: '',
-                    cheatingStatus: 'لا توجد',
-                    cheatingDetails: '',
-                    complaints: '',
-                    teacherAttendance: 'الجميع حاضر',
-                    visitors: Array.from({ length: 4 }, () => ({ name: '', job: '' })),
-                    otherNotes: ''
+                    floorProctors: toFixedArray(src.floorProctors, 2, (item) => {
+                        const fp = asPlainObject(item, {});
+                        return { name: toSafeText(fp.name), location: toSafeText(fp.location) };
+                    }),
+                    standbyTeachers: toFixedArray(src.standbyTeachers, 2, (item) => toSafeText(item))
                 };
-            });
-
-            const [proctoringExtra, setProctoringExtra] = useState(() => {
-                const saved = localStorage.getItem(`exam_proctoring_extra_${currentDate}`);
-                return cleanProctoringExtraData(saved ? JSON.parse(saved) : {});
-            });
-
-            const [secondPeriodProctoring, setSecondPeriodProctoring] = useState(() => {
-                const saved = localStorage.getItem(`exam_second_period_proctoring_${currentDate}`);
-                return cleanSecondPeriodProctoringData(saved ? JSON.parse(saved) : {});
-            });
-
-            const [individualAbsentee, setIndividualAbsentee] = useState(() => {
-                const saved = localStorage.getItem(`exam_individual_absentee_${currentDate}`);
-                return saved ? JSON.parse(saved) : {
-                    name: '', isReg: true, isAdult: false, grade: '', subject: '', proctor1: '', proctor1Sign: '', proctor2: '', proctor2Sign: ''
+            };
+            const sanitizeSecondPeriodProctoringPreserve = (value) => {
+                const src = asPlainObject(value, {});
+                const roomsSource = asPlainObject(src.rooms, {});
+                const rooms = Object.fromEntries(Object.entries(roomsSource).map(([key, room]) => {
+                    const r = asPlainObject(room, {});
+                    return [key, { ...r, proctorName: toSafeText(r.proctorName) }];
+                }));
+                return {
+                    rooms,
+                    floorProctors: toFixedArray(src.floorProctors, 2, (item) => {
+                        const fp = asPlainObject(item, {});
+                        return { name: toSafeText(fp.name), location: toSafeText(fp.location) };
+                    }),
+                    standbyTeachers: toFixedArray(src.standbyTeachers, 2, (item) => toSafeText(item))
                 };
+            };
+            const defaultIndividualAbsentee = () => ({
+                name: '', isReg: true, isAdult: false, grade: '', subject: '', proctor1: '', proctor1Sign: '', proctor2: '', proctor2Sign: ''
             });
-
-            const [violationData, setViolationData] = useState(() => {
-                const saved = localStorage.getItem(`exam_violation_${currentDate}`);
-                return saved ? JSON.parse(saved) : {
-                    name: '', isReg: true, isAdult: false, subject: '', date: currentDate, time: '',
-                    selectedInfractions: {}, infractionCounts: { a: '', b: '', c: '' },
-                    impersonatorName: '', impersonatorId: '', impersonatorRelation: '', impersonatorJob: '', impersonatorWorkplace: '', impersonatorPhone: '', impersonatorTime: '',
-                    proctor1Name: '', proctor1Id: '', proctor1Statement: '', proctor2Name: '', proctor2Id: '', proctor2Statement: '',
-                    committeeStatement: '', directorStatement: ''
+            const sanitizeIndividualAbsentee = (value) => {
+                const src = asPlainObject(value, {});
+                return { ...defaultIndividualAbsentee(), ...src,
+                    name: toSafeText(src.name), grade: toSafeText(src.grade), subject: toSafeText(src.subject),
+                    proctor1: toSafeText(src.proctor1), proctor1Sign: toSafeText(src.proctor1Sign), proctor2: toSafeText(src.proctor2), proctor2Sign: toSafeText(src.proctor2Sign),
+                    isReg: src.isReg === undefined ? true : !!src.isReg, isAdult: !!src.isAdult
                 };
+            };
+            const defaultViolationData = (dateToBuild = currentDate) => ({
+                name: '', isReg: true, isAdult: false, subject: '', date: dateToBuild, time: '',
+                selectedInfractions: {}, infractionCounts: { a: '', b: '', c: '' },
+                impersonatorName: '', impersonatorId: '', impersonatorRelation: '', impersonatorJob: '', impersonatorWorkplace: '', impersonatorPhone: '', impersonatorTime: '',
+                proctor1Name: '', proctor1Id: '', proctor1Statement: '', proctor2Name: '', proctor2Id: '', proctor2Statement: '',
+                committeeStatement: '', directorStatement: ''
             });
+            const sanitizeViolationData = (value, dateToBuild = currentDate) => {
+                const src = asPlainObject(value, {});
+                return {
+                    ...defaultViolationData(dateToBuild),
+                    ...src,
+                    selectedInfractions: asPlainObject(src.selectedInfractions, {}),
+                    infractionCounts: { a: toSafeText(src.infractionCounts?.a), b: toSafeText(src.infractionCounts?.b), c: toSafeText(src.infractionCounts?.c) },
+                    date: toSafeText(src.date, dateToBuild)
+                };
+            };
+            const sanitizeSignaturesMap = (value) => Object.fromEntries(
+                Object.entries(asPlainObject(value, {})).filter(([key, val]) => key && typeof val === 'string')
+            );
+            const getInitialSessionsFromLocal = (dateToLoad = currentDate) => sanitizeSessionsData(
+                safeLocalJSON(`exam_sessions_${dateToLoad}`, null),
+                dateToLoad,
+                true
+            );
+            const sanitizeIncomingCloudPayload = (payload = {}, dateToLoad = currentDate) => {
+                const data = asPlainObject(payload, {});
+                return stripUndefinedDeep({
+                    currentDate: dateToLoad,
+                    sessionsData: sanitizeSessionsData(data.sessionsData, dateToLoad, false),
+                    envelopeData: sanitizeEnvelopeData(data.envelopeData),
+                    dailyReportNotes: sanitizeDailyReportNotes(data.dailyReportNotes),
+                    proctoringExtra: sanitizeProctoringExtraPreserve(data.proctoringExtra),
+                    secondPeriodProctoring: sanitizeSecondPeriodProctoringPreserve(data.secondPeriodProctoring),
+                    individualAbsentee: sanitizeIndividualAbsentee(data.individualAbsentee),
+                    violationData: sanitizeViolationData(data.violationData, dateToLoad),
+                    signaturesStoredSeparately: true
+                });
+            };
+
+            const [sessionsData, setSessionsData] = useState(() => getInitialSessionsFromLocal(currentDate));
+
+            const [envelopeData, setEnvelopeData] = useState(() => sanitizeEnvelopeData(safeLocalJSON(`exam_envelopes_${currentDate}`, defaultEnvelopeData())));
+
+            const [dailyReportNotes, setDailyReportNotes] = useState(() => sanitizeDailyReportNotes(safeLocalJSON(`exam_daily_notes_${currentDate}`, defaultDailyReportNotes())));
+
+            const [proctoringExtra, setProctoringExtra] = useState(() => sanitizeProctoringExtraPreserve(safeLocalJSON(`exam_proctoring_extra_${currentDate}`, {})));
+
+            const [secondPeriodProctoring, setSecondPeriodProctoring] = useState(() => sanitizeSecondPeriodProctoringPreserve(safeLocalJSON(`exam_second_period_proctoring_${currentDate}`, {})));
+
+            const [individualAbsentee, setIndividualAbsentee] = useState(() => sanitizeIndividualAbsentee(safeLocalJSON(`exam_individual_absentee_${currentDate}`, defaultIndividualAbsentee())));
+
+            const [violationData, setViolationData] = useState(() => sanitizeViolationData(safeLocalJSON(`exam_violation_${currentDate}`, defaultViolationData(currentDate)), currentDate));
 
             // تحميل كود التوقيع الرقمي المخزن محلياً
             const [signatures, setSignatures] = useState(() => loadSignaturesForDate(currentDate));
@@ -4280,18 +4574,17 @@
 
             // التواقيع تحفظ في مستند التاريخ نفسه داخل exam_records لتعمل المزامنة بين الأجهزة.
             // ولا تتأثر بالحفظ العام للتقارير.
-            const getCloudPayload = () => ({
+            const getCloudPayload = () => stripUndefinedDeep({
                 currentDate,
-                sessionsData,
-                envelopeData,
-                dailyReportNotes,
-                proctoringExtra,
-                secondPeriodProctoring,
-                individualAbsentee,
-                violationData,
+                sessionsData: sanitizeSessionsData(sessionsData, currentDate, false),
+                envelopeData: sanitizeEnvelopeData(envelopeData),
+                dailyReportNotes: sanitizeDailyReportNotes(dailyReportNotes),
+                proctoringExtra: sanitizeProctoringExtraPreserve(proctoringExtra),
+                secondPeriodProctoring: sanitizeSecondPeriodProctoringPreserve(secondPeriodProctoring),
+                individualAbsentee: sanitizeIndividualAbsentee(individualAbsentee),
+                violationData: sanitizeViolationData(violationData, currentDate),
                 // مهم جداً: لا نحفظ صور التواقيع Base64 داخل مستند اليوم الرئيسي.
-                // Firestore له حد لحجم المستند، لذلك تحفظ التواقيع اليومية في Subcollection مستقلة:
-                // exam_records / currentDate / signatures / signatureId
+                // Firestore له حد لحجم المستند، لذلك تحفظ التواقيع اليومية في Subcollection مستقلة.
                 signaturesStoredSeparately: true
             });
 
@@ -4310,7 +4603,8 @@
 
             const saveSingleSignatureToCloud = async (id, dataUrl, deleted = false) => {
                 if (!cloudDB || !id) return false;
-                const signatureDate = currentDate;
+                const signatureDate = getSafeCurrentDate(currentDate, CONTROL_DEFAULT_DATE);
+                if (!isSafeFirestoreDateKey(signatureDate)) return false;
                 const indexRef = cloudDB.doc(cloudDB.db, "exam_signature_indexes", signatureDate);
                 const itemRef = cloudDB.doc(cloudDB.db, "exam_signature_items", getSignatureDocumentId(signatureDate, id));
 
@@ -4359,14 +4653,15 @@
             };
 
             const loadSignaturesMapFromCloud = async (dateToLoad = currentDate) => {
-                if (!cloudDB) return {};
+                const safeDateToLoad = getSafeCurrentDate(dateToLoad, currentDate || CONTROL_DEFAULT_DATE);
+                if (!cloudDB || !isSafeFirestoreDateKey(safeDateToLoad)) return {};
                 try {
-                    const indexRef = cloudDB.doc(cloudDB.db, "exam_signature_indexes", dateToLoad);
+                    const indexRef = cloudDB.doc(cloudDB.db, "exam_signature_indexes", safeDateToLoad);
                     const indexSnap = await cloudDB.getDoc(indexRef);
                     if (!indexSnap.exists()) return {};
                     const ids = Array.isArray(indexSnap.data().ids) ? indexSnap.data().ids : [];
                     const entries = await Promise.all(ids.map(async (id) => {
-                        const itemRef = cloudDB.doc(cloudDB.db, "exam_signature_items", getSignatureDocumentId(dateToLoad, id));
+                        const itemRef = cloudDB.doc(cloudDB.db, "exam_signature_items", getSignatureDocumentId(safeDateToLoad, id));
                         const itemSnap = await cloudDB.getDoc(itemRef);
                         if (!itemSnap.exists()) return null;
                         const item = itemSnap.data() || {};
@@ -4546,7 +4841,7 @@
                 // هنا نحافظ فقط على التواقيع المحلية والكنترول والتواقيع المعلقة حتى لا تختفي بعد التحديث.
                 const mergedSignatures = {
                     ...localSignatures,
-                    ...(data.controlSignatures || {}),
+                    ...sanitizeSignaturesMap(data.controlSignatures || {}),
                     ...globalControlSignatures,
                     ...pending
                 };
@@ -4554,83 +4849,76 @@
                 return { mergedSignatures, mergedDeletes: {} };
             };
 
-            const applyCloudPayload = (data) => {
-                if (!data) return;
-                setSessionsData(data.sessionsData || generateDefaultSessions());
-                setEnvelopeData(data.envelopeData || {
-                    hour: '',
-                    minute: '30',
-                    rows: Array.from({ length: 10 }, () => ({ subject: '', minute: '30', hour: '' })),
-                    members: Array.from({ length: 5 }, () => '')
-                });
-                setDailyReportNotes(data.dailyReportNotes ? {
-                    ...data.dailyReportNotes,
-                    absentees: Array.from({ length: 14 }, (_, i) => ({
-                        name: data.dailyReportNotes.absentees?.[i]?.name || '',
-                        grade: data.dailyReportNotes.absentees?.[i]?.grade || '',
-                        subject: data.dailyReportNotes.absentees?.[i]?.subject || '',
-                        isReg: false,
-                        isAdult: false
-                    }))
-                } : {
-                    registered: Array(9).fill(''),
-                    absentReg: Array(9).fill(''),
-                    absentAdult: Array(9).fill(''),
-                    absentees: Array.from({ length: 14 }, () => ({ name: '', grade: '', subject: '', isReg: false, isAdult: false })),
-                    paperStatus: 'كافية',
-                    processingNotes: '',
-                    cheatingStatus: 'لا توجد',
-                    cheatingDetails: '',
-                    complaints: '',
-                    teacherAttendance: 'الجميع حاضر',
-                    visitors: Array.from({ length: 4 }, () => ({ name: '', job: '' })),
-                    otherNotes: ''
-                });
-                setProctoringExtra(data.proctoringExtra || {
-                    floorProctors: Array.from({ length: 2 }, () => ({ name: '', location: '' })),
-                    standbyTeachers: Array.from({ length: 2 }, () => '')
-                });
-                setSecondPeriodProctoring(data.secondPeriodProctoring || {
-                    rooms: {},
-                    floorProctors: Array.from({ length: 2 }, () => ({ name: '', location: '' })),
-                    standbyTeachers: Array.from({ length: 2 }, () => '')
-                });
-                setIndividualAbsentee(data.individualAbsentee || {
-                    name: '', isReg: true, isAdult: false, grade: '', subject: '', proctor1: '', proctor1Sign: '', proctor2: '', proctor2Sign: ''
-                });
-                setViolationData(data.violationData || {
-                    name: '', isReg: true, isAdult: false, subject: '', date: currentDate, time: '',
-                    selectedInfractions: {}, infractionCounts: { a: '', b: '', c: '' },
-                    impersonatorName: '', impersonatorId: '', impersonatorRelation: '', impersonatorJob: '', impersonatorWorkplace: '', impersonatorPhone: '', impersonatorTime: '',
-                    proctor1Name: '', proctor1Id: '', proctor1Statement: '', proctor2Name: '', proctor2Id: '', proctor2Statement: '',
-                    committeeStatement: '', directorStatement: ''
-                });
-                const { mergedSignatures, mergedDeletes } = buildMergedSignatures(data, data.currentDate || currentDate);
-                setSignatures(mergedSignatures);
-                setSignatureDeletes(mergedDeletes);
-                localStorage.setItem(`exam_signatures_${data.currentDate || currentDate}`, JSON.stringify(mergedSignatures));
-                saveSignatureDeletesForDate(data.currentDate || currentDate, mergedDeletes);
-                saveGlobalControlSignatures(mergedSignatures);
-                setHasUnsavedChanges(false);
+            const applyCloudPayload = (data, options = {}) => {
+                if (!data || typeof data !== 'object') return;
+                const dateToLoad = options.dateToLoad || data.currentDate || currentDate;
+                const safeDateToLoad = getSafeCurrentDate(dateToLoad, currentDate || CONTROL_DEFAULT_DATE);
+                const partial = !!options.partial;
+                const skipSignatures = !!options.skipSignatures;
+
+                try {
+                    if (Array.isArray(data.sessionsData)) setSessionsData(sanitizeSessionsData(data.sessionsData, dateToLoad, false));
+                    else if (!partial) setSessionsData(sanitizeSessionsData(null, dateToLoad, false));
+
+                    if (data.envelopeData && typeof data.envelopeData === 'object') setEnvelopeData(sanitizeEnvelopeData(data.envelopeData));
+                    else if (!partial) setEnvelopeData(defaultEnvelopeData());
+
+                    if (data.dailyReportNotes && typeof data.dailyReportNotes === 'object') setDailyReportNotes(sanitizeDailyReportNotes(data.dailyReportNotes));
+                    else if (!partial) setDailyReportNotes(defaultDailyReportNotes());
+
+                    if (data.proctoringExtra && typeof data.proctoringExtra === 'object') setProctoringExtra(sanitizeProctoringExtraPreserve(data.proctoringExtra));
+                    else if (!partial) setProctoringExtra(sanitizeProctoringExtraPreserve({}));
+
+                    if (data.secondPeriodProctoring && typeof data.secondPeriodProctoring === 'object') setSecondPeriodProctoring(sanitizeSecondPeriodProctoringPreserve(data.secondPeriodProctoring));
+                    else if (!partial) setSecondPeriodProctoring(sanitizeSecondPeriodProctoringPreserve({}));
+
+                    if (data.individualAbsentee && typeof data.individualAbsentee === 'object') setIndividualAbsentee(sanitizeIndividualAbsentee(data.individualAbsentee));
+                    else if (!partial) setIndividualAbsentee(defaultIndividualAbsentee());
+
+                    if (data.violationData && typeof data.violationData === 'object') setViolationData(sanitizeViolationData(data.violationData, dateToLoad));
+                    else if (!partial) setViolationData(defaultViolationData(dateToLoad));
+
+                    if (!skipSignatures) {
+                        const { mergedSignatures, mergedDeletes } = buildMergedSignatures(data, dateToLoad);
+                        const safeSignatures = sanitizeSignaturesMap(mergedSignatures);
+                        setSignatures(safeSignatures);
+                        setSignatureDeletes(asPlainObject(mergedDeletes, {}));
+                        localStorage.setItem(`exam_signatures_${safeDateToLoad}`, JSON.stringify(safeSignatures));
+                        saveSignatureDeletesForDate(safeDateToLoad, asPlainObject(mergedDeletes, {}));
+                        saveGlobalControlSignatures(safeSignatures);
+                    }
+                    setHasUnsavedChanges(false);
+                } catch (error) {
+                    console.error('تم منع انهيار الشاشة أثناء تحميل بيانات Firebase:', error);
+                    setSessionsData(sanitizeSessionsData(null, dateToLoad, false));
+                    setEnvelopeData(defaultEnvelopeData());
+                    setDailyReportNotes(defaultDailyReportNotes());
+                    setProctoringExtra(sanitizeProctoringExtraPreserve({}));
+                    setSecondPeriodProctoring(sanitizeSecondPeriodProctoringPreserve({}));
+                    setIndividualAbsentee(defaultIndividualAbsentee());
+                    setViolationData(defaultViolationData(dateToLoad));
+                }
             };
 
             const saveExactPayloadToCloud = async (override = {}) => {
-                if (!cloudDB) return false;
-                const docRef = cloudDB.doc(cloudDB.db, "exam_records", currentDate);
+                const safeDateKey = getSafeCurrentDate(currentDate, CONTROL_DEFAULT_DATE);
+                if (!cloudDB || !isSafeFirestoreDateKey(safeDateKey)) return false;
+                const docRef = cloudDB.doc(cloudDB.db, "exam_records", safeDateKey);
                 await cloudDB.setDoc(docRef, {
                     ...getCloudPayload(),
-                    ...override,
+                    ...stripUndefinedDeep(override || {}),
                     updatedAt: cloudDB.serverTimestamp()
                 }, { merge: true });
                 return true;
             };
 
             const saveRealtimeToCloud = async (override = {}) => {
-                if (!cloudDB || suppressAutoSaveRef.current) return false;
-                const docRef = cloudDB.doc(cloudDB.db, "exam_records", currentDate);
+                const safeDateKey = getSafeCurrentDate(currentDate, CONTROL_DEFAULT_DATE);
+                if (!cloudDB || suppressAutoSaveRef.current || !isSafeFirestoreDateKey(safeDateKey)) return false;
+                const docRef = cloudDB.doc(cloudDB.db, "exam_records", safeDateKey);
                 await cloudDB.setDoc(docRef, {
                     ...getCloudPayload(),
-                    ...override,
+                    ...stripUndefinedDeep(override || {}),
                     updatedAt: cloudDB.serverTimestamp()
                 }, { merge: true });
                 return true;
@@ -4643,9 +4931,15 @@
                     return;
                 }
 
+                const safeDateKey = getSafeCurrentDate(currentDate, CONTROL_DEFAULT_DATE);
+                if (!isSafeFirestoreDateKey(safeDateKey)) {
+                    setAlertMessage({ text: "تاريخ غير صالح. تم تحويله تلقائياً إلى صيغة آمنة." });
+                    setCurrentDate(CONTROL_DEFAULT_DATE);
+                    return;
+                }
                 setIsSaving(true);
                 try {
-                    const docRef = cloudDB.doc(cloudDB.db, "exam_records", currentDate);
+                    const docRef = cloudDB.doc(cloudDB.db, "exam_records", safeDateKey);
                     await cloudDB.setDoc(docRef, {
                         ...getCloudPayload(),
                         updatedAt: cloudDB.serverTimestamp()
@@ -4665,25 +4959,56 @@
             };
 
             const loadFromCloud = async (dateToLoad = currentDate) => {
-                if (!cloudDB) return false;
+                const safeDateToLoad = getSafeCurrentDate(dateToLoad, currentDate || CONTROL_DEFAULT_DATE);
+                if (!cloudDB || !safeDateToLoad || !isSafeFirestoreDateKey(safeDateToLoad)) return false;
                 setIsSaving(true);
                 try {
-                    const docRef = cloudDB.doc(cloudDB.db, "exam_records", dateToLoad);
-                    const snap = await cloudDB.getDoc(docRef);
+                    const docRef = cloudDB.doc(cloudDB.db, "exam_records", safeDateToLoad);
+                    const snap = await Promise.race([
+                        cloudDB.getDoc(docRef),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase load timeout')), 9000))
+                    ]);
                     if (snap.exists()) {
-                        const payload = snap.data() || {};
-                        applyCloudPayload(payload);
-                        const { mergedSignatures, mergedDeletes } = buildMergedSignatures(payload, dateToLoad);
-                        localStorage.setItem(`exam_signatures_${dateToLoad}`, JSON.stringify(mergedSignatures));
-                        saveSignatureDeletesForDate(dateToLoad, mergedDeletes);
-                        setAlertMessage({ text: "تم تحميل بيانات هذا التاريخ من السحابة." });
-                        setTimeout(() => setAlertMessage(null), 3000);
+                        const payload = asPlainObject(snap.data(), {});
+                        applyCloudPayload(payload, { partial: false, dateToLoad: safeDateToLoad });
+
+                        // إصلاح المستند نفسه في Firebase بعد تحميله، بدون حذف التواقيع المستقلة.
+                        // هذا يمنع تكرار الصفحة البيضاء في الأجهزة الأخرى إذا كان المستند القديم ناقصاً أو غير متوافق.
+                        try {
+                            const repaired = sanitizeIncomingCloudPayload(payload, safeDateToLoad);
+                            await cloudDB.setDoc(docRef, {
+                                ...repaired,
+                                repairedByApp: true,
+                                repairedAt: cloudDB.serverTimestamp(),
+                                updatedAt: cloudDB.serverTimestamp()
+                            }, { merge: true });
+                        } catch (repairError) {
+                            console.warn('تعذر إصلاح مستند Firebase تلقائياً، سيتم الاستمرار بالنسخة الآمنة محلياً:', repairError);
+                        }
+
+                        const { mergedSignatures, mergedDeletes } = buildMergedSignatures(payload, safeDateToLoad);
+                        const safeSignatures = sanitizeSignaturesMap(mergedSignatures);
+                        localStorage.setItem(`exam_signatures_${safeDateToLoad}`, JSON.stringify(safeSignatures));
+                        saveSignatureDeletesForDate(safeDateToLoad, asPlainObject(mergedDeletes, {}));
+                        setAlertMessage({ text: "تم تحميل بيانات هذا التاريخ من السحابة بأمان." });
+                        setTimeout(() => setAlertMessage(null), 2500);
                         return true;
+                    }
+
+                    // إذا لم يوجد مستند لهذا التاريخ ننشئ مستنداً آمناً فارغاً حتى لا يعود Firebase بوثيقة ناقصة لاحقاً.
+                    try {
+                        await cloudDB.setDoc(docRef, {
+                            ...sanitizeIncomingCloudPayload({}, safeDateToLoad),
+                            createdSafely: true,
+                            updatedAt: cloudDB.serverTimestamp()
+                        }, { merge: true });
+                    } catch (createError) {
+                        console.warn('تعذر إنشاء مستند آمن للتاريخ الجديد:', createError);
                     }
                     return false;
                 } catch (error) {
                     console.error("Cloud load error:", error);
-                    setAlertMessage({ text: "تعذر تحميل البيانات من السحابة." });
+                    setAlertMessage({ text: "تعذر تحميل بيانات Firebase لهذا التاريخ، تم فتح نسخة آمنة محلياً بدون صفحة بيضاء." });
                     setTimeout(() => setAlertMessage(null), 4000);
                     return false;
                 } finally {
@@ -4691,79 +5016,79 @@
                 }
             };
 
-            // تحميل وتحديث البيانات لكل تاريخ محدد (عند تغيير التاريخ)
+            // تحميل وتحديث البيانات لكل تاريخ محدد (عند تغيير التاريخ) - آمن ضد بيانات localStorage/Firebase التالفة.
             useEffect(() => {
+                let cancelled = false;
+                const dateToLoad = getSafeCurrentDate(currentDate, CONTROL_DEFAULT_DATE);
+                if (dateToLoad !== currentDate) {
+                    try { localStorage.setItem("savedExamDate", dateToLoad); } catch (e) {}
+                    setCurrentDate(dateToLoad);
+                    return;
+                }
+                const safetyTimer = setTimeout(() => {
+                    if (!cancelled) {
+                        setIsSaving(false);
+                        suppressAutoSaveRef.current = false;
+                    }
+                }, 10000);
+
+                const unlockAutoSave = () => {
+                    if (cancelled) return;
+                    setTimeout(() => {
+                        if (!cancelled) {
+                            suppressAutoSaveRef.current = false;
+                            setIsSaving(false);
+                        }
+                    }, 600);
+                };
+
                 suppressAutoSaveRef.current = true;
                 pendingLocalSignaturesRef.current = {};
                 clearTimeout(autoSaveTimerRef.current);
-                const savedSessions = localStorage.getItem(`exam_sessions_${currentDate}`);
-                const loadedSessions = cleanSessionProctorNames(savedSessions ? JSON.parse(savedSessions) : generateDefaultSessions());
-                setSessionsData(ensureSpecialCommitteeSession(loadedSessions).map(row => row.grade === SPECIAL_COMMITTEE_GRADE ? {
-                    ...row,
-                    room: row.room || SPECIAL_COMMITTEE_ROOM,
-                    count: row.count || SPECIAL_COMMITTEE_COUNT,
-                    registeredNormal: row.registeredNormal || SPECIAL_COMMITTEE_COUNT,
-                    proctorName: ''
-                } : { ...row, proctorName: '' }));
 
-                const savedEnvelopes = localStorage.getItem(`exam_envelopes_${currentDate}`);
-                setEnvelopeData(savedEnvelopes ? JSON.parse(savedEnvelopes) : {
-                    hour: '',
-                    minute: '30',
-                    rows: Array.from({ length: 10 }, () => ({ subject: '', minute: '30', hour: '' })),
-                    members: Array.from({ length: 5 }, () => '')
-                });
+                try {
+                    setSessionsData(getInitialSessionsFromLocal(dateToLoad));
+                    setEnvelopeData(sanitizeEnvelopeData(safeLocalJSON(`exam_envelopes_${dateToLoad}`, defaultEnvelopeData())));
+                    setDailyReportNotes(sanitizeDailyReportNotes(safeLocalJSON(`exam_daily_notes_${dateToLoad}`, defaultDailyReportNotes())));
+                    setProctoringExtra(sanitizeProctoringExtraPreserve(safeLocalJSON(`exam_proctoring_extra_${dateToLoad}`, {})));
+                    setSecondPeriodProctoring(sanitizeSecondPeriodProctoringPreserve(safeLocalJSON(`exam_second_period_proctoring_${dateToLoad}`, {})));
+                    setIndividualAbsentee(sanitizeIndividualAbsentee(safeLocalJSON(`exam_individual_absentee_${dateToLoad}`, defaultIndividualAbsentee())));
+                    setViolationData(sanitizeViolationData(safeLocalJSON(`exam_violation_${dateToLoad}`, defaultViolationData(dateToLoad)), dateToLoad));
+                    setSignatures(sanitizeSignaturesMap(loadSignaturesForDate(dateToLoad)));
+                    setSignatureDeletes(asPlainObject(loadSignatureDeletesForDate(dateToLoad), {}));
 
-                const savedDailyNotes = localStorage.getItem(`exam_daily_notes_${currentDate}`);
-                setDailyReportNotes(savedDailyNotes ? JSON.parse(savedDailyNotes) : {
-                    registered: Array(9).fill(''),
-                    absentReg: Array(9).fill(''),
-                    absentAdult: Array(9).fill(''),
-                    absentees: Array.from({ length: 14 }, () => ({ name: '', grade: '', subject: '', isReg: false, isAdult: false })),
-                    paperStatus: 'كافية',
-                    processingNotes: '',
-                    cheatingStatus: 'لا توجد',
-                    cheatingDetails: '',
-                    complaints: '',
-                    teacherAttendance: 'الجميع حاضر',
-                    visitors: Array.from({ length: 4 }, () => ({ name: '', job: '' })),
-                    otherNotes: ''
-                });
+                    const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+                    const d = new Date(String(dateToLoad) + 'T00:00:00');
+                    setDayName(Number.isNaN(d.getTime()) ? '' : days[d.getDay()]);
+                    try { localStorage.setItem('control_last_safe_date', dateToLoad); } catch (e) {}
+                    setHasUnsavedChanges(false);
+                } catch (error) {
+                    console.error('تم إصلاح خطأ بيانات التاريخ ومنع اختفاء الشاشة:', error);
+                    setSessionsData(sanitizeSessionsData(null, dateToLoad, false));
+                    setEnvelopeData(defaultEnvelopeData());
+                    setDailyReportNotes(defaultDailyReportNotes());
+                    setProctoringExtra(sanitizeProctoringExtraPreserve({}));
+                    setSecondPeriodProctoring(sanitizeSecondPeriodProctoringPreserve({}));
+                    setIndividualAbsentee(defaultIndividualAbsentee());
+                    setViolationData(defaultViolationData(dateToLoad));
+                    setSignatures({});
+                    setSignatureDeletes({});
+                }
 
-                const savedProctoringExtra = localStorage.getItem(`exam_proctoring_extra_${currentDate}`);
-                setProctoringExtra(cleanProctoringExtraData(savedProctoringExtra ? JSON.parse(savedProctoringExtra) : {}));
-
-                const savedSecondPeriodProctoring = localStorage.getItem(`exam_second_period_proctoring_${currentDate}`);
-                setSecondPeriodProctoring(cleanSecondPeriodProctoringData(savedSecondPeriodProctoring ? JSON.parse(savedSecondPeriodProctoring) : {}));
-
-                const savedIndividualAbsentee = localStorage.getItem(`exam_individual_absentee_${currentDate}`);
-                setIndividualAbsentee(savedIndividualAbsentee ? JSON.parse(savedIndividualAbsentee) : {
-                    name: '', isReg: true, isAdult: false, grade: '', subject: '', proctor1: '', proctor1Sign: '', proctor2: '', proctor2Sign: ''
-                });
-
-                const savedViolation = localStorage.getItem(`exam_violation_${currentDate}`);
-                setViolationData(savedViolation ? JSON.parse(savedViolation) : {
-                    name: '', isReg: true, isAdult: false, subject: '', date: currentDate, time: '',
-                    selectedInfractions: {}, infractionCounts: { a: '', b: '', c: '' },
-                    impersonatorName: '', impersonatorId: '', impersonatorRelation: '', impersonatorJob: '', impersonatorWorkplace: '', impersonatorPhone: '', impersonatorTime: '',
-                    proctor1Name: '', proctor1Id: '', proctor1Statement: '', proctor2Name: '', proctor2Id: '', proctor2Statement: '',
-                    committeeStatement: '', directorStatement: ''
-                });
-
-                setSignatures(loadSignaturesForDate(currentDate));
-                setSignatureDeletes(loadSignatureDeletesForDate(currentDate));
-
-                const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-                const d = new Date(currentDate);
-                setDayName(days[d.getDay()]);
-                setHasUnsavedChanges(false);
                 if (cloudDB) {
-                    loadFromCloud(currentDate).finally(() => {
-                        setTimeout(() => { suppressAutoSaveRef.current = false; }, 800);
+                    loadFromCloud(dateToLoad).finally(() => {
+                        clearTimeout(safetyTimer);
+                        unlockAutoSave();
                     });
                 } else {
-                    setTimeout(() => { suppressAutoSaveRef.current = false; }, 800);
+                    clearTimeout(safetyTimer);
+                    unlockAutoSave();
                 }
+
+                return () => {
+                    cancelled = true;
+                    clearTimeout(safetyTimer);
+                };
             }, [currentDate, cloudDB]);
 
             // مزامنة التواقيع مباشرة بين الأجهزة من المسار:
@@ -4771,14 +5096,22 @@
             // ملاحظة مهمة: نعتمد على docChanges بدلاً من استبدال كل الخريطة، حتى لا يختفي توقيع محلي
             // بسبب Snapshot قديم أو فارغ، وحتى يضاف توقيع الجهاز الآخر فور وصوله.
             useEffect(() => {
-                if (!cloudDB || !cloudDB.collection || !cloudDB.onSnapshot || !currentDate) return;
+                const safeDateKey = getSafeCurrentDate(currentDate, CONTROL_DEFAULT_DATE);
+                if (!cloudDB || !cloudDB.collection || !cloudDB.onSnapshot || !safeDateKey || !isSafeFirestoreDateKey(safeDateKey)) return;
 
-                const signaturesRef = cloudDB.collection(
-                    cloudDB.db,
-                    "exam_records",
-                    currentDate,
-                    "signatures"
-                );
+                let signaturesRef;
+                try {
+                    signaturesRef = cloudDB.collection(
+                        cloudDB.db,
+                        "exam_records",
+                        safeDateKey,
+                        "signatures"
+                    );
+                } catch (error) {
+                    console.error('مسار تواقيع Firebase غير آمن لهذا التاريخ:', currentDate, error);
+                    setIsSaving(false);
+                    return;
+                }
 
                 const applySignatureSnapshot = (snapshot, sourceLabel = 'onSnapshot') => {
                     if (!snapshot) return;
@@ -4805,7 +5138,7 @@
                                 const deleteTime = data.clientUpdatedAt || Date.now();
                                 setSignatureDeletes(prevDeletes => {
                                     const updated = { ...(prevDeletes || {}), [sigId]: deleteTime };
-                                    saveSignatureDeletesForDate(currentDate, updated);
+                                    saveSignatureDeletesForDate(safeDateKey, updated);
                                     return updated;
                                 });
                                 return;
@@ -4819,9 +5152,9 @@
                             }
                         });
 
-                        localStorage.setItem(`exam_signatures_${currentDate}`, JSON.stringify(merged));
+                        localStorage.setItem(`exam_signatures_${safeDateKey}`, JSON.stringify(merged));
                         saveGlobalControlSignatures(merged);
-                        console.log(`تمت مزامنة التواقيع من Firebase (${sourceLabel})`, currentDate, Object.keys(merged).length);
+                        console.log(`تمت مزامنة التواقيع من Firebase (${sourceLabel})`, safeDateKey, Object.keys(merged).length);
                         return merged;
                     });
                 };
@@ -4846,9 +5179,17 @@
 
             // مزامنة مباشرة بين الأجهزة: كل الأجهزة تستمع لنفس مستند التاريخ داخل exam_records.
             useEffect(() => {
-                if (!cloudDB || !cloudDB.onSnapshot || !currentDate) return;
+                const safeDateKey = getSafeCurrentDate(currentDate, CONTROL_DEFAULT_DATE);
+                if (!cloudDB || !cloudDB.onSnapshot || !safeDateKey || !isSafeFirestoreDateKey(safeDateKey)) return;
 
-                const docRef = cloudDB.doc(cloudDB.db, "exam_records", currentDate);
+                let docRef;
+                try {
+                    docRef = cloudDB.doc(cloudDB.db, "exam_records", safeDateKey);
+                } catch (error) {
+                    console.error('مسار Firebase غير آمن لهذا التاريخ:', currentDate, error);
+                    setIsSaving(false);
+                    return;
+                }
 
                 const unsubscribe = cloudDB.onSnapshot(docRef, (snap) => {
                     if (!snap.exists()) return;
@@ -4856,29 +5197,23 @@
                     const data = snap.data() || {};
                     suppressAutoSaveRef.current = true;
 
-                    if (data.sessionsData) setSessionsData(data.sessionsData);
-                    if (data.envelopeData) setEnvelopeData(data.envelopeData);
-                    if (data.dailyReportNotes) setDailyReportNotes(data.dailyReportNotes);
-                    if (data.proctoringExtra) setProctoringExtra(data.proctoringExtra);
-                    if (data.secondPeriodProctoring) setSecondPeriodProctoring(data.secondPeriodProctoring);
-                    if (data.individualAbsentee) setIndividualAbsentee(data.individualAbsentee);
-                    if (data.violationData) setViolationData(data.violationData);
+                    applyCloudPayload(data, { partial: true, skipSignatures: true, dateToLoad: safeDateKey });
 
                     // قراءة تواقيع اليوم من مستند اليوم نفسه كنسخة احتياطية فقط.
                     // مهم جداً: لا نعالج الحذف من مستند اليوم هنا حتى لا يؤدي حذف توقيع واحد
                     // إلى إخفاء باقي التواقيع مؤقتاً. الحذف الصحيح يأتي من Subcollection فقط:
                     // exam_records / currentDate / signatures / signatureId
                     const parentSignatureMaps = [
-                        data.signatures || {},
-                        data.dailySignatures || {},
-                        data.proctoringSignatures || {},
-                        data.receivingSignatures || {},
-                        data.absenceSignatures || {},
-                        data.controlSignatures || {}
+                        sanitizeSignaturesMap(data.signatures || {}),
+                        sanitizeSignaturesMap(data.dailySignatures || {}),
+                        sanitizeSignaturesMap(data.proctoringSignatures || {}),
+                        sanitizeSignaturesMap(data.receivingSignatures || {}),
+                        sanitizeSignaturesMap(data.absenceSignatures || {}),
+                        sanitizeSignaturesMap(data.controlSignatures || {})
                     ];
                     const parentMergedRaw = Object.assign({}, ...parentSignatureMaps);
                     const parentDeleteMap = {
-                        ...(loadSignatureDeletesForDate(currentDate) || {}),
+                        ...(loadSignatureDeletesForDate(safeDateKey) || {}),
                         ...(data.signatureDeletes || {})
                     };
                     const parentMerged = Object.fromEntries(
@@ -4891,7 +5226,7 @@
                     if (Object.keys(parentDeleteMap).length > 0) {
                         setSignatureDeletes(prevDeletes => {
                             const updatedDeletes = { ...(prevDeletes || {}), ...parentDeleteMap };
-                            saveSignatureDeletesForDate(currentDate, updatedDeletes);
+                            saveSignatureDeletesForDate(safeDateKey, updatedDeletes);
                             return updatedDeletes;
                         });
                     }
@@ -4904,9 +5239,9 @@
                                 ...(pendingLocalSignaturesRef.current || {})
                             };
 
-                            localStorage.setItem(`exam_signatures_${currentDate}`, JSON.stringify(mergedSignatures));
+                            localStorage.setItem(`exam_signatures_${safeDateKey}`, JSON.stringify(mergedSignatures));
                             saveGlobalControlSignatures(mergedSignatures);
-                            console.log('تمت مزامنة تواقيع مستند اليوم من Firebase', currentDate, Object.keys(parentMerged).length);
+                            console.log('تمت مزامنة تواقيع مستند اليوم من Firebase', safeDateKey, Object.keys(parentMerged).length);
                             return mergedSignatures;
                         });
                     }
@@ -4926,36 +5261,39 @@
 
             // الحفظ الفوري المباشر لجميع الحالات عند أي تعديل من المستخدم
             useEffect(() => {
-                localStorage.setItem(`exam_sessions_${currentDate}`, JSON.stringify(sessionsData));
+                try { localStorage.setItem(`exam_sessions_${currentDate}`, JSON.stringify(sanitizeSessionsData(sessionsData, currentDate, false))); } catch(e) { console.warn('تعذر حفظ جلسات التاريخ محلياً', e); }
             }, [sessionsData, currentDate]);
 
             useEffect(() => {
-                localStorage.setItem(`exam_envelopes_${currentDate}`, JSON.stringify(envelopeData));
+                try { localStorage.setItem(`exam_envelopes_${currentDate}`, JSON.stringify(sanitizeEnvelopeData(envelopeData))); } catch(e) { console.warn('تعذر حفظ المغلفات محلياً', e); }
             }, [envelopeData, currentDate]);
 
             useEffect(() => {
-                localStorage.setItem(`exam_daily_notes_${currentDate}`, JSON.stringify(dailyReportNotes));
+                try { localStorage.setItem(`exam_daily_notes_${currentDate}`, JSON.stringify(sanitizeDailyReportNotes(dailyReportNotes))); } catch(e) { console.warn('تعذر حفظ التقرير اليومي محلياً', e); }
             }, [dailyReportNotes, currentDate]);
 
             useEffect(() => {
-                localStorage.setItem(`exam_proctoring_extra_${currentDate}`, JSON.stringify(proctoringExtra));
+                try { localStorage.setItem(`exam_proctoring_extra_${currentDate}`, JSON.stringify(sanitizeProctoringExtraPreserve(proctoringExtra))); } catch(e) { console.warn('تعذر حفظ بيانات المراقبة الإضافية محلياً', e); }
             }, [proctoringExtra, currentDate]);
 
             useEffect(() => {
-                localStorage.setItem(`exam_second_period_proctoring_${currentDate}`, JSON.stringify(secondPeriodProctoring));
+                try { localStorage.setItem(`exam_second_period_proctoring_${currentDate}`, JSON.stringify(sanitizeSecondPeriodProctoringPreserve(secondPeriodProctoring))); } catch(e) { console.warn('تعذر حفظ بيانات الفترة الثانية محلياً', e); }
             }, [secondPeriodProctoring, currentDate]);
 
             useEffect(() => {
-                localStorage.setItem(`exam_individual_absentee_${currentDate}`, JSON.stringify(individualAbsentee));
+                try { localStorage.setItem(`exam_individual_absentee_${currentDate}`, JSON.stringify(sanitizeIndividualAbsentee(individualAbsentee))); } catch(e) { console.warn('تعذر حفظ استمارة الغياب محلياً', e); }
             }, [individualAbsentee, currentDate]);
 
             useEffect(() => {
-                localStorage.setItem(`exam_violation_${currentDate}`, JSON.stringify(violationData));
+                try { localStorage.setItem(`exam_violation_${currentDate}`, JSON.stringify(sanitizeViolationData(violationData, currentDate))); } catch(e) { console.warn('تعذر حفظ المخالفات محلياً', e); }
             }, [violationData, currentDate]);
 
             useEffect(() => {
-                localStorage.setItem(`exam_signatures_${currentDate}`, JSON.stringify(signatures));
-                saveGlobalControlSignatures(signatures);
+                try {
+                    const safeSignatures = sanitizeSignaturesMap(signatures);
+                    localStorage.setItem(`exam_signatures_${currentDate}`, JSON.stringify(safeSignatures));
+                    saveGlobalControlSignatures(safeSignatures);
+                } catch(e) { console.warn('تعذر حفظ التواقيع محلياً', e); }
             }, [signatures, currentDate]);
 
             useEffect(() => {
@@ -4981,6 +5319,7 @@
                     saveRealtimeToCloud().catch(error => {
                         console.error("Realtime autosave error:", error);
                         setHasUnsavedChanges(true);
+                        setIsSaving(false);
                     });
                 }, 1200);
                 return () => clearTimeout(autoSaveTimerRef.current);
@@ -5429,12 +5768,8 @@
                                 <div className="no-print bg-white p-1 rounded-xl border flex items-center text-xs text-blue-900 ">
                                     <input 
                                         type="date" 
-                                        value={currentDate} 
-                                        onChange={(e) => {
-                                            const newDate = e.target.value;
-                                            localStorage.setItem("savedExamDate", newDate);
-                                            setCurrentDate(newDate);
-                                        }}
+                                        value={getSafeCurrentDate(currentDate, CONTROL_DEFAULT_DATE)} 
+                                        onChange={(e) => handleCurrentDateChange(e.target.value)}
                                         className="p-1.5 outline-none  text-blue-900 cursor-pointer bg-transparent"
                                     />
                                 </div>
@@ -5654,12 +5989,40 @@
         };
 
 
+        class ControlAppErrorBoundary extends React.Component {
+            constructor(props) {
+                super(props);
+                this.state = { hasError: false, message: '' };
+            }
+            static getDerivedStateFromError(error) {
+                return { hasError: true, message: error?.message || '' };
+            }
+            componentDidCatch(error, info) {
+                console.error('تم منع الصفحة البيضاء بواسطة طبقة الحماية:', error, info);
+                try { localStorage.setItem('control_last_render_error', String(error?.message || error || 'unknown')); } catch(e) {}
+            }
+            render() {
+                if (!this.state.hasError) return this.props.children;
+                return (
+                    <div dir="rtl" className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+                        <div className="bg-white rounded-3xl shadow-xl border border-red-100 p-8 max-w-xl text-center space-y-4">
+                            <div className="text-4xl">⚠️</div>
+                            <h2 className="text-2xl font-black text-red-700">تم منع اختفاء الشاشة</h2>
+                            <p className="text-gray-700 leading-relaxed">حدث خطأ في بيانات هذا التاريخ. اضغط الزر لإعادة فتح النظام بالبيانات الآمنة بدون حذف بيانات Firebase.</p>
+                            <button onClick={() => window.location.reload()} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold shadow">إعادة فتح النظام</button>
+                            <p className="text-xs text-gray-400 break-all">{this.state.message}</p>
+                        </div>
+                    </div>
+                );
+            }
+        }
+
         const rootElement = document.getElementById('root');
         const mountApp = () => {
             if (window.__CONTROL_APP_MOUNTED__) return;
             window.__CONTROL_APP_MOUNTED__ = true;
             const root = ReactDOM.createRoot(rootElement);
-            root.render(<App />);
+            root.render(<ControlAppErrorBoundary><App /></ControlAppErrorBoundary>);
         };
         if (window.CONTROL_APP_AUTH_READY) mountApp();
         else window.addEventListener('control-auth-ready', mountApp, { once: true });
@@ -5713,4 +6076,17 @@
 </script>
 
 </body>
-</html>
+</html>            const handleCurrentDateChange = (rawDate) => {
+                const newDate = getSafeCurrentDate(rawDate, currentDate || CONTROL_DEFAULT_DATE);
+                if (!isSafeFirestoreDateKey(newDate)) return;
+                try {
+                    localStorage.setItem("savedExamDate", newDate);
+                    localStorage.setItem("control_last_safe_date", newDate);
+                } catch (e) {}
+                setAlertMessage(null);
+                setIsSaving(false);
+                setHasUnsavedChanges(false);
+                if (newDate !== currentDate) setCurrentDate(newDate);
+            };
+
+
