@@ -1122,6 +1122,85 @@
             const normalized = normalizeControlDateKey(value, fallback);
             return isSafeFirestoreDateKey(normalized) ? normalized : CONTROL_DEFAULT_DATE;
         };
+        const getDateCandidateParts = (value, fallback = CONTROL_DEFAULT_DATE) => {
+            const fallbackYear = String(getSafeCurrentDate(fallback, CONTROL_DEFAULT_DATE)).slice(0, 4);
+            const out = [];
+            const add = (year, month, day) => {
+                const y = Number(year), m = Number(month), d = Number(day);
+                if (!isValidControlDateParts(y, m, d)) return;
+                const key = `${y}-${padDatePart(m)}-${padDatePart(d)}`;
+                if (!out.some(item => item.key === key)) out.push({ year: y, month: m, day: d, key });
+            };
+            try {
+                if (value instanceof Date && !Number.isNaN(value.getTime())) {
+                    add(value.getFullYear(), value.getMonth() + 1, value.getDate());
+                    return out;
+                }
+                if (typeof value === 'number' && Number.isFinite(value)) {
+                    // دعم تواريخ Excel الرقمية إن وصلت من ملف مستورد.
+                    if (value > 25000 && value < 80000) {
+                        const d = new Date(Math.round((value - 25569) * 86400 * 1000));
+                        if (!Number.isNaN(d.getTime())) add(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+                    }
+                }
+            } catch(e) {}
+            let raw = toEnglishDigits(value).trim();
+            if (!raw) return out;
+            // دعم تواريخ Excel عندما تصل كنص مثل 45451 أو 45451.0
+            if (/^\d+(?:\.\d+)?$/.test(raw)) {
+                const numericDate = Number(raw);
+                if (Number.isFinite(numericDate) && numericDate > 25000 && numericDate < 80000) {
+                    const d = new Date(Math.round((numericDate - 25569) * 86400 * 1000));
+                    if (!Number.isNaN(d.getTime())) add(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+                }
+            }
+            raw = raw.replace(/[.]/g, '/').replace(/\s+/g, '');
+            let match = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:T.*)?$/);
+            if (match) add(match[1], match[2], match[3]);
+            match = raw.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+            if (match) add(match[1], match[2], match[3]);
+            match = raw.match(/^(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?$/);
+            if (match) {
+                let year = match[3] || fallbackYear;
+                if (String(year).length === 2) year = `20${year}`;
+                // الصيغة الأساسية في النظام: يوم/شهر/سنة.
+                add(year, match[2], match[1]);
+                // دعم الملفات التي تأتي بصيغة شهر/يوم/سنة، خصوصاً عندما لا تظهر من تاريخ 7 وما بعده.
+                if (Number(match[1]) <= 12 && Number(match[2]) <= 12) add(year, match[1], match[2]);
+            }
+            return out;
+        };
+        const getSmartExamRawDate = (exam = {}) => exam.date || exam.examDate || exam.day || exam.examDay || exam.testDate || exam.scheduleDate || exam.dateText || exam.exam_date;
+        const datesMatchForControl = (examDate, targetDate) => {
+            const targetSafe = getSafeCurrentDate(targetDate, CONTROL_DEFAULT_DATE);
+            const targetParts = getDateCandidateParts(targetSafe, CONTROL_DEFAULT_DATE);
+            const examParts = getDateCandidateParts(examDate, targetSafe);
+            if (!targetParts.length || !examParts.length) return false;
+            const targetFull = new Set(targetParts.map(p => p.key));
+            if (examParts.some(p => targetFull.has(p.key))) return true;
+            // احتياط مهم: إذا اختلفت السنة بين ملف الكنترول والمراقب الذكي نطابق يوم/شهر فقط.
+            const targetDayMonth = new Set(targetParts.map(p => `${p.month}-${p.day}`));
+            return examParts.some(p => targetDayMonth.has(`${p.month}-${p.day}`));
+        };
+
+        const getSmartExamsForControlDate = (exams = [], targetDate = CONTROL_DEFAULT_DATE) => {
+            const list = Array.isArray(exams) ? exams : [];
+            const safeTarget = getSafeCurrentDate(targetDate, CONTROL_DEFAULT_DATE);
+            const fullMatches = list.filter(exam => datesMatchForControl(getSmartExamRawDate(exam), safeTarget));
+            if (fullMatches.length) return fullMatches;
+
+            // حل جذري للتواريخ التي لا تظهر بعد اليوم 7:
+            // بعض الملفات تحفظ الشهر/السنة بطريقة مختلفة أو كتاريخ Excel، لذلك عند فشل التطابق الكامل
+            // نطابق رقم اليوم فقط حتى تظهر مواد الاختبار لذلك اليوم بدلاً من ترك المغلفات فارغة.
+            const targetParts = getDateCandidateParts(safeTarget, CONTROL_DEFAULT_DATE);
+            const targetDays = new Set(targetParts.map(p => Number(p.day)).filter(Boolean));
+            if (!targetDays.size) return [];
+            const dayOnlyMatches = list.filter(exam => {
+                const parts = getDateCandidateParts(getSmartExamRawDate(exam), safeTarget);
+                return parts.some(p => targetDays.has(Number(p.day)));
+            });
+            return dayOnlyMatches;
+        };
 
         const buildSmartBridgeFromStoredState = (state) => {
             const data = state && typeof state === 'object' ? state : {};
@@ -1479,8 +1558,8 @@
             // المصدر الوحيد الآن: exams + assignments + teachers من المراقب الذكي لنفس التاريخ.
             // لا نقرأ sessionsByDate حتى لا ترجع أسماء Excel/الكنترول القديمة.
             const rows = [];
-            const safeTargetDate = getSafeCurrentDate(date, '');
-            (bridge.exams || []).filter(ex => getSafeCurrentDate(ex.date, '') === safeTargetDate).forEach(exam => {
+            const safeTargetDate = getSafeCurrentDate(date, CONTROL_DEFAULT_DATE);
+            getSmartExamsForControlDate(bridge.exams || [], safeTargetDate).forEach(exam => {
                 (exam.selectedClasses || []).forEach(classId => {
                     const cls = getSmartClassById(bridge, classId) || {};
                     const assignments = (bridge.assignments || []).filter(a =>
@@ -1520,20 +1599,40 @@
         const getExamScheduleForDate = (date) => {
             const bridge = getStoredSmartBridge();
             if (!bridge) return [];
-            return (bridge.exams || []).filter(ex => ex.date === date).map(exam => {
-                const sections = (exam.selectedClasses || []).map(classId => getSmartClassById(bridge, classId)?.className).filter(Boolean);
-                const grades = Array.from(new Set(sections.map(s => String(s).split('/')[0]).filter(Boolean)));
-                const start = String(exam.period || '').replace('ص', '').replace('م', '').trim();
-                return {
-                    grades: grades.length ? grades : sections,
-                    subject: exam.subject || '',
-                    period: normalizeSmartPeriodForControl(exam.period),
-                    time: start || '',
-                    duration: exam.duration ? `${exam.duration} ساعة` : '',
-                    rooms: sections.length ? sections.join('، ') : '',
-                    sections
-                };
-            });
+            const safeTargetDate = getSafeCurrentDate(date, CONTROL_DEFAULT_DATE);
+            const getExamClassIds = (exam = {}) => {
+                if (Array.isArray(exam.selectedClasses) && exam.selectedClasses.length) return exam.selectedClasses;
+                if (Array.isArray(exam.classIds) && exam.classIds.length) return exam.classIds;
+                if (Array.isArray(exam.classes) && exam.classes.length) {
+                    return exam.classes.map(c => (c && typeof c === 'object') ? (c.id || c.classId || c.value || c.name || c.className) : c).filter(Boolean);
+                }
+                if (exam.classId) return [exam.classId];
+                if (exam.grade || exam.className) return [exam.grade || exam.className];
+                return [];
+            };
+            const getClassNameFromId = (classId) => {
+                const cls = getSmartClassById(bridge, classId) || {};
+                if (cls.className || cls.name) return cls.className || cls.name;
+                return typeof classId === 'string' ? classId : '';
+            };
+            return getSmartExamsForControlDate(bridge.exams || [], safeTargetDate)
+                .map(exam => {
+                    const classIds = getExamClassIds(exam);
+                    const sections = classIds.map(getClassNameFromId).filter(Boolean);
+                    const grades = Array.from(new Set(sections.map(s => String(s).split('/')[0]).filter(Boolean)));
+                    const rawTime = String(exam.time || exam.startTime || exam.examTime || '').trim();
+                    const rawPeriod = exam.period || exam.session || exam.shift || '';
+                    const start = rawTime || String(rawPeriod || '').replace('ص', '').replace('م', '').trim();
+                    return {
+                        grades: grades.length ? grades : sections,
+                        subject: exam.subject || exam.subjectName || exam.name || '',
+                        period: normalizeSmartPeriodForControl(rawPeriod),
+                        time: start || '',
+                        duration: exam.duration ? `${exam.duration} ساعة` : '',
+                        rooms: sections.length ? sections.join('، ') : '',
+                        sections
+                    };
+                });
         };
 
         const buildSmartStatsData = () => {
@@ -6227,7 +6326,7 @@
                 return stripUndefinedDeep({
                     currentDate: dateToLoad,
                     sessionsData: sanitizeSessionsData(linkedRows, dateToLoad, false),
-                    envelopeData: isCleanPayload ? sanitizeEnvelopeData(data.envelopeData) : defaultEnvelopeData(),
+                    envelopeData: buildSmartEnvelopeDataForDate(dateToLoad), // مغلفات الأسئلة مصدرها المراقب الذكي مباشرة ولا تُقرأ من بيانات الكنترول القديمة
                     dailyReportNotes: isCleanPayload ? sanitizeDailyReportNotes(data.dailyReportNotes) : defaultDailyReportNotes(),
                     proctoringExtra: sanitizeProctoringExtraPreserve(buildFirstPeriodExtraFromAssignments(dateToLoad, null)),
                     secondPeriodProctoring: sanitizeSecondPeriodProctoringPreserve(buildSecondPeriodProctoringFromAssignments(dateToLoad)),
@@ -6245,7 +6344,7 @@
 
             const [sessionsData, setSessionsData] = useState(() => getInitialSessionsFromLocal(currentDate));
 
-            const [envelopeData, setEnvelopeData] = useState(() => sanitizeEnvelopeData(safeLocalJSON(`exam_envelopes_${currentDate}`, defaultEnvelopeData())));
+            const [envelopeData, setEnvelopeData] = useState(() => sanitizeEnvelopeData(defaultEnvelopeData()));
 
             const [dailyReportNotes, setDailyReportNotes] = useState(() => sanitizeDailyReportNotes(safeLocalJSON(`exam_daily_notes_${currentDate}`, defaultDailyReportNotes())));
 
@@ -6294,7 +6393,7 @@
                     if (!smartRows.length) return sanitizeSessionsData(cleanSessionProctorNames(sessionsData || []), currentDate, false);
                     return sanitizeSessionsData(smartRows, currentDate, false);
                 })(),
-                envelopeData: sanitizeEnvelopeData(envelopeData),
+                envelopeData: buildSmartEnvelopeDataForDate(currentDate),
                 dailyReportNotes: sanitizeDailyReportNotes(dailyReportNotes),
                 // تحفظ هذه القيم بعد ربطها بالمراقب الذكي، ولا تُستخدم كمصدر مستقل قديم.
                 proctoringExtra: sanitizeProctoringExtraPreserve(proctoringExtra),
@@ -6588,8 +6687,15 @@
                     const autoRows = applyMonitorAssignmentsToSessions(buildExamSessionsForDate(safeDateToLoad), safeDateToLoad);
                     setSessionsData(sanitizeSessionsData(mergeRowsWithManualSessionFields(autoRows.length ? autoRows : [], safeDateToLoad, sessionsData), safeDateToLoad, false));
 
-                    if (isCleanPayload && data.envelopeData && typeof data.envelopeData === 'object') setEnvelopeData(sanitizeEnvelopeData(data.envelopeData));
-                    else if (!partial || !isCleanPayload) setEnvelopeData(defaultEnvelopeData());
+                    // مغلفات الأسئلة لا تُقرأ من Firebase أو التخزين القديم حتى لا تظهر ثم تختفي.
+                    // مصدرها الوحيد جدول الاختبارات في المراقب الذكي للتاريخ المختار.
+                    try {
+                        setEnvelopeData(buildSmartEnvelopeDataForDate(safeDateToLoad));
+                        removeStoredEnvelopeDataForDate(safeDateToLoad);
+                    } catch (envelopeDirectErr) {
+                        console.warn('تعذر بناء مغلفات الأسئلة مباشرة من المراقب الذكي أثناء تحميل السحابة', envelopeDirectErr);
+                        setEnvelopeData(defaultEnvelopeData());
+                    }
 
                     if (isCleanPayload && data.dailyReportNotes && typeof data.dailyReportNotes === 'object') setDailyReportNotes(sanitizeDailyReportNotes(data.dailyReportNotes));
                     else if (!partial || !isCleanPayload) setDailyReportNotes(defaultDailyReportNotes());
@@ -6817,7 +6923,8 @@
                 try {
                     try { clearStoredProctorNamesForCleanControl(true); } catch (e) {}
                     setSessionsData(getInitialSessionsFromLocal(dateToLoad));
-                    setEnvelopeData(isControlBlankVersionReady() ? sanitizeEnvelopeData(safeLocalJSON(`exam_envelopes_${dateToLoad}`, defaultEnvelopeData())) : defaultEnvelopeData());
+                    setEnvelopeData(buildSmartEnvelopeDataForDate(dateToLoad));
+                    removeStoredEnvelopeDataForDate(dateToLoad);
                     setDailyReportNotes(isControlBlankVersionReady() ? sanitizeDailyReportNotes(safeLocalJSON(`exam_daily_notes_${dateToLoad}`, defaultDailyReportNotes())) : defaultDailyReportNotes());
                     // إلغاء بيانات المراقبين القديمة من الإكسل: يتم توليدها مباشرة من المراقب الذكي حسب التاريخ.
                     setProctoringExtra(sanitizeProctoringExtraPreserve(buildFirstPeriodExtraFromAssignments(dateToLoad, null)));
@@ -6834,6 +6941,11 @@
                     setDayName(Number.isNaN(d.getTime()) ? '' : days[d.getDay()]);
                     try { localStorage.setItem('control_last_safe_date', dateToLoad); } catch (e) {}
                     setHasUnsavedChanges(false);
+                    setTimeout(() => {
+                        if (!cancelled) {
+                            try { applySmartMonitorDataForDate(dateToLoad); } catch (e) { console.warn('تعذر تنزيل بيانات المراقب الذكي تلقائياً لهذا التاريخ', e); }
+                        }
+                    }, 450);
                 } catch (error) {
                     console.error('تم إصلاح خطأ بيانات التاريخ ومنع اختفاء الشاشة:', error);
                     setSessionsData(sanitizeSessionsData(null, dateToLoad, false));
@@ -7039,7 +7151,8 @@
             }, [sessionsData, currentDate]);
 
             useEffect(() => {
-                try { localStorage.setItem(`exam_envelopes_${currentDate}`, JSON.stringify(sanitizeEnvelopeData(envelopeData))); } catch(e) { console.warn('تعذر حفظ المغلفات محلياً', e); }
+                // لا نحفظ مغلفات الأسئلة كمصدر مستقل؛ يتم حذف النسخ القديمة حتى لا تستبدل بيانات المراقب الذكي.
+                removeStoredEnvelopeDataForDate(currentDate);
             }, [envelopeData, currentDate]);
 
             useEffect(() => {
@@ -7346,46 +7459,54 @@
                 };
             };
 
-const applyScheduleToEnvelopes = (silent = false) => {
-    const rows = getEnvelopeRowsForDate(currentDate);
+            const removeStoredEnvelopeDataForDate = (dateToRemove = currentDate) => {
+                try {
+                    const safeDate = getSafeCurrentDate(dateToRemove, currentDate || CONTROL_DEFAULT_DATE);
+                    const keys = new Set([`exam_envelopes_${dateToRemove}`, `exam_envelopes_${safeDate}`]);
+                    for (let i = localStorage.length - 1; i >= 0; i--) {
+                        const key = localStorage.key(i);
+                        if (String(key || '').startsWith('exam_envelopes_')) keys.add(key);
+                    }
+                    keys.forEach(key => { try { localStorage.removeItem(key); } catch(_) {} });
+                } catch(e) {}
+            };
 
-    const hasSubjects = rows.some(
-        r => String(r.subject || '').trim()
-    );
-
-    setEnvelopeData(prev => {
-
-        // إذا وصلت بيانات فارغة من Firebase لا تمسح البيانات الحالية
-        if (!hasSubjects && Array.isArray(prev.rows) &&
-            prev.rows.some(r => String(r.subject || '').trim())) {
-            return prev;
-        }
-                    const firstSubjectRow = rows.find(row => String(row.subject || '').trim());
-                    const firstOpenTime = firstSubjectRow ? getEnvelopeOpeningTime(firstSubjectRow) : { hour: '', minute: '' };
-                    const updatedRows = normalizeEnvelopeRowsForDisplay(rows).map((item) => {
-                        const openTime = item.subject ? getEnvelopeOpeningTime(item) : { hour: '', minute: '' };
-                        return {
-                            gradeLabel: item.gradeLabel || item.grade || '',
-                            subject: item.subject || '',
-                            time: item.time || '',
-                            period: item.period || '',
-                            hour: openTime.hour,
-                            minute: openTime.minute
-                        };
-                    });
-                    return { 
-                        ...prev,
-                        hour: firstOpenTime.hour,
-                        minute: firstOpenTime.minute,
-                        meetingHour: firstOpenTime.hour,
-                        meetingMinute: firstOpenTime.minute,
-                        rows: updatedRows,
-                        members: getUniqueControlMembers(5)
+            const buildSmartEnvelopeDataForDate = (dateToBuild = currentDate) => {
+                const safeDate = getSafeCurrentDate(dateToBuild, currentDate || CONTROL_DEFAULT_DATE);
+                let rows = [];
+                try { rows = normalizeEnvelopeRowsForDisplay(getEnvelopeRowsForDate(safeDate)); } catch(e) { rows = []; }
+                const updatedRows = normalizeEnvelopeRowsForDisplay(rows).map((item) => {
+                    const openTime = item.subject ? getEnvelopeOpeningTime(item) : { hour: '', minute: '' };
+                    return {
+                        gradeLabel: item.gradeLabel || item.grade || '',
+                        subject: item.subject || '',
+                        time: item.time || '',
+                        period: item.period || '',
+                        hour: openTime.hour,
+                        minute: openTime.minute
                     };
                 });
-                const hasEnvelopeSubjects = rows.some(r => String(r.subject || '').trim());
+                const firstSubjectRow = updatedRows.find(row => String(row.subject || '').trim());
+                const firstOpenTime = firstSubjectRow ? { hour: firstSubjectRow.hour || '', minute: firstSubjectRow.minute || '' } : { hour: '', minute: '' };
+                return sanitizeEnvelopeData({
+                    ...defaultEnvelopeData(),
+                    hour: firstOpenTime.hour,
+                    minute: firstOpenTime.minute,
+                    meetingHour: firstOpenTime.hour,
+                    meetingMinute: firstOpenTime.minute,
+                    rows: updatedRows,
+                    members: getUniqueControlMembers(5)
+                });
+            };
+
+const applyScheduleToEnvelopes = (silent = false) => {
+                const nextEnvelope = buildSmartEnvelopeDataForDate(currentDate);
+                setEnvelopeData(nextEnvelope);
+                removeStoredEnvelopeDataForDate(currentDate);
+
+                const hasEnvelopeSubjects = Array.isArray(nextEnvelope.rows) && nextEnvelope.rows.some(r => String(r.subject || '').trim());
                 if (!silent) {
-                    setAlertMessage({ text: hasEnvelopeSubjects ? "تم تحديث مواد فتح المغلفات من جدول الاختبارات، ووقت الفتح قبل الامتحان بنصف ساعة، واللجنة الخاصة آخر الجدول." : "لم توجد مواد في جدول الاختبارات لهذا التاريخ؛ تم إبقاء جدول فتح المغلفات فارغًا مع ترتيب اللجنة الخاصة أخيرًا." });
+                    setAlertMessage({ text: hasEnvelopeSubjects ? "تم تحديث مواد فتح المغلفات مباشرة من المراقب الذكي، ووقت الفتح قبل الامتحان بنصف ساعة." : "لم توجد مواد في جدول اختبارات المراقب الذكي لهذا التاريخ؛ لا توجد بيانات قديمة من الكنترول معروضة." });
                     setTimeout(() => setAlertMessage(null), 3000);
                 }
             };
@@ -7397,6 +7518,11 @@ const applyScheduleToEnvelopes = (silent = false) => {
                 }, 250);
                 return () => clearTimeout(t);
             }, [currentDate, smartBridgeVersion]);
+
+            useEffect(() => {
+                // تنظيف أي مغلفات محفوظة سابقاً في الكنترول كي لا ترجع وتخفي بيانات المراقب الذكي.
+                removeStoredEnvelopeDataForDate(currentDate);
+            }, [currentDate]);
 
             // إدارة تفعيل وحفظ التوقيع
             const openSignatureModal = (id, title = "رسم التوقيع بالقلم") => {
@@ -7588,6 +7714,36 @@ const applyScheduleToEnvelopes = (silent = false) => {
                 setSessionsData(sanitizeSessionsData(linkedRows, safeDate, false));
                 setProctoringExtra(sanitizeProctoringExtraPreserve(buildFirstPeriodExtraFromAssignments(safeDate, null)));
                 setSecondPeriodProctoring(sanitizeSecondPeriodProctoringPreserve(buildSecondPeriodProctoringFromAssignments(safeDate)));
+                try {
+                    const nextEnvelopeRows = normalizeEnvelopeRowsForDisplay(getEnvelopeRowsForDate(safeDate)).map((item) => {
+                        const openTime = item.subject ? getEnvelopeOpeningTime(item) : { hour: '', minute: '' };
+                        return {
+                            gradeLabel: item.gradeLabel || item.grade || '',
+                            subject: item.subject || '',
+                            time: item.time || '',
+                            period: item.period || '',
+                            hour: openTime.hour,
+                            minute: openTime.minute
+                        };
+                    });
+                    const firstSubjectRow = nextEnvelopeRows.find(row => String(row.subject || '').trim());
+                    const firstOpenTime = firstSubjectRow ? { hour: firstSubjectRow.hour || '', minute: firstSubjectRow.minute || '' } : { hour: '', minute: '' };
+                    const nextEnvelope = sanitizeEnvelopeData({
+                        ...defaultEnvelopeData(),
+                        hour: firstOpenTime.hour,
+                        minute: firstOpenTime.minute,
+                        meetingHour: firstOpenTime.hour,
+                        meetingMinute: firstOpenTime.minute,
+                        rows: nextEnvelopeRows,
+                        members: getUniqueControlMembers(5)
+                    });
+                    if (nextEnvelope.rows.some(row => String(row.subject || '').trim())) {
+                        setEnvelopeData(nextEnvelope);
+                        removeStoredEnvelopeDataForDate(safeDate);
+                    }
+                } catch (envelopeAutoError) {
+                    console.warn('تعذر تحديث فتح مغلفات الأسئلة من المراقب الذكي لهذا التاريخ', envelopeAutoError);
+                }
             };
 
             const handleCurrentDateChange = (rawDate) => {
@@ -7600,8 +7756,10 @@ const applyScheduleToEnvelopes = (silent = false) => {
                 setAlertMessage(null);
                 setIsSaving(false);
                 setHasUnsavedChanges(false);
-                if (newDate !== currentDate) setCurrentDate(newDate);
-                else applySmartMonitorDataForDate(newDate);
+                if (newDate !== currentDate) {
+                    setCurrentDate(newDate);
+                    setTimeout(() => applySmartMonitorDataForDate(newDate), 350);
+                } else applySmartMonitorDataForDate(newDate);
             };
 
             return (
