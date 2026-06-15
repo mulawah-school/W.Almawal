@@ -5102,7 +5102,6 @@
                                                     <StableTextInput
                                                         value={nameLine}
                                                         onCommit={(value) => updateAbsenteeNameForRow(idx, s.absenteesNames || '', nameIndex, value)}
-                                                        commitDelay={250}
                                                         data-absence-print-input="true"
                                                         placeholder="اسم الطالب المتغيب"
                                                         className="absence-screen-name-input w-full p-1 border border-gray-200 rounded-md outline-none text-xs text-right bg-white"
@@ -6135,8 +6134,27 @@
             };
             const safeLocalJSON = (key, fallback) => safeJSONParse(localStorage.getItem(key), fallback);
             const getSessionIdentityKey = (row = {}) => [row.id || '', row.period || '', row.room || '', row.grade || '', row.subject || ''].map(v => normalizeArabicText(v)).join('|');
+            const SESSION_MANUAL_FIELDS = ['registeredNormal', 'registeredAdults', 'absentNormal', 'absentAdults', 'absenteesNames', 'receiver', 'correctionTeacherReceiver', 'afterCorrectionReceiver'];
+            const saveManualSessionFieldsForDate = (dateToSave, row = {}) => {
+                try {
+                    const safeDate = getSafeCurrentDate(dateToSave, currentDate || CONTROL_DEFAULT_DATE);
+                    const key = `exam_receiving_correction_manual_${safeDate}`;
+                    const saved = safeLocalJSON(key, {});
+                    const manual = {};
+                    SESSION_MANUAL_FIELDS.forEach(field => {
+                        if (row[field] !== undefined && row[field] !== null && String(row[field]).trim() !== '') manual[field] = row[field];
+                    });
+                    const next = { ...(saved && typeof saved === 'object' ? saved : {}) };
+                    const identity = getSessionIdentityKey(row);
+                    if (row.id) next[String(row.id)] = { ...(next[String(row.id)] || {}), ...manual };
+                    if (identity) next[identity] = { ...(next[identity] || {}), ...manual };
+                    localStorage.setItem(key, JSON.stringify(next));
+                } catch (e) {
+                    console.warn('تعذر حفظ حقول الجلسة اليدوية محلياً', e);
+                }
+            };
             const mergeRowsWithManualSessionFields = (autoRows = [], dateToLoad = currentDate, liveRows = []) => {
-                const manualFields = ['registeredNormal', 'registeredAdults', 'absentNormal', 'absentAdults', 'absenteesNames', 'receiver', 'correctionTeacherReceiver', 'afterCorrectionReceiver'];
+                const manualFields = SESSION_MANUAL_FIELDS;
                 const savedRows = safeLocalJSON(`exam_sessions_${dateToLoad}`, []);
                 const savedReceivingManual = safeLocalJSON(`exam_receiving_correction_manual_${dateToLoad}`, {});
                 const sources = [...(Array.isArray(liveRows) ? liveRows : []), ...(Array.isArray(savedRows) ? savedRows : [])];
@@ -6473,6 +6491,8 @@
             // توقيعات تم رسمها للتو ولم تصل بعد من Firebase.
             // هذا يمنع اختفاء التوقيع فورًا إذا وصل Snapshot قديم قبل اكتمال الرفع.
             const pendingLocalSignaturesRef = useRef({});
+            const lastParentSignatureSyncRef = useRef(0);
+            const sessionLastEditRef = useRef(0);
             const monitoringFollowupLastEditRef = useRef(0);
             const monitoringFollowupCloudSaveTimerRef = useRef(null);
 
@@ -6483,7 +6503,7 @@
                 sessionsData: (() => {
                     const smartRows = applyMonitorAssignmentsToSessions(buildExamSessionsForDate(currentDate), currentDate);
                     if (!smartRows.length) return sanitizeSessionsData(cleanSessionProctorNames(sessionsData || []), currentDate, false);
-                    return sanitizeSessionsData(smartRows, currentDate, false);
+                    return sanitizeSessionsData(mergeRowsWithManualSessionFields(smartRows, currentDate, sessionsData), currentDate, false);
                 })(),
                 envelopeData: buildSmartEnvelopeDataForDate(currentDate),
                 dailyReportNotes: sanitizeDailyReportNotes(dailyReportNotes),
@@ -6629,6 +6649,8 @@
                 await cloudDB.setDoc(parentRef, {
                     currentDate,
                     signaturesCollectionReady: true,
+                    signaturesStoredSeparately: true,
+                    liveSync: true,
                     lastSignatureId: signatureId,
                     lastSignatureDocId: signatureDocId,
                     lastSignatureKind: kind,
@@ -6648,37 +6670,6 @@
                     clientUpdatedAt: now,
                     updatedAt: cloudDB.serverTimestamp()
                 }, { merge: true });
-
-                // 3) نسخة احتياطية داخل مستند اليوم نفسه للتجربة مع قواعد Firebase المفتوحة.
-                // إذا لم يعمل استماع Subcollection في جهاز معيّن، يستطيع الجهاز الآخر قراءة التوقيع من هذه الخرائط.
-                const parentSignaturePatch = {
-                    signatures: { [signatureId]: dataUrl },
-                    dailySignatures: !isControlSignatureId(signatureId) ? { [signatureId]: dataUrl } : {},
-                    controlSignatures: isControlSignatureId(signatureId) ? { [signatureId]: dataUrl } : {},
-                    proctoringSignatures: kind === 'proctoring' ? { [signatureId]: dataUrl } : {},
-                    receivingSignatures: kind === 'receiving' ? { [signatureId]: dataUrl } : {},
-                    absenceSignatures: kind === 'absence' ? { [signatureId]: dataUrl } : {}
-                };
-                await cloudDB.setDoc(parentRef, {
-                    ...parentSignaturePatch,
-                    signatureDeletes: { [signatureId]: null },
-                    currentDate,
-                    signaturesMirrorReady: true,
-                    lastSignatureId: signatureId,
-                    lastSignatureDocId: signatureDocId,
-                    lastSignatureKind: kind,
-                    lastSignatureDeleted: false,
-                    lastSignatureClientUpdatedAt: now,
-                    updatedAt: cloudDB.serverTimestamp()
-                }, { merge: true });
-
-                // 4) تحقق سريع: إذا فشل الرفع أو منعته Rules يظهر الخطأ في Console.
-                if (cloudDB.getDoc) {
-                    const verifySnap = await cloudDB.getDoc(signatureRef);
-                    if (!verifySnap.exists()) {
-                        throw new Error("Signature was not written to Firestore. Check Rules/path.");
-                    }
-                }
 
                 return true;
             };
@@ -6776,8 +6767,12 @@
 
                 try {
                     try { clearStoredProctorNamesForCleanControl(true); } catch (e) {}
+                    const recentlyEditedSessions = partial && (Date.now() - (sessionLastEditRef.current || 0) < 20000);
                     const autoRows = applyMonitorAssignmentsToSessions(buildExamSessionsForDate(safeDateToLoad), safeDateToLoad);
-                    setSessionsData(sanitizeSessionsData(mergeRowsWithManualSessionFields(autoRows.length ? autoRows : [], safeDateToLoad, sessionsData), safeDateToLoad, false));
+                    const cloudRows = Array.isArray(data.sessionsData) ? data.sessionsData : [];
+                    const sessionMergeSources = recentlyEditedSessions ? sessionsData : [...cloudRows, ...sessionsData];
+                    const nextSessions = sanitizeSessionsData(mergeRowsWithManualSessionFields(autoRows.length ? autoRows : [], safeDateToLoad, sessionMergeSources), safeDateToLoad, false);
+                    setSessionsData(nextSessions);
 
                     // مغلفات الأسئلة لا تُقرأ من Firebase أو التخزين القديم حتى لا تظهر ثم تختفي.
                     // مصدرها الوحيد جدول الاختبارات في المراقب الذكي للتاريخ المختار.
@@ -6789,7 +6784,9 @@
                         setEnvelopeData(defaultEnvelopeData());
                     }
 
-                    if (isCleanPayload && data.dailyReportNotes && typeof data.dailyReportNotes === 'object') setDailyReportNotes(sanitizeDailyReportNotes(data.dailyReportNotes));
+                    if (recentlyEditedSessions) {
+                        syncAbsenceToDailyReport(nextSessions);
+                    } else if (isCleanPayload && data.dailyReportNotes && typeof data.dailyReportNotes === 'object') setDailyReportNotes(sanitizeDailyReportNotes(data.dailyReportNotes));
                     else if (!partial || !isCleanPayload) setDailyReportNotes(defaultDailyReportNotes());
 
                     // بيانات مراقبي القاعات، مراقب الدور، والاحتياط مصدرها المراقب الذكي فقط.
@@ -7169,7 +7166,12 @@
                     const data = snap.data() || {};
                     suppressAutoSaveRef.current = true;
 
-                    applyCloudPayload(data, { partial: true, skipSignatures: true, dateToLoad: safeDateKey });
+                    const parentSignatureStamp = Number(data.lastSignatureClientUpdatedAt || 0) || 0;
+                    const isFreshSignatureNotice = parentSignatureStamp && parentSignatureStamp !== lastParentSignatureSyncRef.current && (Date.now() - parentSignatureStamp < 15000);
+                    if (parentSignatureStamp) lastParentSignatureSyncRef.current = parentSignatureStamp;
+                    if (!isFreshSignatureNotice) {
+                        applyCloudPayload(data, { partial: true, skipSignatures: true, dateToLoad: safeDateKey });
+                    }
 
                     // قراءة تواقيع اليوم من مستند اليوم نفسه كنسخة احتياطية فقط.
                     // مهم جداً: لا نعالج الحذف من مستند اليوم هنا حتى لا يؤدي حذف توقيع واحد
@@ -7309,7 +7311,7 @@
                     });
                 }, 3000);
                 return () => clearTimeout(autoSaveTimerRef.current);
-            }, [sessionsData, envelopeData, dailyReportNotes, proctoringExtra, secondPeriodProctoring, individualAbsentee, violationWarningData, violationExclusionData, monitoringFollowupData, signatures, currentDate, cloudDB]);
+            }, [envelopeData, dailyReportNotes, proctoringExtra, secondPeriodProctoring, individualAbsentee, violationWarningData, violationExclusionData, monitoringFollowupData, signatures, currentDate, cloudDB]);
 
             useEffect(() => () => clearTimeout(sessionCloudSaveTimerRef.current), []);
 
@@ -7320,7 +7322,16 @@
                 const safeSessions = sanitizeSessionsData(updatedSessions, safeDateKey, false);
                 clearTimeout(sessionCloudSaveTimerRef.current);
                 sessionCloudSaveTimerRef.current = setTimeout(() => {
-                    saveExactPayloadToCloud({ sessionsData: safeSessions }).catch((error) => {
+                    const docRef = cloudDB.doc(cloudDB.db, "exam_records", safeDateKey);
+                    cloudDB.setDoc(docRef, {
+                        currentDate: safeDateKey,
+                        sessionsData: stripUndefinedDeep(safeSessions),
+                        controlBlankVersion: CONTROL_FIRST_FILE_BLANK_VERSION,
+                        linkedToSmartMonitor: true,
+                        updatedAt: cloudDB.serverTimestamp()
+                    }, { merge: true }).then(() => {
+                        setHasUnsavedChanges(false);
+                    }).catch((error) => {
                         console.error('Deferred receiving cloud save error:', error);
                         setHasUnsavedChanges(true);
                     });
@@ -7403,8 +7414,10 @@
                 if (index < 0 || !sessionsData[index]) return;
                 const updated = [...sessionsData];
                 updated[index] = { ...updated[index], [field]: value };
+                sessionLastEditRef.current = Date.now();
                 setSessionsData(updated);
                 localStorage.setItem(`exam_sessions_${currentDate}`, JSON.stringify(updated));
+                saveManualSessionFieldsForDate(currentDate, updated[index]);
                 if (['absentNormal', 'absentAdults', 'absenteesNames', 'subject', 'grade'].includes(field)) {
                     syncAbsenceToDailyReport(updated);
                 }
@@ -7662,14 +7675,6 @@ const applyScheduleToEnvelopes = (silent = false) => {
                     // التواقيع اليومية تحفظ كمستندات مستقلة فقط حتى لا يتجاوز مستند اليوم حد Firestore
                     // وحتى لا يستبدل جهاز توقيع جهاز آخر.
                     saveSignatureToFirebase(signatureId, dataUrl)
-                        .then(() => saveExactPayloadToCloud({
-                            signaturesStoredSeparately: true,
-                            signatureDeletes: { ...updatedDeletes, [signatureId]: null },
-                            lastSignatureId: signatureId,
-                            lastSignatureDeleted: false,
-                            lastSignatureClientUpdatedAt: Date.now(),
-                            liveSync: true
-                        }))
                         .then(() => {
                             console.log("تم حفظ التوقيع في Firebase:", signatureId);
                             setHasUnsavedChanges(false);
@@ -7706,15 +7711,6 @@ const applyScheduleToEnvelopes = (silent = false) => {
 
                 if (cloudDB) {
                     deleteSignatureFromFirebase(id)
-                        .then(() => saveExactPayloadToCloud({
-                            signaturesStoredSeparately: true,
-                            // لا نرسل خريطة الحذف الكاملة إلى مستند اليوم حتى لا تخفي باقي التواقيع.
-                            // مستند التوقيع المستقل داخل Subcollection هو مصدر الحذف الوحيد.
-                            lastSignatureId: id,
-                            lastSignatureDeleted: true,
-                            lastSignatureClientUpdatedAt: Date.now(),
-                            liveSync: true
-                        }))
                         .then(() => {
                             console.log("تم حذف التوقيع من Firebase:", id);
                             setHasUnsavedChanges(false);
