@@ -2422,12 +2422,11 @@
 
         // مكون نافذة رسم التوقيع بالقلم
         const SignatureModal = ({ isOpen, onClose, onSave, title }) => {
-            if (!isOpen) return null;
             const canvasRef = useRef(null);
             const [isDrawing, setIsDrawing] = useState(false);
 
             useEffect(() => {
-                if (canvasRef.current) {
+                if (isOpen && canvasRef.current) {
                     const canvas = canvasRef.current;
                     const rect = canvas.getBoundingClientRect();
                     canvas.width = rect.width || 400;
@@ -2493,12 +2492,39 @@
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
             };
 
+            const exportCompactSignature = (sourceCanvas) => new Promise((resolve) => {
+                const target = document.createElement('canvas');
+                const maxWidth = 320;
+                const maxHeight = 140;
+                const scale = Math.min(1, maxWidth / Math.max(1, sourceCanvas.width), maxHeight / Math.max(1, sourceCanvas.height));
+                target.width = Math.max(1, Math.round(sourceCanvas.width * scale));
+                target.height = Math.max(1, Math.round(sourceCanvas.height * scale));
+                const ctx = target.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, target.width, target.height);
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'medium';
+                ctx.drawImage(sourceCanvas, 0, 0, target.width, target.height);
+                const fallback = () => resolve(target.toDataURL('image/jpeg', 0.72));
+                if (!target.toBlob) return fallback();
+                target.toBlob((blob) => {
+                    if (!blob) return fallback();
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = fallback;
+                    reader.readAsDataURL(blob);
+                }, 'image/jpeg', 0.72);
+            });
+
             const handleSave = () => {
                 const canvas = canvasRef.current;
-                const dataUrl = canvas.toDataURL('image/png');
-                onSave(dataUrl);
+                exportCompactSignature(canvas)
+                    .then((dataUrl) => onSave(dataUrl))
+                    .catch(() => onSave(canvas.toDataURL('image/jpeg', 0.72)));
                 onClose();
             };
+
+            if (!isOpen) return null;
 
             return (
                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 no-print animate-fade-in">
@@ -6036,6 +6062,47 @@
                     return {};
                 }
             };
+            const getSignatureItemStorageKey = (date, id) => `exam_signature_item_${date}_${encodeURIComponent(String(id || ''))}`;
+            const getSignatureItemIndexKey = (date) => `exam_signature_item_index_${date}`;
+            const loadIndividualSignaturesForDate = (date) => {
+                const map = {};
+                try {
+                    const ids = JSON.parse(localStorage.getItem(getSignatureItemIndexKey(date)) || '[]');
+                    if (Array.isArray(ids)) {
+                        ids.forEach(id => {
+                            const dataUrl = localStorage.getItem(getSignatureItemStorageKey(date, id));
+                            if (dataUrl) map[id] = dataUrl;
+                        });
+                    }
+                } catch (e) {}
+                return map;
+            };
+            const scheduleCombinedSignaturesLocalSave = (date, source = {}) => {
+                const save = () => {
+                    try { localStorage.setItem(`exam_signatures_${date}`, JSON.stringify(source || {})); } catch(e) {}
+                };
+                if (window.requestIdleCallback) window.requestIdleCallback(save, { timeout: 1500 });
+                else setTimeout(save, 0);
+            };
+            const saveSignatureLocallyFast = (date, id, dataUrl, mergedMap = {}) => {
+                try {
+                    localStorage.setItem(getSignatureItemStorageKey(date, id), dataUrl);
+                    const indexKey = getSignatureItemIndexKey(date);
+                    const ids = JSON.parse(localStorage.getItem(indexKey) || '[]');
+                    const nextIds = Array.from(new Set([...(Array.isArray(ids) ? ids : []), id]));
+                    localStorage.setItem(indexKey, JSON.stringify(nextIds));
+                } catch(e) {}
+                scheduleCombinedSignaturesLocalSave(date, mergedMap);
+            };
+            const removeSignatureLocallyFast = (date, id, mergedMap = {}) => {
+                try {
+                    localStorage.removeItem(getSignatureItemStorageKey(date, id));
+                    const indexKey = getSignatureItemIndexKey(date);
+                    const ids = JSON.parse(localStorage.getItem(indexKey) || '[]');
+                    localStorage.setItem(indexKey, JSON.stringify((Array.isArray(ids) ? ids : []).filter(item => item !== id)));
+                } catch(e) {}
+                scheduleCombinedSignaturesLocalSave(date, mergedMap);
+            };
             const loadSignaturesForDate = (date) => {
                 let dateSignatures = {};
                 try {
@@ -6043,7 +6110,7 @@
                 } catch (e) {
                     dateSignatures = {};
                 }
-                return { ...dateSignatures, ...loadGlobalControlSignatures() };
+                return { ...dateSignatures, ...loadIndividualSignaturesForDate(date), ...loadGlobalControlSignatures() };
             };
             const saveGlobalControlSignatures = (source = {}) => {
                 const controlSignatures = getControlSignaturesOnly(source);
@@ -7127,7 +7194,7 @@
                             }
                         });
 
-                        localStorage.setItem(`exam_signatures_${safeDateKey}`, JSON.stringify(merged));
+                        scheduleCombinedSignaturesLocalSave(safeDateKey, merged);
                         saveGlobalControlSignatures(merged);
                         console.log(`تمت مزامنة التواقيع من Firebase (${sourceLabel})`, safeDateKey, Object.keys(merged).length);
                         return merged;
@@ -7213,7 +7280,7 @@
                                 ...(pendingLocalSignaturesRef.current || {})
                             };
 
-                            localStorage.setItem(`exam_signatures_${safeDateKey}`, JSON.stringify(mergedSignatures));
+                            scheduleCombinedSignaturesLocalSave(safeDateKey, mergedSignatures);
                             saveGlobalControlSignatures(mergedSignatures);
                             console.log('تمت مزامنة تواقيع مستند اليوم من Firebase', safeDateKey, Object.keys(parentMerged).length);
                             return mergedSignatures;
@@ -7278,7 +7345,7 @@
             useEffect(() => {
                 try {
                     const safeSignatures = sanitizeSignaturesMap(signatures);
-                    localStorage.setItem(`exam_signatures_${currentDate}`, JSON.stringify(safeSignatures));
+                    scheduleCombinedSignaturesLocalSave(currentDate, safeSignatures);
                     saveGlobalControlSignatures(safeSignatures);
                 } catch(e) { console.warn('تعذر حفظ التواقيع محلياً', e); }
             }, [signatures, currentDate]);
@@ -7666,7 +7733,7 @@ const applyScheduleToEnvelopes = (silent = false) => {
                 };
 
                 setSignatures(updatedSignatures);
-                localStorage.setItem(`exam_signatures_${currentDate}`, JSON.stringify(updatedSignatures));
+                saveSignatureLocallyFast(currentDate, signatureId, dataUrl, updatedSignatures);
                 saveSignatureDeletesForDate(currentDate, updatedDeletes);
                 setSignatureDeletes(updatedDeletes);
                 if (isControlSignatureId(signatureId)) saveGlobalControlSignatures(updatedSignatures);
@@ -7674,19 +7741,19 @@ const applyScheduleToEnvelopes = (silent = false) => {
                 if (cloudDB) {
                     // التواقيع اليومية تحفظ كمستندات مستقلة فقط حتى لا يتجاوز مستند اليوم حد Firestore
                     // وحتى لا يستبدل جهاز توقيع جهاز آخر.
-                    saveSignatureToFirebase(signatureId, dataUrl)
+                    setAlertMessage({ text: 'تم حفظ التوقيع محلياً، وتجري مزامنته في الخلفية.' });
+                    setTimeout(() => setAlertMessage(null), 1600);
+                    setTimeout(() => saveSignatureToFirebase(signatureId, dataUrl)
                         .then(() => {
                             console.log("تم حفظ التوقيع في Firebase:", signatureId);
                             setHasUnsavedChanges(false);
-                            setAlertMessage({ text: isControlSignatureId(signatureId) ? "تم حفظ توقيع الكنترول." : "تم حفظ التوقيع اليومي ومزامنته." });
-                            setTimeout(() => setAlertMessage(null), 2500);
                         })
                         .catch((error) => {
                             console.error("فشل حفظ التوقيع في Firebase:", error);
                             setHasUnsavedChanges(true);
                             setAlertMessage({ text: "تم حفظ التوقيع في هذا الجهاز، لكن لم يتم رفعه إلى Firebase. راجع Rules والاتصال." });
                             setTimeout(() => setAlertMessage(null), 5000);
-                        });
+                        }), 80);
                 } else {
                     setHasUnsavedChanges(true);
                 }
@@ -7704,7 +7771,7 @@ const applyScheduleToEnvelopes = (silent = false) => {
                 delete updatedSignatures[id];
 
                 setSignatures(updatedSignatures);
-                localStorage.setItem(`exam_signatures_${currentDate}`, JSON.stringify(updatedSignatures));
+                removeSignatureLocallyFast(currentDate, id, updatedSignatures);
                 saveSignatureDeletesForDate(currentDate, updatedDeletes);
                 setSignatureDeletes(updatedDeletes);
                 if (isControlSignatureId(id)) saveGlobalControlSignatures(updatedSignatures);
