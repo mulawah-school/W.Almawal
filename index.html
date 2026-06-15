@@ -2387,7 +2387,7 @@
 
 
         // مكون لوحة ومساحة التوقيع التفاعلية
-        const SignatureArea = ({ id, signatures, onSignClick, onClearSig, label = "اضغط للتوقيع" }) => {
+        const SignatureArea = React.memo(({ id, signatures, onSignClick, onClearSig, label = "اضغط للتوقيع" }) => {
             const signature = signatures[id];
             return (
                 <div className="relative group flex items-center justify-center min-h-[42px] border border-dashed border-gray-300 rounded hover:bg-blue-50/40 transition cursor-pointer print:border-none print:hover:bg-transparent w-full">
@@ -2418,7 +2418,11 @@
                     {!signature && <span className="hidden print:inline text-xs font-serif text-gray-300 select-none">...................</span>}
                 </div>
             );
-        };
+        }, (prev, next) => {
+            const prevSignature = (prev.signatures || {})[prev.id];
+            const nextSignature = (next.signatures || {})[next.id];
+            return prev.id === next.id && prevSignature === nextSignature && prev.label === next.label;
+        });
 
         // مكون نافذة رسم التوقيع بالقلم
         const SignatureModal = ({ isOpen, onClose, onSave, title }) => {
@@ -7718,7 +7722,6 @@ const applyScheduleToEnvelopes = (silent = false) => {
 
                 // لا نعتمد على state فقط لأنه قد يكون متأخراً عند توقيع أكثر من خانة.
                 // ندمج: المحلي + الحالة الحالية + التوقيع الجديد حتى لا يختفي توقيع سابق.
-                const localSignatures = loadSignaturesForDate(currentDate) || {};
                 const updatedDeletes = { ...signatureDeletes };
                 delete updatedDeletes[signatureId];
                 pendingLocalSignaturesRef.current = {
@@ -7727,12 +7730,13 @@ const applyScheduleToEnvelopes = (silent = false) => {
                 };
 
                 const updatedSignatures = {
-                    ...localSignatures,
                     ...(signatures || {}),
                     [signatureId]: dataUrl
                 };
 
-                setSignatures(updatedSignatures);
+                const applySignatureState = () => setSignatures(prev => ({ ...(prev || {}), [signatureId]: dataUrl }));
+                if (React.startTransition) React.startTransition(applySignatureState);
+                else applySignatureState();
                 saveSignatureLocallyFast(currentDate, signatureId, dataUrl, updatedSignatures);
                 saveSignatureDeletesForDate(currentDate, updatedDeletes);
                 setSignatureDeletes(updatedDeletes);
@@ -7753,7 +7757,7 @@ const applyScheduleToEnvelopes = (silent = false) => {
                             setHasUnsavedChanges(true);
                             setAlertMessage({ text: "تم حفظ التوقيع في هذا الجهاز، لكن لم يتم رفعه إلى Firebase. راجع Rules والاتصال." });
                             setTimeout(() => setAlertMessage(null), 5000);
-                        }), 80);
+                        }), 1400);
                 } else {
                     setHasUnsavedChanges(true);
                 }
@@ -7766,11 +7770,12 @@ const applyScheduleToEnvelopes = (silent = false) => {
                     delete pendingLocalSignaturesRef.current[id];
                 }
 
-                const localSignatures = loadSignaturesForDate(currentDate) || {};
-                const updatedSignatures = { ...localSignatures, ...(signatures || {}) };
+                const updatedSignatures = { ...(signatures || {}) };
                 delete updatedSignatures[id];
 
-                setSignatures(updatedSignatures);
+                const applySignatureState = () => setSignatures(updatedSignatures);
+                if (React.startTransition) React.startTransition(applySignatureState);
+                else applySignatureState();
                 removeSignatureLocallyFast(currentDate, id, updatedSignatures);
                 saveSignatureDeletesForDate(currentDate, updatedDeletes);
                 setSignatureDeletes(updatedDeletes);
