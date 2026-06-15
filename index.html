@@ -5948,20 +5948,9 @@
                 return () => window.removeEventListener('message', handler);
             }, []);
             useEffect(() => {
-                refreshSmartBridge();
-                const t = setTimeout(() => {
-                    refreshSmartBridge();
-                    const autoRows = applyMonitorAssignmentsToSessions(buildExamSessionsForDate(currentDate), currentDate);
-                    try {
-                        const linkedRows = mergeRowsWithManualSessionFields(autoRows.length ? autoRows : [], currentDate, sessionsData);
-                        setSessionsData(sanitizeSessionsData(linkedRows, currentDate, false));
-                        setProctoringExtra(sanitizeProctoringExtraPreserve(buildFirstPeriodExtraFromAssignments(currentDate, null)));
-                        setSecondPeriodProctoring(sanitizeSecondPeriodProctoringPreserve(buildSecondPeriodProctoringFromAssignments(currentDate)));
-                    } catch (dateMergeError) {
-                        console.error('تعذر ربط بيانات التاريخ بالمراقب الذكي، تم فتح صفوف آمنة:', dateMergeError);
-                        setSessionsData(sanitizeSessionsData(autoRows, currentDate, false));
-                    }
-                }, 900);
+                // عند تغيير التاريخ يتم بناء الصفوف في مؤثر التحميل الرئيسي.
+                // هنا نطلب الجسر فقط، وإذا تغير فعلاً سيحدّث smartBridgeVersion مرة واحدة.
+                const t = setTimeout(() => refreshSmartBridge(), 120);
                 return () => clearTimeout(t);
             }, [currentDate]);
 
@@ -6003,10 +5992,10 @@
             useEffect(() => {
                 if (activeTab !== 'proctoring') return;
                 const t = setTimeout(() => {
-                    try { rebuildControlRowsFromSmartMonitorOnly(currentDate, true); } catch (e) {}
+                    try { rebuildControlRowsFromSmartMonitorOnly(currentDate, false); } catch (e) {}
                 }, 1400);
                 return () => clearTimeout(t);
-            }, [activeTab, currentDate, smartBridgeVersion, cloudDB]);
+            }, [activeTab, currentDate, smartBridgeVersion]);
 
             // حالات الحفظ السحابي Firebase
             const [cloudDB, setCloudDB] = useState(window.cloudDB || null);
@@ -7032,7 +7021,7 @@
                         if (!cancelled) {
                             try { applySmartMonitorDataForDate(dateToLoad); } catch (e) { console.warn('تعذر تنزيل بيانات المراقب الذكي تلقائياً لهذا التاريخ', e); }
                         }
-                    }, 450);
+                    }, 120);
                 } catch (error) {
                     console.error('تم إصلاح خطأ بيانات التاريخ ومنع اختفاء الشاشة:', error);
                     setSessionsData(sanitizeSessionsData(null, dateToLoad, false));
@@ -7048,7 +7037,7 @@
                     setSignatureDeletes({});
                 }
 
-                if (cloudDB) {
+                if (cloudDB && !cloudDB.onSnapshot) {
                     loadFromCloud(dateToLoad).finally(() => {
                         clearTimeout(safetyTimer);
                         unlockAutoSave();
@@ -7132,13 +7121,7 @@
                     });
                 };
 
-                // قراءة أولية احتياطية، ثم مستمع مباشر للتغييرات.
-                if (cloudDB.getDocs) {
-                    cloudDB.getDocs(signaturesRef)
-                        .then((snapshot) => applySignatureSnapshot(snapshot, 'getDocs-initial'))
-                        .catch((error) => console.error('Initial signatures load error:', error));
-                }
-
+                // onSnapshot يعيد القراءة الأولية ثم التغييرات، لذلك لا نطلب getDocs إضافية عند تغيير التاريخ.
                 const unsubscribe = cloudDB.onSnapshot(signaturesRef, (snapshot) => {
                     applySignatureSnapshot(snapshot, 'onSnapshot-live');
                 }, (error) => {
@@ -7845,7 +7828,6 @@ const applyScheduleToEnvelopes = (silent = false) => {
                 setHasUnsavedChanges(false);
                 if (newDate !== currentDate) {
                     setCurrentDate(newDate);
-                    setTimeout(() => applySmartMonitorDataForDate(newDate), 350);
                 } else applySmartMonitorDataForDate(newDate);
             };
 
