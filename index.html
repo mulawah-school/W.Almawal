@@ -3663,15 +3663,28 @@
         const StableTextInput = ({ value, onCommit, className = '', type = 'text', ...props }) => {
             const [draft, setDraft] = useState(value || '');
             const focusedRef = useRef(false);
+            const commitTimerRef = useRef(null);
             useEffect(() => {
                 if (!focusedRef.current) setDraft(value || '');
             }, [value]);
+            useEffect(() => () => clearTimeout(commitTimerRef.current), []);
             const commit = (nextValue) => {
                 if (typeof onCommit === 'function') onCommit(nextValue);
             };
+            const queueCommit = (nextValue) => {
+                const delay = Number(props.commitDelay || 0);
+                clearTimeout(commitTimerRef.current);
+                if (delay > 0) {
+                    commitTimerRef.current = setTimeout(() => commit(nextValue), delay);
+                } else {
+                    commit(nextValue);
+                }
+            };
+            const cleanProps = { ...props };
+            delete cleanProps.commitDelay;
             return (
                 <input
-                    {...props}
+                    {...cleanProps}
                     type={type}
                     value={focusedRef.current ? draft : (value || '')}
                     onFocus={(e) => {
@@ -3682,11 +3695,12 @@
                     onChange={(e) => {
                         const nextValue = e.target.value;
                         setDraft(nextValue);
-                        commit(nextValue);
+                        queueCommit(nextValue);
                         if (props.onChange) props.onChange(e);
                     }}
                     onBlur={(e) => {
                         focusedRef.current = false;
+                        clearTimeout(commitTimerRef.current);
                         commit(e.target.value || '');
                         if (props.onBlur) props.onBlur(e);
                     }}
@@ -5088,6 +5102,8 @@
                                                     <StableTextInput
                                                         value={nameLine}
                                                         onCommit={(value) => updateAbsenteeNameForRow(idx, s.absenteesNames || '', nameIndex, value)}
+                                                        commitDelay={250}
+                                                        data-absence-print-input="true"
                                                         placeholder="اسم الطالب المتغيب"
                                                         className="absence-screen-name-input w-full p-1 border border-gray-200 rounded-md outline-none text-xs text-right bg-white"
                                                     />
@@ -7271,6 +7287,7 @@
 
             const changesReadyRef = useRef(false);
             const autoSaveTimerRef = useRef(null);
+            const sessionCloudSaveTimerRef = useRef(null);
             const suppressAutoSaveRef = useRef(false);
 
             useEffect(() => {
@@ -7290,9 +7307,25 @@
                         setHasUnsavedChanges(true);
                         setIsSaving(false);
                     });
-                }, 1200);
+                }, 3000);
                 return () => clearTimeout(autoSaveTimerRef.current);
             }, [sessionsData, envelopeData, dailyReportNotes, proctoringExtra, secondPeriodProctoring, individualAbsentee, violationWarningData, violationExclusionData, monitoringFollowupData, signatures, currentDate, cloudDB]);
+
+            useEffect(() => () => clearTimeout(sessionCloudSaveTimerRef.current), []);
+
+            const scheduleSessionsCloudSave = (updatedSessions, delay = 1800) => {
+                if (!cloudDB || suppressAutoSaveRef.current) return;
+                const safeDateKey = getSafeCurrentDate(currentDate, CONTROL_DEFAULT_DATE);
+                if (!isSafeFirestoreDateKey(safeDateKey)) return;
+                const safeSessions = sanitizeSessionsData(updatedSessions, safeDateKey, false);
+                clearTimeout(sessionCloudSaveTimerRef.current);
+                sessionCloudSaveTimerRef.current = setTimeout(() => {
+                    saveExactPayloadToCloud({ sessionsData: safeSessions }).catch((error) => {
+                        console.error('Deferred receiving cloud save error:', error);
+                        setHasUnsavedChanges(true);
+                    });
+                }, delay);
+            };
 
             const syncAbsenceToDailyReport = (sourceSessions) => {
                 const reportGrades = ['5', '6', '7', '8', '9', '10', '11', '12'];
@@ -7376,11 +7409,9 @@
                     syncAbsenceToDailyReport(updated);
                 }
 
-                // حفظ فوري خاص بسجل الاستلام حتى لا تضيع أسماء المستلمين أو أعداد الاستلام عند إعادة التحميل السريع.
+                // حفظ مؤجل خاص بسجل الاستلام؛ المحلي فوري، والسحابة بعد توقف الكتابة حتى تبقى الواجهة سريعة.
                 if (['receiver', 'correctionTeacherReceiver', 'afterCorrectionReceiver', 'registeredNormal', 'registeredAdults', 'absentNormal', 'absentAdults', 'absenteesNames', 'subject', 'grade', 'proctorName'].includes(field) && cloudDB && !suppressAutoSaveRef.current) {
-                    saveExactPayloadToCloud({ sessionsData: updated }).catch((error) => {
-                        console.error('Immediate receiving cloud save error:', error);
-                    });
+                    scheduleSessionsCloudSave(updated);
                 }
             };
 
@@ -7765,12 +7796,25 @@ const applyScheduleToEnvelopes = (silent = false) => {
             };
 
             const handlePrint = () => {
+                const prepareAbsencePrintNames = () => {
+                    try {
+                        document.querySelectorAll('[data-absence-print-input="true"]').forEach(input => {
+                            const holder = input.closest('div');
+                            const printName = holder ? holder.querySelector('.absence-print-name') : null;
+                            if (printName) printName.textContent = String(input.value || '').trim() || '—';
+                        });
+                    } catch (e) {}
+                };
                 // تثبيت آخر حرف مكتوب في حقول الغياب قبل الطباعة حتى لا تختفي الأسماء أو تظهر ناقصة.
+                prepareAbsencePrintNames();
                 try {
                     const active = document.activeElement;
                     if (active && typeof active.blur === 'function') active.blur();
                 } catch (e) {}
-                setTimeout(() => window.print(), 80);
+                setTimeout(() => {
+                    prepareAbsencePrintNames();
+                    window.print();
+                }, 180);
             };
 
             const applySmartMonitorDataForDate = (dateToApply = currentDate) => {
