@@ -473,15 +473,26 @@
     }
 
     function errorMessage(error) {
-      return (error && (error.message || error.code)) || "حدث خطأ غير متوقع.";
+      const code = error && error.code ? String(error.code).replace(/^functions\//, "") : "";
+      const detail = error && error.details && (error.details.message || error.details.error || error.details.reason);
+      let message = (error && error.message) || detail || code || "حدث خطأ غير متوقع.";
+      if (message === "internal") {
+        message = "حدث خطأ داخل دوال Firebase. اضغط تحديث القائمة، وإذا تكرر الخطأ تأكد من تفعيل Firestore ثم أعد نشر الدوال.";
+      }
+      return code && !message.includes(code) ? `${message} (${code})` : message;
     }
 
     async function refreshUsers() {
       setMessage($("mainMessage"), "info", "جاري تحميل المستخدمين...");
       try {
         const result = await listSchoolUsers({ limit: 120 });
-        renderUsers((result.data && result.data.users) || []);
-        setMessage($("mainMessage"), "", "");
+        const data = result.data || {};
+        renderUsers(data.users || []);
+        if (data.warning) {
+          setMessage($("mainMessage"), "info", data.warning);
+        } else {
+          setMessage($("mainMessage"), "", "");
+        }
       } catch (error) {
         setMessage($("mainMessage"), "err", errorMessage(error));
       }
