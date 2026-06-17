@@ -248,7 +248,7 @@
                 try {
                     const stateString = JSON.stringify(stripOldControlDerivedFieldsFromState(data || {}));
                     purgeOldControlDerivedDataSmartOnly();
-                    localStorage.setItem('monitoring_distribution_full_state_v4', stateString);
+                    try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
                     try { localStorage.setItem(`monitoring_distribution_full_state_v4_${schoolId}`, stateString); } catch(e) {}
                 } catch(e) { console.warn('تعذر تجهيز بيانات المراقب الذكي محليًا', e); }
                 return true;
@@ -312,7 +312,7 @@
                 state = stripOldControlDerivedFieldsFromState(state);
                 state = cleanFirestoreValue(state);
                 const stateString = JSON.stringify(state);
-                try { localStorage.setItem('monitoring_distribution_full_state_v4', stateString); } catch(e) {}
+                try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
                 try { localStorage.setItem(`monitoring_distribution_full_state_v4_${window.currentSchoolId}`, stateString); } catch(e) {}
                 try { window.__LAST_MONITORING_STATE_STRING = stateString; } catch(e) {}
                 const nowIso = new Date().toISOString();
@@ -405,11 +405,14 @@
                 clearTimeout(monitoringAppSaveTimer);
                 if (app && app.cloudSaveTimer) clearTimeout(app.cloudSaveTimer);
                 if (app && typeof app.ensureAllGrade11OptionalRows === 'function') app.ensureAllGrade11OptionalRows();
-                if (app && typeof app.getSerializableState === 'function') {
+                if (!options.flushIframe && window.__LAST_MONITORING_STATE_STRING) {
+                    try { state = JSON.parse(window.__LAST_MONITORING_STATE_STRING); } catch(e) { state = null; }
+                }
+                if (!state && app && typeof app.getSerializableState === 'function') {
                     state = app.getSerializableState();
-                } else {
+                } else if (!state) {
                     const scopedKey = `monitoring_distribution_full_state_v4_${window.currentSchoolId}`;
-                    const saved = localStorage.getItem(scopedKey) || localStorage.getItem('monitoring_distribution_full_state_v4');
+                    const saved = localStorage.getItem(scopedKey);
                     state = saved ? JSON.parse(saved) : null;
                 }
                 if (!state || typeof state !== 'object') {
@@ -684,7 +687,7 @@
                 purgeOldControlDerivedDataSmartOnly();
 
                 // هذه المفاتيح تغطي طريقة قراءة الكنترول والمراقب الذكي، بعد تنظيف بيانات الكنترول القديمة.
-                localStorage.setItem('monitoring_distribution_full_state_v4', stateString);
+                try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
                 localStorage.setItem('monitoring_distribution_full_state_v4_demo_school', stateString);
 
                 try { window.__LAST_MONITORING_STATE_STRING = stateString; } catch(e) {}
@@ -845,6 +848,68 @@
             }
         }
 
+
+        function purgeAllOldControlFilesAndCaches() {
+            try {
+                const currentSchoolId = window.currentSchoolId || '';
+                const allowedSmartKey = currentSchoolId ? ('monitoring_distribution_full_state_v4_' + currentSchoolId) : '';
+                const allowedDemoKey = currentSchoolId === 'demo_school' ? 'monitoring_distribution_full_state_v4_demo_school' : '';
+
+                const oldControlPatterns = [
+                    /^monitoring_distribution_full_state_v4$/,
+                    /^monitoring_distribution_full_state_v4_(?!.*$)/,
+                    /^monitoring_distribution_teachers_v2$/,
+                    /^monitoring_distribution_teachers_v2_/,
+                    /^monitoring_control_bridge_v1$/,
+                    /^control_bridge_/,
+                    /^control_/,
+                    /^old_control_/,
+                    /^legacy_control_/,
+                    /^exam_/,
+                    /^examSessions/,
+                    /^examEnvelopes/,
+                    /^sessionsByDate/,
+                    /^sessions_by_date/,
+                    /^dailyReports/,
+                    /^daily_reports/,
+                    /^proctor/,
+                    /^proctoring/,
+                    /^observer/,
+                    /^observers/,
+                    /^committee_/,
+                    /^teacher_exceptions/,
+                    /^subject_exceptions/,
+                    /^exceptions_/,
+                    /^savedExamDate$/,
+                    /^smart_monitor_temp_/,
+                    /^__LAST_MONITORING/
+                ];
+
+                const toRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i) || '';
+                    if (key === allowedSmartKey || key === allowedDemoKey) continue;
+
+                    if (/^monitoring_distribution_full_state_v4_/.test(key) && key !== allowedSmartKey && key !== allowedDemoKey) {
+                        toRemove.push(key);
+                        continue;
+                    }
+
+                    if (oldControlPatterns.some((r) => r.test(key))) toRemove.push(key);
+                }
+
+                [...new Set(toRemove)].forEach((key) => {
+                    try { localStorage.removeItem(key); } catch(e) {}
+                });
+
+                try { sessionStorage.removeItem('smart_monitor_selected_daily_exam_id'); } catch(e) {}
+                return true;
+            } catch(e) {
+                console.warn('تعذر حذف ملفات الكنترول القديمة', e);
+                return false;
+            }
+        }
+
 async function openSchoolForUser(user) {
             if (!user) return;
             purgeOldControlDerivedDataSmartOnly();
@@ -894,7 +959,9 @@ async function openSchoolForUser(user) {
                 prepareCleanDefaultMonitoringStateForNewUser(window.currentSchoolId);
             }
 
+            purgeAllOldControlFilesAndCaches();
             await restoreSchoolLocalStorage(window.currentSchoolId);
+            purgeAllOldControlFilesAndCaches();
             if (isSchool001User(window.currentSchoolInfo || userData)) await forceLoadDemoSchoolSnapshotForSchool001();
             purgeOldControlDerivedDataSmartOnly();
             await restoreMonitoringAppDataFromCloud(window.currentSchoolId);
@@ -5344,7 +5411,7 @@ const App = () => {
                 grade12OptionalRows: cleanBridge.grade12OptionalRows || {},
                 updatedAtLocal: new Date().toISOString()
             };
-            localStorage.setItem('monitoring_distribution_full_state_v4', JSON.stringify(stateLike));
+            try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
             if (window.currentSchoolId)
                 localStorage.setItem(`monitoring_distribution_full_state_v4_${window.currentSchoolId}`, JSON.stringify(stateLike));
         }
