@@ -129,6 +129,7 @@
         }
 
         function clearDefaultOnlyRuntimeKeys(currentSchoolId) {
+            if (!CONTROL_DEFAULT_ONLY_SCHOOL_IDS.has(normalizeSchoolUserId(currentSchoolId))) return false;
             try {
                 const keepKey = currentSchoolId ? ('monitoring_distribution_full_state_v4_' + currentSchoolId) : '';
                 const toRemove = [];
@@ -726,10 +727,13 @@
         }
         function restoreLocalControlSession(session) {
             if (!session || !session.schoolId) return false;
-            window.currentSchoolId = session.schoolId;
-            const defaultOnly = isDefaultOnlySchoolUser(session.userData || {}, session.schoolId);
+            const rawSessionUserData = session.userData || {};
+            const sessionUsername = String(rawSessionUserData.username || session.schoolId || '').trim().toLowerCase();
+            const resolvedSessionSchoolId = resolveSchoolIdForUser({ email: sessionUsername ? `${sessionUsername}@monitoring.local` : '' }, rawSessionUserData);
+            window.currentSchoolId = resolvedSessionSchoolId || session.schoolId;
+            const defaultOnly = isDefaultOnlySchoolUser(rawSessionUserData, window.currentSchoolId);
             const sessionUserData = defaultOnly ? sanitizeDefaultOnlySchoolInfo(session.userData || {}) : (session.userData || {});
-            window.currentSchoolInfo = { ...sessionUserData, schoolId: session.schoolId, resolvedSchoolId: session.schoolId, defaultOnly };
+            window.currentSchoolInfo = { ...sessionUserData, schoolId: window.currentSchoolId, resolvedSchoolId: window.currentSchoolId, defaultOnly };
             
             if (defaultOnly) {
                 enforceCleanDefaultMonitoringState(window.currentSchoolId);
@@ -752,13 +756,15 @@
         }
         
         function resolveSchoolIdForUser(user, userData = {}) {
-            if (isSchool001User(userData)) return 'demo_school';
             const schoolId = String(userData.schoolId || '').trim();
-            const username = String(userData.username || '').trim();
+            const authUsername = String((user && user.email ? user.email.split('@')[0] : '') || '').trim();
+            const username = String(userData.username || authUsername || '').trim();
             const normalizedUsername = normalizeSchoolUserId(username);
             const normalizedSchoolId = normalizeSchoolUserId(schoolId);
             if (CONTROL_DEFAULT_ONLY_SCHOOL_IDS.has(normalizedUsername)) return normalizedUsername;
             if (CONTROL_DEFAULT_ONLY_SCHOOL_IDS.has(normalizedSchoolId)) return normalizedSchoolId;
+            if (normalizedUsername === 'school001') return 'demo_school';
+            if (!normalizedUsername && normalizedSchoolId === 'demo_school') return 'demo_school';
             return schoolId || username || user.uid;
         }
 
@@ -914,7 +920,8 @@
         function isSchool001User(userData = {}) {
             const username = String(userData.username || '').trim().toLowerCase();
             const schoolId = String(userData.schoolId || '').trim().toLowerCase();
-            return username === 'school001' || schoolId === 'demo_school';
+            if (username) return username === 'school001';
+            return schoolId === 'demo_school';
         }
 
         function isProtectedSchool001StorageKey(key) {
@@ -1004,6 +1011,7 @@
 
         function enforceCleanDefaultMonitoringState(currentSchoolId) {
             if (!currentSchoolId) return false;
+            if (!CONTROL_DEFAULT_ONLY_SCHOOL_IDS.has(normalizeSchoolUserId(currentSchoolId))) return false;
             try {
                 try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
                 try { localStorage.removeItem('monitoring_distribution_full_state_v4_' + currentSchoolId); } catch(e) {}
@@ -1018,6 +1026,7 @@
 
         async function resetDefaultOnlyMonitoringDataInCloud(currentSchoolId) {
             if (!currentSchoolId) return false;
+            if (!CONTROL_DEFAULT_ONLY_SCHOOL_IDS.has(normalizeSchoolUserId(currentSchoolId))) return false;
             const blankState = cleanFirestoreValue(buildCleanDefaultMonitoringState(currentSchoolId));
             try {
                 await setDoc(fbDoc(db, 'schools', currentSchoolId, 'monitoring', 'appData'), {
@@ -1126,10 +1135,15 @@ async function openSchoolForUser(user) {
                 setLoginError('هذا الحساب غير مفعل. اجعل active = true في schoolUsers.');
                 return;
             }
+            const authUsername = String((user && user.email ? user.email.split('@')[0] : '') || '').trim().toLowerCase();
+            const normalizedUserData = {
+                ...userData,
+                username: String(userData.username || authUsername || '').trim().toLowerCase()
+            };
             const previousSchoolId = window.currentSchoolId || window.__CONTROL_LAST_OPENED_SCHOOL_ID || '';
-            window.currentSchoolId = resolveSchoolIdForUser(user, userData);
-            const defaultOnly = isDefaultOnlySchoolUser(userData, window.currentSchoolId);
-            const effectiveUserData = defaultOnly ? sanitizeDefaultOnlySchoolInfo(userData) : userData;
+            window.currentSchoolId = resolveSchoolIdForUser(user, normalizedUserData);
+            const defaultOnly = isDefaultOnlySchoolUser(normalizedUserData, window.currentSchoolId);
+            const effectiveUserData = defaultOnly ? sanitizeDefaultOnlySchoolInfo(normalizedUserData) : normalizedUserData;
             if (previousSchoolId && previousSchoolId !== window.currentSchoolId) {
                 backupSchoolLocalRuntimeKeys(previousSchoolId);
             }
@@ -1155,15 +1169,15 @@ async function openSchoolForUser(user) {
             try {
                 await setDoc(fbDoc(db, 'schools', window.currentSchoolId), {
                     schoolId: window.currentSchoolId,
-                    schoolName: defaultOnly ? '' : (userData.schoolName || ''),
-                    username: userData.username || '',
+                    schoolName: defaultOnly ? '' : (effectiveUserData.schoolName || ''),
+                    username: effectiveUserData.username || '',
                     defaultOnly,
                     active: true,
                     lastOpenAt: serverTimestamp()
                 }, { merge: true });
             } catch(e) { console.warn('تعذر تحديث مستند المدرسة', e); }
 
-            if (!isSchool001User(window.currentSchoolInfo || userData)) {
+            if (!isSchool001User(window.currentSchoolInfo || normalizedUserData)) {
                 purgeOldControlFirestoreData(window.currentSchoolId).catch(e => console.warn('تعذر تشغيل تنظيف بيانات الكنترول القديمة في الخلفية', e));
             }
             
@@ -1171,7 +1185,7 @@ async function openSchoolForUser(user) {
                 clearDefaultOnlyRuntimeKeys(window.currentSchoolId);
                 enforceCleanDefaultMonitoringState(window.currentSchoolId);
                 resetDefaultOnlyMonitoringDataInCloud(window.currentSchoolId).catch(e => console.warn('تعذر تصفير school002 في الخلفية', e));
-            } else if (isSchool001User(window.currentSchoolInfo || userData)) {
+            } else if (isSchool001User(window.currentSchoolInfo || normalizedUserData)) {
                 // school001 فقط يسترجع بيانات demo_school القديمة.
             } else {
                 clearMonitoringKeysForFreshUser(window.currentSchoolId);
@@ -1180,19 +1194,19 @@ async function openSchoolForUser(user) {
 
             if (defaultOnly) {
                 clearDefaultOnlyRuntimeKeys(window.currentSchoolId);
-            } else if (!isSchool001User(window.currentSchoolInfo || userData)) {
+            } else if (!isSchool001User(window.currentSchoolInfo || normalizedUserData)) {
                 purgeAllOldControlFilesAndCaches();
                 restoreSchoolLocalRuntimeBackup(window.currentSchoolId);
             }
             await restoreSchoolLocalStorage(window.currentSchoolId);
             if (defaultOnly) {
                 clearDefaultOnlyRuntimeKeys(window.currentSchoolId);
-            } else if (!isSchool001User(window.currentSchoolInfo || userData)) {
+            } else if (!isSchool001User(window.currentSchoolInfo || normalizedUserData)) {
                 purgeAllOldControlFilesAndCaches();
                 restoreSchoolLocalRuntimeBackup(window.currentSchoolId);
             }
             let school001SnapshotRestored = false;
-            if (isSchool001User(window.currentSchoolInfo || userData)) {
+            if (isSchool001User(window.currentSchoolInfo || normalizedUserData)) {
                 clearDefaultOnlyRuntimeKeys(window.currentSchoolId);
                 restoreSchoolLocalRuntimeBackup(window.currentSchoolId);
                 school001SnapshotRestored = await forceLoadDemoSchoolSnapshotForSchool001();
@@ -1201,7 +1215,7 @@ async function openSchoolForUser(user) {
             const smartDataRestored = defaultOnly ? false : (school001SnapshotRestored ? true : await restoreMonitoringAppDataFromCloud(window.currentSchoolId));
             if (defaultOnly) {
                 enforceCleanDefaultMonitoringState(window.currentSchoolId);
-            } else if (!isSchool001User(window.currentSchoolInfo || userData) && !smartDataRestored) {
+            } else if (!isSchool001User(window.currentSchoolInfo || normalizedUserData) && !smartDataRestored) {
                 clearMonitoringKeysForFreshUser(window.currentSchoolId);
                 prepareCleanDefaultMonitoringStateForNewUser(window.currentSchoolId);
             }
@@ -1212,7 +1226,7 @@ async function openSchoolForUser(user) {
                 const scopedKey = `monitoring_distribution_full_state_v4_${window.currentSchoolId}`;
                 if (defaultOnly) {
                     prepareCleanDefaultMonitoringStateForNewUser(window.currentSchoolId, true);
-                } else if (!localStorage.getItem(scopedKey) && !isSchool001User(window.currentSchoolInfo || userData)) {
+                } else if (!localStorage.getItem(scopedKey) && !isSchool001User(window.currentSchoolInfo || normalizedUserData)) {
                     prepareCleanDefaultMonitoringStateForNewUser(window.currentSchoolId);
                 }
             } catch(e) {}
