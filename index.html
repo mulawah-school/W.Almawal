@@ -231,6 +231,7 @@
         function showLogin() {
             const login = document.getElementById('control-login-screen');
             const root = document.getElementById('root');
+            clearLoginFields();
             if (login) login.style.display = 'flex';
             if (root) root.style.display = 'none';
         }
@@ -242,6 +243,14 @@
         }
         function markActivity() {
             try { localStorage.setItem(AUTH_LAST_ACTIVITY_KEY, String(Date.now())); } catch(e) {}
+        }
+        function clearLoginFields() {
+            try {
+                const username = document.getElementById('control-login-username');
+                const password = document.getElementById('control-login-password');
+                if (username) username.value = '';
+                if (password) password.value = '';
+            } catch(e) {}
         }
         function saveLocalControlSession(user, userData) {
             try {
@@ -1266,6 +1275,7 @@ async function openSchoolForUser(user) {
                 const root = document.getElementById('root');
                 const login = document.getElementById('control-login-screen');
                 if (typeof window.resetControlAppShell === 'function') window.resetControlAppShell();
+                clearLoginFields();
                 if (root) root.style.display = 'none';
                 if (login) login.style.display = 'flex';
 
@@ -1613,14 +1623,10 @@ async function openSchoolForUser(user) {
             </div>
             <div id="control-auth-status" style="display:inline-block;font-size:11px;font-weight:800;border-radius:999px;padding:5px 10px;margin-bottom:16px;background:#f1f5f9;color:#475569;">غير متصل</div>
             <label style="font-size:13px;font-weight:800;color:#334155;display:block;margin-bottom:6px;">اسم المستخدم</label>
-            <input id="control-login-username" type="text" placeholder="مثال: school001" style="width:100%;margin-bottom:14px;padding:12px;border:1px solid #cbd5e1;border-radius:13px;font-size:14px;box-sizing:border-box;outline:none;">
+            <input id="control-login-username" type="text" placeholder="مثال: school001" autocomplete="off" autocapitalize="none" spellcheck="false" style="width:100%;margin-bottom:14px;padding:12px;border:1px solid #cbd5e1;border-radius:13px;font-size:14px;box-sizing:border-box;outline:none;">
             <label style="font-size:13px;font-weight:800;color:#334155;display:block;margin-bottom:6px;">كلمة المرور</label>
-            <input id="control-login-password" type="password" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter') loginWithControlUsername()" style="width:100%;margin-bottom:12px;padding:12px;border:1px solid #cbd5e1;border-radius:13px;font-size:14px;box-sizing:border-box;outline:none;">
+            <input id="control-login-password" type="password" placeholder="كلمة المرور" autocomplete="new-password" onkeydown="if(event.key==='Enter') loginWithControlUsername()" style="width:100%;margin-bottom:12px;padding:12px;border:1px solid #cbd5e1;border-radius:13px;font-size:14px;box-sizing:border-box;outline:none;">
             <div id="control-login-error" style="min-height:20px;color:#dc2626;font-size:13px;margin-bottom:12px;font-weight:700;"></div>
-            
-            <button type="button" onclick="if(window.clearOldControlMonitorData){window.clearOldControlMonitorData(); const e=document.getElementById('control-login-error'); if(e){e.style.color='#166534';e.textContent='تم تنظيف بيانات المراقب والجداول القديمة من هذا المتصفح.';}}" style="width:100%;padding:10px;border:none;border-radius:13px;background:#f1f5f9;color:#334155;font-weight:900;font-size:13px;cursor:pointer;margin-bottom:10px;">
-                تنظيف بيانات المراقب والجداول القديمة
-            </button>
 
             <button onclick="loginWithControlUsername()" style="width:100%;padding:13px;border:none;border-radius:13px;background:linear-gradient(135deg,#1d4ed8,#059669);color:white;font-weight:900;font-size:15px;cursor:pointer;box-shadow:0 10px 22px rgba(29,78,216,.22);">
                 دخول
@@ -1835,6 +1841,49 @@ const isSafeFirestoreDateKey = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(valu
 const getSafeCurrentDate = (value, fallback = CONTROL_DEFAULT_DATE) => {
     const normalized = normalizeControlDateKey(value, fallback);
     return isSafeFirestoreDateKey(normalized) ? normalized : CONTROL_DEFAULT_DATE;
+};
+const CONTROL_LAST_EXAM_DATE_PREFIX = "schoolLastExamDate_v1_";
+const getCurrentControlSchoolId = () => {
+    try {
+        return String(window.currentSchoolId || (window.currentSchoolInfo && window.currentSchoolInfo.schoolId) || '').trim();
+    }
+    catch (e) {
+        return '';
+    }
+};
+const getSchoolLastExamDateStorageKey = (schoolId = getCurrentControlSchoolId()) => {
+    const safeSchoolId = String(schoolId || 'default').replace(/[^a-zA-Z0-9_-]/g, '_') || 'default';
+    return `${CONTROL_LAST_EXAM_DATE_PREFIX}${safeSchoolId}`;
+};
+const getStoredSafeExamDate = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw)
+        return '';
+    const normalized = normalizeControlDateKey(raw, CONTROL_DEFAULT_DATE);
+    return isSafeFirestoreDateKey(normalized) ? normalized : '';
+};
+const loadLastExamDateForCurrentSchool = () => {
+    try {
+        const scopedDate = getStoredSafeExamDate(localStorage.getItem(getSchoolLastExamDateStorageKey()));
+        if (scopedDate)
+            return scopedDate;
+        const genericDate = getStoredSafeExamDate(localStorage.getItem("savedExamDate") || localStorage.getItem("control_last_safe_date"));
+        if (genericDate)
+            return genericDate;
+    }
+    catch (e) { }
+    return CONTROL_DEFAULT_DATE;
+};
+const persistLastExamDateForCurrentSchool = (dateValue) => {
+    const safeDate = getSafeCurrentDate(dateValue, CONTROL_DEFAULT_DATE);
+    try {
+        localStorage.setItem(getSchoolLastExamDateStorageKey(), safeDate);
+        localStorage.setItem("savedExamDate", safeDate);
+        localStorage.setItem("control_last_safe_date", safeDate);
+        window.__CONTROL_LAST_SELECTED_EXAM_DATE = safeDate;
+    }
+    catch (e) { }
+    return safeDate;
 };
 const getDateCandidateParts = (value, fallback = CONTROL_DEFAULT_DATE) => {
     const fallbackYear = String(getSafeCurrentDate(fallback, CONTROL_DEFAULT_DATE)).slice(0, 4);
@@ -5623,14 +5672,8 @@ const App = () => {
         setActiveTab(tab);
     };
     const [currentDate, setCurrentDate] = useState(() => {
-        const savedExamDate = localStorage.getItem("savedExamDate");
-        const normalizedDate = getSafeCurrentDate(savedExamDate, CONTROL_DEFAULT_DATE);
-        if (savedExamDate !== normalizedDate) {
-            try {
-                localStorage.setItem("savedExamDate", normalizedDate);
-            }
-            catch (e) { }
-        }
+        const normalizedDate = loadLastExamDateForCurrentSchool();
+        persistLastExamDateForCurrentSchool(normalizedDate);
         return normalizedDate;
     });
     const [dayName, setDayName] = useState('الأحد');
@@ -6843,10 +6886,7 @@ const App = () => {
         let cancelled = false;
         const dateToLoad = getSafeCurrentDate(currentDate, CONTROL_DEFAULT_DATE);
         if (dateToLoad !== currentDate) {
-            try {
-                localStorage.setItem("savedExamDate", dateToLoad);
-            }
-            catch (e) { }
+            persistLastExamDateForCurrentSchool(dateToLoad);
             setCurrentDate(dateToLoad);
             return;
         }
@@ -6890,10 +6930,7 @@ const App = () => {
             const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
             const d = new Date(String(dateToLoad) + 'T00:00:00');
             setDayName(Number.isNaN(d.getTime()) ? '' : days[d.getDay()]);
-            try {
-                localStorage.setItem('control_last_safe_date', dateToLoad);
-            }
-            catch (e) { }
+            persistLastExamDateForCurrentSchool(dateToLoad);
             setHasUnsavedChanges(false);
             setTimeout(() => {
                 if (!cancelled) {
@@ -7751,11 +7788,7 @@ const App = () => {
         const newDate = getSafeCurrentDate(rawDate, currentDate || CONTROL_DEFAULT_DATE);
         if (!isSafeFirestoreDateKey(newDate))
             return;
-        try {
-            localStorage.setItem("savedExamDate", newDate);
-            localStorage.setItem("control_last_safe_date", newDate);
-        }
-        catch (e) { }
+        persistLastExamDateForCurrentSchool(newDate);
         setAlertMessage(null);
         setIsSaving(false);
         setHasUnsavedChanges(false);
