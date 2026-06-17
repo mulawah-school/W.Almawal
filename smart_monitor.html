@@ -34,6 +34,10 @@
 
 <script>
 (function(){
+  function isDefaultOnlySchoolId(sid){
+    return String(sid || '').trim().toLowerCase() === 'school002';
+  }
+  window.isDefaultOnlySchoolId = isDefaultOnlySchoolId;
   function cleanGenericStateForNonDemoSchool(){
     try {
       var sid = window.currentSchoolId ||
@@ -47,6 +51,10 @@
       localStorage.removeItem('monitoring_distribution_full_state_v4');
       localStorage.removeItem('monitoring_distribution_full_state_v4_demo_school');
       localStorage.removeItem('monitoring_distribution_full_state_v4_school001');
+      if (isDefaultOnlySchoolId(sid)) {
+        localStorage.removeItem('monitoring_distribution_full_state_v4_school002');
+        localStorage.removeItem('monitoring_distribution_teachers_v2_school002');
+      }
     } catch(e) {}
   }
   cleanGenericStateForNonDemoSchool();
@@ -2178,6 +2186,26 @@
                     if (typeof this.ensureAllGrade12OptionalRows === 'function') this.ensureAllGrade12OptionalRows();
                 },
 
+                applyCleanDefaultStateForCurrentSchool() {
+                    this.schoolSettings = { ministry: 'وزارة التعليم', directorate: '', schoolName: '', logoDataUrl: '' };
+                    this.teachers = [];
+                    this.schoolClasses = [];
+                    this.exams = [];
+                    this.assignments = [];
+                    this.subjectRestrictions = [];
+                    this.teacherRestrictions = [];
+                    this.selectedDailyExamId = null;
+                    this.grade11OptionalRows = {};
+                    this.grade12OptionalRows = {};
+                    try {
+                        localStorage.removeItem('monitoring_distribution_full_state_v4');
+                        localStorage.removeItem('monitoring_distribution_full_state_v4_school002');
+                        localStorage.removeItem('monitoring_distribution_teachers_v2_school002');
+                    } catch(e) {}
+                    this.safeSaveLocalSnapshot(this.getSerializableState());
+                    this.scheduleControlBridgeSync ? this.scheduleControlBridgeSync('default_only_school') : this.syncControlBridgeData({ force: true });
+                },
+
                 cleanForFirestore(value) {
                     if (value === undefined) return null;
                     if (value === null) return null;
@@ -2323,7 +2351,25 @@
                     try {
                         this.isLoadingCloudData = true;
                         if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('تحميل البيانات...', 'loading');
-                        const { db, doc, getDoc } = window.monitoringFirebase;
+                        const { db, doc, getDoc, setDoc, serverTimestamp } = window.monitoringFirebase;
+                        if (window.isDefaultOnlySchoolId && window.isDefaultOnlySchoolId(window.currentSchoolId)) {
+                            this.applyCleanDefaultStateForCurrentSchool();
+                            const state = this.cleanForFirestore(this.getSerializableState());
+                            await setDoc(doc(db, 'schools', window.currentSchoolId, 'monitoring', 'appData'), {
+                                ...state,
+                                updatedAt: serverTimestamp(),
+                                updatedAtLocal: new Date().toISOString(),
+                                resetToDefaultBySmartMonitor: true
+                            });
+                            await setDoc(doc(db, 'schools', window.currentSchoolId, 'monitoring', 'teachers'), {
+                                teachers: [],
+                                updatedAt: serverTimestamp(),
+                                updatedAtLocal: new Date().toISOString(),
+                                resetToDefaultBySmartMonitor: true
+                            });
+                            if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('بيانات افتراضية', 'success');
+                            return;
+                        }
                         const ref = doc(db, 'schools', window.currentSchoolId, 'monitoring', 'appData');
                         const snap = await getDoc(ref);
                         if (snap.exists()) {
@@ -2655,7 +2701,13 @@
                         this.darkMode = true;
                         document.documentElement.classList.add('dark');
                     }
+                    if (window.isDefaultOnlySchoolId && window.isDefaultOnlySchoolId(window.currentSchoolId)) {
+                        this.applyCleanDefaultStateForCurrentSchool();
+                    }
                     this.loadSavedData();
+                    if (window.isDefaultOnlySchoolId && window.isDefaultOnlySchoolId(window.currentSchoolId)) {
+                        this.applyCleanDefaultStateForCurrentSchool();
+                    }
                     this.migrateLegacySubjectCountsToGrade11Optional();
                     this.ensureAllGrade11OptionalRows();
                     this.ensureAllGrade12OptionalRows();

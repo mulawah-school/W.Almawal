@@ -56,6 +56,32 @@
         let lastOpenedAuthUid = null;
 
         const CONTROL_LOGOUT_FLAG_KEY = 'control_force_logged_out_v1';
+        const CONTROL_DEFAULT_ONLY_SCHOOL_IDS = new Set(['school002']);
+
+        function normalizeSchoolUserId(value) {
+            return String(value || '').trim().toLowerCase();
+        }
+
+        function isDefaultOnlySchoolUser(userData = {}, resolvedSchoolId = '') {
+            const ids = [
+                resolvedSchoolId,
+                userData.schoolId,
+                userData.resolvedSchoolId,
+                userData.username
+            ].map(normalizeSchoolUserId).filter(Boolean);
+            return ids.some(id => CONTROL_DEFAULT_ONLY_SCHOOL_IDS.has(id));
+        }
+
+        function sanitizeDefaultOnlySchoolInfo(userData = {}) {
+            return {
+                ...userData,
+                schoolName: '',
+                school: '',
+                directorate: '',
+                logoDataUrl: '',
+                schoolLogoDataUrl: ''
+            };
+        }
 
         function clearOldControlMonitorData() {
             try {
@@ -225,6 +251,7 @@
 
         async function restoreMonitoringAppDataFromCloud(schoolId) {
             if (!schoolId) return false;
+            if (CONTROL_DEFAULT_ONLY_SCHOOL_IDS.has(normalizeSchoolUserId(schoolId))) return false;
             try {
                 let data = {};
                 let hasData = false;
@@ -633,9 +660,13 @@
         function restoreLocalControlSession(session) {
             if (!session || !session.schoolId) return false;
             window.currentSchoolId = session.schoolId;
-            window.currentSchoolInfo = session.userData || { schoolId: session.schoolId, username: session.schoolId };
+            const defaultOnly = isDefaultOnlySchoolUser(session.userData || {}, session.schoolId);
+            const sessionUserData = defaultOnly ? sanitizeDefaultOnlySchoolInfo(session.userData || {}) : (session.userData || {});
+            window.currentSchoolInfo = { ...sessionUserData, schoolId: session.schoolId, resolvedSchoolId: session.schoolId, defaultOnly };
             
-            if (!isSchool001User(window.currentSchoolInfo || {})) {
+            if (defaultOnly) {
+                enforceCleanDefaultMonitoringState(window.currentSchoolId);
+            } else if (!isSchool001User(window.currentSchoolInfo || {})) {
                 clearMonitoringKeysForFreshUser(window.currentSchoolId);
                 prepareCleanDefaultMonitoringStateForNewUser(window.currentSchoolId);
             }
@@ -657,6 +688,10 @@
             if (isSchool001User(userData)) return 'demo_school';
             const schoolId = String(userData.schoolId || '').trim();
             const username = String(userData.username || '').trim();
+            const normalizedUsername = normalizeSchoolUserId(username);
+            const normalizedSchoolId = normalizeSchoolUserId(schoolId);
+            if (CONTROL_DEFAULT_ONLY_SCHOOL_IDS.has(normalizedUsername)) return normalizedUsername;
+            if (CONTROL_DEFAULT_ONLY_SCHOOL_IDS.has(normalizedSchoolId)) return normalizedSchoolId;
             return schoolId || username || user.uid;
         }
 
@@ -825,29 +860,73 @@
             }
         }
 
-        function prepareCleanDefaultMonitoringStateForNewUser(currentSchoolId) {
+        function buildCleanDefaultMonitoringState(currentSchoolId) {
+            return {
+                teachers: [],
+                exams: [],
+                assignments: [],
+                schoolClasses: [],
+                correctionCommittees: [],
+                subjectRestrictions: [],
+                teacherRestrictions: [],
+                grade11OptionalRows: {},
+                grade12OptionalRows: {},
+                schoolSettings: { ministry: 'وزارة التعليم', schoolName: '', directorate: '', logoDataUrl: '' },
+                updatedAtLocal: new Date().toISOString(),
+                defaultForNewUser: true,
+                forcedDefaultForSchool: currentSchoolId || ''
+            };
+        }
+
+        function prepareCleanDefaultMonitoringStateForNewUser(currentSchoolId, force = false) {
             try {
                 if (!currentSchoolId) return false;
                 const key = 'monitoring_distribution_full_state_v4_' + currentSchoolId;
-                if (localStorage.getItem(key)) return false;
+                if (!force && localStorage.getItem(key)) return false;
 
-                const blankState = {
-                    teachers: [],
-                    exams: [],
-                    assignments: [],
-                    schoolClasses: [],
-                    correctionCommittees: [],
-                    grade11OptionalRows: {},
-                    grade12OptionalRows: {},
-                    schoolSettings: { ministry: 'وزارة التعليم' },
-                    updatedAtLocal: new Date().toISOString(),
-                    defaultForNewUser: true
-                };
-
+                const blankState = buildCleanDefaultMonitoringState(currentSchoolId);
                 localStorage.setItem(key, JSON.stringify(blankState));
+                try { window.__LAST_MONITORING_STATE_STRING = JSON.stringify(blankState); } catch(e) {}
                 return true;
             } catch(e) {
                 console.warn('تعذر تجهيز بيانات افتراضية للمستخدم الجديد', e);
+                return false;
+            }
+        }
+
+        function enforceCleanDefaultMonitoringState(currentSchoolId) {
+            if (!currentSchoolId) return false;
+            try {
+                try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
+                try { localStorage.removeItem('monitoring_distribution_full_state_v4_' + currentSchoolId); } catch(e) {}
+                try { localStorage.removeItem('monitoring_distribution_teachers_v2_' + currentSchoolId); } catch(e) {}
+                clearMonitoringKeysForFreshUser(currentSchoolId);
+                return prepareCleanDefaultMonitoringStateForNewUser(currentSchoolId, true);
+            } catch(e) {
+                console.warn('تعذر فرض البيانات الافتراضية لهذا المستخدم', e);
+                return false;
+            }
+        }
+
+        async function resetDefaultOnlyMonitoringDataInCloud(currentSchoolId) {
+            if (!currentSchoolId) return false;
+            const blankState = cleanFirestoreValue(buildCleanDefaultMonitoringState(currentSchoolId));
+            try {
+                await setDoc(fbDoc(db, 'schools', currentSchoolId, 'monitoring', 'appData'), {
+                    ...blankState,
+                    updatedAt: serverTimestamp(),
+                    updatedAtLocal: new Date().toISOString(),
+                    resetToDefaultByControl: true
+                });
+                await setDoc(fbDoc(db, 'schools', currentSchoolId, 'monitoring', 'teachers'), {
+                    teachers: [],
+                    updatedAt: serverTimestamp(),
+                    updatedAtLocal: new Date().toISOString(),
+                    resetToDefaultByControl: true
+                });
+                return true;
+            } catch(e) {
+                console.warn('تعذر تصفير بيانات المراقب الذكي في Firebase لهذا المستخدم', e);
                 return false;
             }
         }
@@ -938,17 +1017,21 @@ async function openSchoolForUser(user) {
                 return;
             }
             window.currentSchoolId = resolveSchoolIdForUser(user, userData);
+            const defaultOnly = isDefaultOnlySchoolUser(userData, window.currentSchoolId);
+            const effectiveUserData = defaultOnly ? sanitizeDefaultOnlySchoolInfo(userData) : userData;
             window.currentSchoolInfo = {
-                ...userData,
+                ...effectiveUserData,
                 schoolId: window.currentSchoolId,
-                resolvedSchoolId: window.currentSchoolId
+                resolvedSchoolId: window.currentSchoolId,
+                defaultOnly
             };
 
             try {
                 await setDoc(fbDoc(db, 'schools', window.currentSchoolId), {
                     schoolId: window.currentSchoolId,
-                    schoolName: userData.schoolName || '',
+                    schoolName: defaultOnly ? '' : (userData.schoolName || ''),
                     username: userData.username || '',
+                    defaultOnly,
                     active: true,
                     lastOpenAt: serverTimestamp()
                 }, { merge: true });
@@ -956,7 +1039,10 @@ async function openSchoolForUser(user) {
 
             purgeOldControlFirestoreData(window.currentSchoolId).catch(e => console.warn('تعذر تشغيل تنظيف بيانات الكنترول القديمة في الخلفية', e));
             
-            if (isSchool001User(window.currentSchoolInfo || userData)) {
+            if (defaultOnly) {
+                enforceCleanDefaultMonitoringState(window.currentSchoolId);
+                resetDefaultOnlyMonitoringDataInCloud(window.currentSchoolId).catch(e => console.warn('تعذر تصفير school002 في الخلفية', e));
+            } else if (isSchool001User(window.currentSchoolInfo || userData)) {
                 // school001 فقط يسترجع بيانات demo_school القديمة.
             } else {
                 clearMonitoringKeysForFreshUser(window.currentSchoolId);
@@ -968,8 +1054,10 @@ async function openSchoolForUser(user) {
             purgeAllOldControlFilesAndCaches();
             if (isSchool001User(window.currentSchoolInfo || userData)) await forceLoadDemoSchoolSnapshotForSchool001();
             purgeOldControlDerivedDataSmartOnly();
-            const smartDataRestored = await restoreMonitoringAppDataFromCloud(window.currentSchoolId);
-            if (!isSchool001User(window.currentSchoolInfo || userData) && !smartDataRestored) {
+            const smartDataRestored = defaultOnly ? false : await restoreMonitoringAppDataFromCloud(window.currentSchoolId);
+            if (defaultOnly) {
+                enforceCleanDefaultMonitoringState(window.currentSchoolId);
+            } else if (!isSchool001User(window.currentSchoolInfo || userData) && !smartDataRestored) {
                 clearMonitoringKeysForFreshUser(window.currentSchoolId);
                 prepareCleanDefaultMonitoringStateForNewUser(window.currentSchoolId);
             }
@@ -978,11 +1066,13 @@ async function openSchoolForUser(user) {
             try {
                 localStorage.removeItem('monitoring_distribution_full_state_v4');
                 const scopedKey = `monitoring_distribution_full_state_v4_${window.currentSchoolId}`;
-                if (!localStorage.getItem(scopedKey) && !isSchool001User(window.currentSchoolInfo || userData)) {
+                if (defaultOnly) {
+                    prepareCleanDefaultMonitoringStateForNewUser(window.currentSchoolId, true);
+                } else if (!localStorage.getItem(scopedKey) && !isSchool001User(window.currentSchoolInfo || userData)) {
                     prepareCleanDefaultMonitoringStateForNewUser(window.currentSchoolId);
                 }
             } catch(e) {}
-            saveLocalControlSession(user, userData);
+            saveLocalControlSession(user, effectiveUserData);
             lastOpenedAuthUid = user.uid;
             window.CONTROL_APP_AUTH_READY = true;
             setAuthStatus('متصل: ' + window.currentSchoolId, 'success');
