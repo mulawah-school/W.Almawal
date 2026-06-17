@@ -63,56 +63,49 @@
             return LEGACY_SCHOOL_ID_BY_UID[uid] || userData.schoolId || userData.username || uid;
         }
 
-        function prepareLegacySnapshotItemsForUid(items, uid, legacySchoolId) {
-            try {
-                if (!items || typeof items !== 'object' || !uid) return {};
-                const out = { ...items };
-                const legacyKey = 'monitoring_distribution_full_state_v4_' + legacySchoolId;
-                const uidKey = 'monitoring_distribution_full_state_v4_' + uid;
-
-                if (typeof out[legacyKey] === 'string') {
-                    out[uidKey] = out[legacyKey];
-                    out['monitoring_distribution_full_state_v4'] = out[legacyKey];
-                }
-                if (typeof out['monitoring_distribution_full_state_v4_demo_school'] === 'string') {
-                    out[uidKey] = out['monitoring_distribution_full_state_v4_demo_school'];
-                    out['monitoring_distribution_full_state_v4'] = out['monitoring_distribution_full_state_v4_demo_school'];
-                }
-
-                return out;
-            } catch(e) {
-                return items || {};
-            }
+        function getMonitoringStateKeyForUid(uid) {
+            return 'monitoring_distribution_full_state_v4_' + uid;
         }
 
-        async function loadLegacySnapshotLocalOnly(uid, legacySchoolId) {
-            if (!uid || !legacySchoolId || uid !== 'cjHInP3SH7Q73Na2aBLQvmlFtVo2') return false;
-
-            // لا نكرر التحميل الثقيل في نفس الجلسة.
-            const marker = 'legacy_demo_school_loaded_for_' + uid;
+        function clearGenericMonitoringKeysForOtherUsers(currentUid) {
             try {
-                if (sessionStorage.getItem(marker) === '1') return false;
+                const allowedKey = getMonitoringStateKeyForUid(currentUid);
+                const remove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i) || '';
+                    if (k === 'monitoring_distribution_full_state_v4') remove.push(k);
+                    if (/^monitoring_distribution_full_state_v4_/.test(k) && k !== allowedKey) remove.push(k);
+                }
+                remove.forEach(k => { try { localStorage.removeItem(k); } catch(e) {} });
             } catch(e) {}
+        }
 
+        async function loadLegacyDemoSchoolForSpecificUid(uid, legacySchoolId) {
+            if (uid !== 'cjHInP3SH7Q73Na2aBLQvmlFtVo2' || legacySchoolId !== 'demo_school') return false;
             try {
+                clearGenericMonitoringKeysForOtherUsers(uid);
+
+                // إذا بيانات UID موجودة محليًا لا نعيد تحميل القديم.
+                const uidKey = getMonitoringStateKeyForUid(uid);
+                if (localStorage.getItem(uidKey)) return false;
+
                 const snap = await getDoc(fbDoc(db, 'schools', legacySchoolId, 'controlLocalStorage', 'snapshot'));
                 if (!snap.exists()) return false;
 
                 const data = snap.data() || {};
-                const items = prepareLegacySnapshotItemsForUid(data.items || {}, uid, legacySchoolId);
+                const items = data.items || {};
+                const stateString = items['monitoring_distribution_full_state_v4_demo_school'] || items['monitoring_distribution_full_state_v4_' + legacySchoolId];
 
-                Object.keys(items).forEach((k) => {
-                    try {
-                        if (typeof items[k] === 'string') localStorage.setItem(k, items[k]);
-                    } catch(e) {}
-                });
-
-                try { sessionStorage.setItem(marker, '1'); } catch(e) {}
-                try { setAuthStatus('تم تحميل بيانات ' + legacySchoolId, 'success'); } catch(e) {}
-                try { window.dispatchEvent(new Event('smart-data-refreshed')); } catch(e) {}
-                return true;
+                if (typeof stateString === 'string' && stateString.length > 2) {
+                    // مهم: لا نضع المفتاح العام حتى لا ينتقل لباقي اليوزرات.
+                    localStorage.setItem(uidKey, stateString);
+                    try { sessionStorage.setItem('control_current_uid_scope', uid); } catch(e) {}
+                    try { setAuthStatus('تم تحميل بيانات ' + legacySchoolId, 'success'); } catch(e) {}
+                    return true;
+                }
+                return false;
             } catch(e) {
-                console.warn('تعذر تحميل بيانات demo_school القديمة محليًا', e);
+                console.warn('تعذر تحميل بيانات demo_school للـ UID المحدد', e);
                 return false;
             }
         }
@@ -310,8 +303,8 @@
                 if (!hasData) return false;
                 try {
                     const stateString = JSON.stringify(data || {});
-                    localStorage.setItem('monitoring_distribution_full_state_v4', stateString);
-                    try { localStorage.setItem(`monitoring_distribution_full_state_v4_${schoolId}`, stateString); } catch(e) {}
+                    try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
+                    localStorage.setItem(`monitoring_distribution_full_state_v4_${schoolId}`, stateString);
                 } catch(e) { console.warn('تعذر تجهيز بيانات المراقب الذكي محليًا', e); }
                 return true;
             } catch(e) {
@@ -373,7 +366,7 @@
             try {
                 state = cleanFirestoreValue(state);
                 const stateString = JSON.stringify(state);
-                try { localStorage.setItem('monitoring_distribution_full_state_v4', stateString); } catch(e) {}
+                try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
                 try { localStorage.setItem(`monitoring_distribution_full_state_v4_${window.currentSchoolId}`, stateString); } catch(e) {}
                 try { window.__LAST_MONITORING_STATE_STRING = stateString; } catch(e) {}
                 const nowIso = new Date().toISOString();
@@ -694,6 +687,7 @@
             }
             const originalSchoolId = getLegacySchoolIdForUid(user.uid, userData);
             window.currentSchoolId = user.uid;
+            try { sessionStorage.setItem('control_current_uid_scope', window.currentSchoolId); } catch(e) {}
             window.currentSchoolInfo = {
                 ...userData,
                 schoolId: user.uid,
@@ -705,6 +699,8 @@
             try {
                 await setDoc(fbDoc(db, 'schools', window.currentSchoolId), {
                     schoolId: window.currentSchoolId,
+                    originalSchoolId,
+                    firebaseUid: user.uid,
                     schoolName: userData.schoolName || '',
                     username: userData.username || '',
                     active: true,
@@ -714,7 +710,8 @@
 
             await purgeOldControlFirestoreData(window.currentSchoolId);
             await restoreSchoolLocalStorage(window.currentSchoolId);
-            await loadLegacySnapshotLocalOnly(user.uid, originalSchoolId);
+            clearGenericMonitoringKeysForOtherUsers(user.uid);
+            await loadLegacyDemoSchoolForSpecificUid(user.uid, originalSchoolId);
             await restoreMonitoringAppDataFromCloud(window.currentSchoolId);
             window.cloudDB = buildCloudDB();
             window.monitoringFirebase = window.cloudDB;
@@ -2795,7 +2792,7 @@ const SmartMonitorSection = React.memo(() => {
                     " \u0627\u0644\u0645\u0631\u0627\u0642\u0628 \u0627\u0644\u0630\u0643\u064A"),
                 React.createElement("p", { className: "text-xs text-gray-500 mt-1" }, "\u0623\u062F\u062E\u0644 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0639\u0644\u0645\u064A\u0646 \u0648\u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A \u0648\u0634\u063A\u0651\u0644 \u0627\u0644\u062A\u0648\u0632\u064A\u0639 \u0627\u0644\u0630\u0643\u064A\u060C \u0648\u0633\u062A\u0646\u062A\u0642\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u062A\u0644\u0642\u0627\u0626\u064A\u064B\u0627 \u0625\u0644\u0649 \u062A\u0648\u0632\u064A\u0639 \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629 \u0648\u0627\u0644\u062A\u0642\u0631\u064A\u0631 \u0627\u0644\u064A\u0648\u0645\u064A \u0648\u0645\u062D\u0636\u0631 \u0641\u062A\u062D \u0627\u0644\u0645\u063A\u0644\u0641\u0627\u062A \u0639\u0646\u062F \u0627\u062E\u062A\u064A\u0627\u0631 \u0627\u0644\u062A\u0627\u0631\u064A\u062E."))),
         React.createElement("div", { className: "rounded-2xl overflow-hidden border border-gray-200 shadow bg-white" },
-            React.createElement("iframe", { title: "\u0627\u0644\u0645\u0631\u0627\u0642\u0628 \u0627\u0644\u0630\u0643\u064A", src: SMART_MONITOR_FILE, className: "w-full min-h-[1200px] bg-white", style: { border: '0' }, loading: "lazy", onLoad: (e) => {
+            React.createElement("iframe", { title: "\u0627\u0644\u0645\u0631\u0627\u0642\u0628 \u0627\u0644\u0630\u0643\u064A", src: (window.currentSchoolId ? ('smart_monitor.html?uid=' + encodeURIComponent(window.currentSchoolId)) : SMART_MONITOR_FILE), className: "w-full min-h-[1200px] bg-white", style: { border: '0' }, loading: "lazy", onLoad: (e) => {
                     try {
                         const w = e.currentTarget.contentWindow;
                         if (!w)
@@ -7398,7 +7395,7 @@ setTimeout(() => { if (!window.__CONTROL_APP_MOUNTED__) mountApp(); }, 800);
 
 <script>
 (function(){
-  function pushFirebaseBridgeToSmartMonitor(){
+  function bridgeSmartMonitor(){
     try {
       if (!window.currentSchoolId) return;
       var frames = Array.from(document.querySelectorAll('iframe'));
@@ -7407,52 +7404,26 @@ setTimeout(() => { if (!window.__CONTROL_APP_MOUNTED__) mountApp(); }, 800);
           var src = frame.getAttribute('src') || '';
           var title = frame.getAttribute('title') || '';
           if (!src.includes('smart_monitor') && !title.includes('المراقب')) return;
-
           var w = frame.contentWindow;
           if (!w) return;
-
           w.currentSchoolId = window.currentSchoolId;
           w.monitoringFirebase = window.monitoringFirebase || window.cloudDB || null;
           w.cloudDB = window.monitoringFirebase || window.cloudDB || null;
-
           try { w.sessionStorage.setItem('control_current_uid_scope', window.currentSchoolId); } catch(e) {}
-
-          if (w.monitoringDistributionApp) {
-            if (typeof w.monitoringDistributionApp.ensureParentFirebaseBridge === 'function') {
-              w.monitoringDistributionApp.ensureParentFirebaseBridge();
-            }
-            if (typeof w.monitoringDistributionApp.loadCloudData === 'function' && !w.monitoringDistributionApp.__parentCloudLoadedOnce) {
-              w.monitoringDistributionApp.__parentCloudLoadedOnce = true;
-              setTimeout(function(){ try { w.monitoringDistributionApp.loadCloudData(); } catch(e) {} }, 250);
-            }
-          }
-
           if (typeof w.updateCloudStatus === 'function' && (window.monitoringFirebase || window.cloudDB)) {
             w.updateCloudStatus('متصل بالسحابة', 'success');
+          }
+          if (w.monitoringDistributionApp && typeof w.monitoringDistributionApp.ensureParentFirebaseBridge === 'function') {
+            w.monitoringDistributionApp.ensureParentFirebaseBridge();
           }
         } catch(e) {}
       });
     } catch(e) {}
   }
-
-  window.pushFirebaseBridgeToSmartMonitor = pushFirebaseBridgeToSmartMonitor;
-  window.addEventListener('firebase-ready', function(){
-    setTimeout(pushFirebaseBridgeToSmartMonitor, 300);
-    setTimeout(pushFirebaseBridgeToSmartMonitor, 1200);
-  });
-  window.addEventListener('control-auth-ready', function(){
-    setTimeout(pushFirebaseBridgeToSmartMonitor, 300);
-    setTimeout(pushFirebaseBridgeToSmartMonitor, 1200);
-  });
-  window.addEventListener('smart-data-refreshed', pushFirebaseBridgeToSmartMonitor);
-  window.addEventListener('load', function(){
-    var count = 0;
-    var t = setInterval(function(){
-      pushFirebaseBridgeToSmartMonitor();
-      count++;
-      if (count > 10) clearInterval(t);
-    }, 700);
-  });
+  window.bridgeSmartMonitor = bridgeSmartMonitor;
+  window.addEventListener('firebase-ready', function(){ setTimeout(bridgeSmartMonitor, 300); setTimeout(bridgeSmartMonitor, 1000); });
+  window.addEventListener('control-auth-ready', function(){ setTimeout(bridgeSmartMonitor, 300); setTimeout(bridgeSmartMonitor, 1000); });
+  window.addEventListener('smart-data-refreshed', bridgeSmartMonitor);
 })();
 </script>
 
