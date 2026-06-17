@@ -30,7 +30,7 @@
     </script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc as fbDoc, getDoc, setDoc, deleteDoc, serverTimestamp, collection as fbCollection, onSnapshot, getDocs, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -45,7 +45,7 @@
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
-        try { setPersistence(auth, browserSessionPersistence); } catch(e) { console.warn('تعذر تثبيت جلسة الدخول محليًا', e); }
+        try { setPersistence(auth, inMemoryPersistence); } catch(e) { console.warn('تعذر تعطيل جلسة الدخول المحلية', e); }
         const db = getFirestore(app);
         const AUTH_LAST_ACTIVITY_KEY = 'control_auth_last_activity_v1';
         const AUTH_LOCAL_SESSION_KEY = 'control_auth_local_session_v2';
@@ -245,25 +245,11 @@
         }
         function saveLocalControlSession(user, userData) {
             try {
-                const schoolId = window.currentSchoolId || resolveSchoolIdForUser(user, userData || {});
-                localStorage.setItem(AUTH_LOCAL_SESSION_KEY, JSON.stringify({
-                    uid: user.uid,
-                    schoolId,
-                    userData,
-                    savedAt: Date.now()
-                }));
+                localStorage.removeItem(AUTH_LOCAL_SESSION_KEY);
             } catch(e) {}
         }
         function getLocalControlSession() {
-            try {
-                const raw = localStorage.getItem(AUTH_LOCAL_SESSION_KEY);
-                if (!raw) return null;
-                const session = JSON.parse(raw);
-                if (!session || !session.schoolId) return null;
-                return session;
-            } catch(e) {
-                return null;
-            }
+            return null;
         }
         function clearLocalControlSession() {
             try { localStorage.removeItem(AUTH_LOCAL_SESSION_KEY); } catch(e) {}
@@ -726,33 +712,8 @@
             };
         }
         function restoreLocalControlSession(session) {
-            if (!session || !session.schoolId) return false;
-            const rawSessionUserData = session.userData || {};
-            const sessionUsername = String(rawSessionUserData.username || session.schoolId || '').trim().toLowerCase();
-            const resolvedSessionSchoolId = resolveSchoolIdForUser({ email: sessionUsername ? `${sessionUsername}@monitoring.local` : '' }, rawSessionUserData);
-            window.currentSchoolId = resolvedSessionSchoolId || session.schoolId;
-            const defaultOnly = isDefaultOnlySchoolUser(rawSessionUserData, window.currentSchoolId);
-            const sessionUserData = defaultOnly ? sanitizeDefaultOnlySchoolInfo(session.userData || {}) : (session.userData || {});
-            window.currentSchoolInfo = { ...sessionUserData, schoolId: window.currentSchoolId, resolvedSchoolId: window.currentSchoolId, defaultOnly };
-            
-            if (defaultOnly) {
-                enforceCleanDefaultMonitoringState(window.currentSchoolId);
-            } else if (!isSchool001User(window.currentSchoolInfo || {})) {
-                clearMonitoringKeysForFreshUser(window.currentSchoolId);
-                prepareCleanDefaultMonitoringStateForNewUser(window.currentSchoolId);
-            }
-
-            window.cloudDB = buildCloudDB();
-            window.monitoringFirebase = window.cloudDB;
-            lastOpenedAuthUid = session.uid || lastOpenedAuthUid;
-            window.CONTROL_APP_AUTH_READY = true;
-            markActivity();
-            setLoginError('');
-            setAuthStatus('متصل بالسحابة: ' + window.currentSchoolId, 'success');
-            showApp();
-            window.dispatchEvent(new Event('firebase-ready'));
-            window.dispatchEvent(new Event('control-auth-ready'));
-            return true;
+            clearLocalControlSession();
+            return false;
         }
         
         function resolveSchoolIdForUser(user, userData = {}) {
@@ -1243,6 +1204,7 @@ async function openSchoolForUser(user) {
             try {
                 localStorage.removeItem(CONTROL_LOGOUT_FLAG_KEY);
                 sessionStorage.removeItem(CONTROL_LOGOUT_FLAG_KEY);
+                clearLocalControlSession();
                 clearOldControlMonitorData();
             } catch(e) {}
             const username = (document.getElementById('control-login-username')?.value || '').trim().toLowerCase();
@@ -1255,6 +1217,7 @@ async function openSchoolForUser(user) {
             try {
                 setLoginError('');
                 setAuthStatus('جاري تسجيل الدخول...', 'loading');
+                try { await setPersistence(auth, inMemoryPersistence); } catch(e) {}
                 manualLoginInThisPage = true;
                 markActivity();
                 const credential = await signInWithEmailAndPassword(auth, email, password);
@@ -1262,6 +1225,7 @@ async function openSchoolForUser(user) {
                 await openSchoolForUser(credential.user);
             } catch(error) {
                 console.error(error);
+                manualLoginInThisPage = false;
                 setAuthStatus('تعذر الدخول', 'error');
                 setLoginError('تعذر تسجيل الدخول: ' + (error.code || error.message));
             }
@@ -1294,10 +1258,14 @@ async function openSchoolForUser(user) {
                 window.CONTROL_APP_AUTH_READY = false;
                 window.currentSchoolId = null;
                 window.currentSchoolInfo = null;
+                window.cloudDB = null;
+                window.monitoringFirebase = null;
                 lastOpenedAuthUid = null;
+                manualLoginInThisPage = false;
 
                 const root = document.getElementById('root');
                 const login = document.getElementById('control-login-screen');
+                if (typeof window.resetControlAppShell === 'function') window.resetControlAppShell();
                 if (root) root.style.display = 'none';
                 if (login) login.style.display = 'flex';
 
@@ -1318,7 +1286,14 @@ async function openSchoolForUser(user) {
                         try { await signOut(auth); } catch(e) {}
                     }
                     window.CONTROL_APP_AUTH_READY = false;
+                    window.currentSchoolId = null;
+                    window.currentSchoolInfo = null;
+                    window.cloudDB = null;
+                    window.monitoringFirebase = null;
                     lastOpenedAuthUid = null;
+                    manualLoginInThisPage = false;
+                    clearLocalControlSession();
+                    if (typeof window.resetControlAppShell === 'function') window.resetControlAppShell();
                     showLogin();
                     setAuthStatus('تم تسجيل الخروج', 'neutral');
                     setLoginError('تم تسجيل الخروج. أدخل بيانات المدرسة للدخول من جديد.');
@@ -1326,21 +1301,36 @@ async function openSchoolForUser(user) {
                 }
             } catch(e) {}
             if (!user) {
-                if (!window.__CONTROL_FAST_LOGOUT && restoreLocalControlSession(getLocalControlSession())) {
-                    return;
-                }
+                clearLocalControlSession();
                 window.currentSchoolId = null;
                 window.cloudDB = null;
+                window.monitoringFirebase = null;
+                window.currentSchoolInfo = null;
                 window.CONTROL_APP_AUTH_READY = false;
+                lastOpenedAuthUid = null;
+                manualLoginInThisPage = false;
+                if (typeof window.resetControlAppShell === 'function') window.resetControlAppShell();
                 showLogin();
-                setAuthStatus('غير متصل', 'neutral');
+                setAuthStatus('غير متصل بالسحابة', 'neutral');
+                return;
+            }
+            if (!manualLoginInThisPage) {
+                clearLocalControlSession();
+                window.CONTROL_APP_AUTH_READY = false;
+                window.currentSchoolId = null;
+                window.currentSchoolInfo = null;
+                window.cloudDB = null;
+                window.monitoringFirebase = null;
+                lastOpenedAuthUid = null;
+                if (typeof window.resetControlAppShell === 'function') window.resetControlAppShell();
+                try { await signOut(auth); } catch(e) {}
+                showLogin();
+                setAuthStatus('يرجى تسجيل الدخول بالسحابة', 'neutral');
+                setLoginError('');
                 return;
             }
             try {
-                // السماح بفتح الجلسة المحفوظة إذا كانت ما زالت صالحة،
-                // وهذا يمنع بقاء الملف على حالة "غير متصل" عند وجود جلسة Firebase نشطة.
                 markActivity();
-                manualLoginInThisPage = true;
                 markActivity();
                 await openSchoolForUser(user);
             } catch(error) {
@@ -7855,8 +7845,11 @@ class ControlAppErrorBoundary extends React.Component {
     }
 }
 const rootElement = document.getElementById('root');
+let controlReactRoot = null;
 const mountApp = () => {
     if (window.__CONTROL_APP_MOUNTED__)
+        return;
+    if (!window.CONTROL_APP_AUTH_READY)
         return;
     window.__CONTROL_APP_MOUNTED__ = true;
     try {
@@ -7870,15 +7863,38 @@ const mountApp = () => {
             rootElement.style.display = 'block';
     }
     catch (e) { }
-    const root = ReactDOM.createRoot(rootElement);
-    root.render(React.createElement(ControlAppErrorBoundary, null,
+    controlReactRoot = ReactDOM.createRoot(rootElement);
+    window.__CONTROL_REACT_ROOT__ = controlReactRoot;
+    controlReactRoot.render(React.createElement(ControlAppErrorBoundary, null,
         React.createElement(App, null)));
+};
+window.resetControlAppShell = function () {
+    try {
+        if (window.__CONTROL_REACT_ROOT__ && typeof window.__CONTROL_REACT_ROOT__.unmount === 'function') {
+            window.__CONTROL_REACT_ROOT__.unmount();
+        }
+        else if (controlReactRoot && typeof controlReactRoot.unmount === 'function') {
+            controlReactRoot.unmount();
+        }
+    }
+    catch (e) { }
+    controlReactRoot = null;
+    window.__CONTROL_REACT_ROOT__ = null;
+    window.__CONTROL_APP_MOUNTED__ = false;
+    try {
+        if (rootElement) {
+            rootElement.style.display = 'none';
+            rootElement.innerHTML = '';
+        }
+        const login = document.getElementById('control-login-screen');
+        if (login)
+            login.style.display = 'flex';
+    }
+    catch (e) { }
 };
 if (window.CONTROL_APP_AUTH_READY)
     mountApp();
-else
-    window.addEventListener('control-auth-ready', mountApp, { once: true });
-setTimeout(() => { if (!window.__CONTROL_APP_MOUNTED__) mountApp(); }, 800);
+window.addEventListener('control-auth-ready', mountApp);
 
 </script>
 
