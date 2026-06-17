@@ -30,7 +30,7 @@
     </script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc as fbDoc, getDoc, setDoc, deleteDoc, serverTimestamp, collection as fbCollection, onSnapshot, getDocs, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -45,7 +45,7 @@
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
-        try { setPersistence(auth, browserLocalPersistence); } catch(e) { console.warn('تعذر تثبيت جلسة الدخول محليًا', e); }
+        try { setPersistence(auth, browserSessionPersistence); } catch(e) { console.warn('تعذر تثبيت جلسة الدخول محليًا', e); }
         const db = getFirestore(app);
         const AUTH_LAST_ACTIVITY_KEY = 'control_auth_last_activity_v1';
         const AUTH_LOCAL_SESSION_KEY = 'control_auth_local_session_v2';
@@ -54,6 +54,76 @@
         let restoringSchoolStorage = false;
         let manualLoginInThisPage = false;
         let lastOpenedAuthUid = null;
+
+        const CONTROL_LOGOUT_FLAG_KEY = 'control_force_logged_out_v1';
+
+        function clearOldControlMonitorData() {
+            try {
+                const exactKeys = [
+                    'monitoringDistributionData',
+                    'monitoringDistributionAppData',
+                    'monitoringDistributionState',
+                    'monitoringAppState',
+                    'smartMonitorData',
+                    'smart_monitor_data',
+                    'smartMonitoringData',
+                    'schoolMonitoringData',
+                    'controlMonitoringData',
+                    'controlSmartMonitorData',
+                    'dailyReportData',
+                    'envelopeOpeningData',
+                    'examScheduleData',
+                    'teacherMonitorData',
+                    'teachersData',
+                    'examsData',
+                    'lastMonitoringState',
+                    'monitoringState',
+                    'controlBridgeData',
+                    'smartDataBridge',
+                    '__LAST_MONITORING_STATE_STRING'
+                ];
+                exactKeys.forEach((key) => {
+                    try { localStorage.removeItem(key); } catch(e) {}
+                    try { sessionStorage.removeItem(key); } catch(e) {}
+                });
+
+                const patterns = [
+                    'monitoring_',
+                    'smart_monitor',
+                    'smartMonitor',
+                    'control_bridge_',
+                    'exam_sessions_',
+                    'exam_envelopes_',
+                    'exam_daily_notes_',
+                    'exam_proctoring_extra_',
+                    'exam_second_period_proctoring_',
+                    'exam_individual_absentee_',
+                    'exam_violation_',
+                    'exam_signatures_',
+                    'exam_signature_deletes_'
+                ];
+
+                for (let i = localStorage.length - 1; i >= 0; i--) {
+                    const key = localStorage.key(i);
+                    if (!key) continue;
+                    if (patterns.some((p) => key.includes(p))) {
+                        try { localStorage.removeItem(key); } catch(e) {}
+                    }
+                }
+                for (let i = sessionStorage.length - 1; i >= 0; i--) {
+                    const key = sessionStorage.key(i);
+                    if (!key) continue;
+                    if (patterns.some((p) => key.includes(p))) {
+                        try { sessionStorage.removeItem(key); } catch(e) {}
+                    }
+                }
+                try { window.__LAST_MONITORING_STATE_STRING = ''; } catch(e) {}
+                try { window.dispatchEvent(new Event('smart-data-cleared')); } catch(e) {}
+            } catch(e) {}
+        }
+
+        window.clearOldControlMonitorData = clearOldControlMonitorData;
+
 
         function setLoginError(message) {
             const el = document.getElementById('control-login-error');
@@ -587,6 +657,11 @@
             window.dispatchEvent(new Event('control-auth-ready'));
         }
         window.loginWithControlUsername = async function() {
+            try {
+                localStorage.removeItem(CONTROL_LOGOUT_FLAG_KEY);
+                sessionStorage.removeItem(CONTROL_LOGOUT_FLAG_KEY);
+                clearOldControlMonitorData();
+            } catch(e) {}
             const username = (document.getElementById('control-login-username')?.value || '').trim().toLowerCase();
             const password = (document.getElementById('control-login-password')?.value || '').trim();
             if (!username || !password) {
@@ -609,92 +684,64 @@
             }
         };
         window.logoutControlSystem = function() {
-            // خروج سريع: لا ننتظر رفع Firebase عند الضغط على زر الخروج.
-            // الحفظ السحابي صار فوريًا أثناء التعديل، لذلك الخروج يكتفي بتفريغ آخر نسخة محلية ثم يسجل الخروج مباشرة.
             if (window.__CONTROL_LOGOUT_RUNNING) return;
             window.__CONTROL_LOGOUT_RUNNING = true;
             window.__CONTROL_FAST_LOGOUT = true;
+
+            try {
+                localStorage.setItem(CONTROL_LOGOUT_FLAG_KEY, '1');
+                sessionStorage.setItem(CONTROL_LOGOUT_FLAG_KEY, '1');
+            } catch(e) {}
+
+            try { clearOldControlMonitorData(); } catch(e) {}
+
             try {
                 setAuthStatus('جاري الخروج...', 'loading');
                 clearTimeout(storageSaveTimer);
                 clearTimeout(monitoringAppSaveTimer);
-                // تحديث محلي صامت فقط حتى لا يبدأ حفظ طويل عند الخروج.
                 try { flushMonitoringIframeToLocalStorage(); } catch(innerErr) {}
             } catch(e) {
                 console.warn('تعذر تجهيز الخروج السريع', e);
             }
+
             try { localStorage.removeItem(AUTH_LAST_ACTIVITY_KEY); } catch(e) {}
             clearLocalControlSession();
+
             try {
+                window.CONTROL_APP_AUTH_READY = false;
+                window.currentSchoolId = null;
+                window.currentSchoolInfo = null;
+                lastOpenedAuthUid = null;
+
                 const root = document.getElementById('root');
                 const login = document.getElementById('control-login-screen');
                 if (root) root.style.display = 'none';
                 if (login) login.style.display = 'flex';
+
+                setAuthStatus('تم تسجيل الخروج', 'neutral');
+                setLoginError('تم تسجيل الخروج. أدخل بيانات المدرسة للدخول من جديد.');
             } catch(e) {}
 
-            const finishReload = (() => {
-                let done = false;
-                return function() {
-                    if (done) return;
-                    done = true;
-                    try { location.reload(); } catch(e) {}
-                };
-            })();
-
-            try {
-                const signOutPromise = signOut(auth);
-                if (signOutPromise && typeof signOutPromise.then === 'function') {
-                    signOutPromise.then(finishReload).catch((e) => {
-                        console.warn('تعذر تسجيل الخروج من Firebase محلياً', e);
-                        finishReload();
-                    });
-                    // حد أقصى بسيط حتى لا يبقى زر الخروج معلقًا إذا تأخر Firebase.
-                    setTimeout(finishReload, 1200);
-                } else {
-                    finishReload();
-                }
-            } catch(e) {
-                console.warn('تعذر تسجيل الخروج من Firebase محلياً', e);
-                finishReload();
-            }
+            signOut(auth).catch((error) => {
+                console.warn('تعذر إكمال تسجيل الخروج من Firebase', error);
+            }).finally(() => {
+                window.__CONTROL_LOGOUT_RUNNING = false;
+            });
         };
-        window.saveSchoolLocalStorageNow = saveSchoolLocalStorageNow;
-        window.saveMonitoringAppDataNow = saveMonitoringAppDataNow;
-        window.flushMonitoringIframeToLocalStorage = flushMonitoringIframeToLocalStorage;
-        window.forceSaveMonitoringIframeNow = forceSaveMonitoringIframeNow;
-        window.addEventListener('pagehide', () => {
-            try {
-                if (window.__CONTROL_FAST_LOGOUT) return;
-                flushMonitoringIframeToLocalStorage();
-                if (window.currentSchoolId) { saveMonitoringAppDataNow({ flushIframe: false }); saveSchoolLocalStorageNow({ flushIframe: false }); }
-            } catch(e) {}
-        });
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'hidden') {
-                try {
-                    if (window.__CONTROL_FAST_LOGOUT) return;
-                    flushMonitoringIframeToLocalStorage();
-                    if (window.currentSchoolId) { saveMonitoringAppDataNow({ flushIframe: false }); saveSchoolLocalStorageNow({ flushIframe: false }); }
-                } catch(e) {}
-            }
-        });
-
-        setInterval(() => {
-            // إبقاء الجلسة نشطة أثناء استخدام البرنامج وعدم إخراج المستخدم تلقائيًا.
-            if (auth.currentUser) markActivity();
-        }, 60000);
-
-        const startupLocalSession = getLocalControlSession();
-        if (startupLocalSession && !window.__CONTROL_FAST_LOGOUT) {
-            setAuthStatus('جاري استعادة الجلسة...', 'loading');
-            setTimeout(() => {
-                if (!window.CONTROL_APP_AUTH_READY) {
-                    restoreLocalControlSession(startupLocalSession);
-                }
-            }, 350);
-        }
-
         onAuthStateChanged(auth, async (user) => {
+            try {
+                if (localStorage.getItem(CONTROL_LOGOUT_FLAG_KEY) === '1' || sessionStorage.getItem(CONTROL_LOGOUT_FLAG_KEY) === '1') {
+                    if (user) {
+                        try { await signOut(auth); } catch(e) {}
+                    }
+                    window.CONTROL_APP_AUTH_READY = false;
+                    lastOpenedAuthUid = null;
+                    showLogin();
+                    setAuthStatus('تم تسجيل الخروج', 'neutral');
+                    setLoginError('تم تسجيل الخروج. أدخل بيانات المدرسة للدخول من جديد.');
+                    return;
+                }
+            } catch(e) {}
             if (!user) {
                 if (!window.__CONTROL_FAST_LOGOUT && restoreLocalControlSession(getLocalControlSession())) {
                     return;
@@ -997,6 +1044,11 @@
             <label style="font-size:13px;font-weight:800;color:#334155;display:block;margin-bottom:6px;">كلمة المرور</label>
             <input id="control-login-password" type="password" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter') loginWithControlUsername()" style="width:100%;margin-bottom:12px;padding:12px;border:1px solid #cbd5e1;border-radius:13px;font-size:14px;box-sizing:border-box;outline:none;">
             <div id="control-login-error" style="min-height:20px;color:#dc2626;font-size:13px;margin-bottom:12px;font-weight:700;"></div>
+            
+            <button type="button" onclick="if(window.clearOldControlMonitorData){window.clearOldControlMonitorData(); const e=document.getElementById('control-login-error'); if(e){e.style.color='#166534';e.textContent='تم تنظيف بيانات المراقب والجداول القديمة من هذا المتصفح.';}}" style="width:100%;padding:10px;border:none;border-radius:13px;background:#f1f5f9;color:#334155;font-weight:900;font-size:13px;cursor:pointer;margin-bottom:10px;">
+                تنظيف بيانات المراقب والجداول القديمة
+            </button>
+
             <button onclick="loginWithControlUsername()" style="width:100%;padding:13px;border:none;border-radius:13px;background:linear-gradient(135deg,#1d4ed8,#059669);color:white;font-weight:900;font-size:15px;cursor:pointer;box-shadow:0 10px 22px rgba(29,78,216,.22);">
                 دخول
             </button>
