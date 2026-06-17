@@ -285,6 +285,7 @@
             try {
                 for (let i = 0; i < localStorage.length; i++) {
                     const k = localStorage.key(i);
+                    if (isProtectedSchool001StorageKey(k) || String(k || '').startsWith(CONTROL_LOCAL_BACKUP_PREFIX)) continue;
                     if (/^(monitoring_|savedExamDate$|control_bridge_|exam_sessions_|exam_envelopes_|exam_daily_notes_|exam_proctoring_extra_|exam_second_period_proctoring_|exam_individual_absentee_|exam_violation_|exam_signatures_|exam_signature_deletes_)/.test(k || '') || k === 'exam_control_committee_signatures_global' || k === 'monitoring_control_bridge_v1' || k === 'control_proctoring_clean_version') keys.push(k);
                 }
                 keys.forEach(k => localStorage.removeItem(k));
@@ -781,6 +782,29 @@
                     items['monitoring_distribution_full_state_v4'];
 
                 if (typeof stateString !== 'string' || stateString.length < 5) {
+                    const bridgeString = items['monitoring_control_bridge_v1'];
+                    if (typeof bridgeString === 'string' && bridgeString.length > 5) {
+                        try {
+                            const bridge = JSON.parse(bridgeString);
+                            stateString = JSON.stringify(stripOldControlDerivedFieldsFromState({
+                                schoolSettings: bridge.schoolSettings || {},
+                                teachers: bridge.teachers || [],
+                                schoolClasses: bridge.schoolClasses || [],
+                                exams: bridge.exams || [],
+                                assignments: bridge.assignments || [],
+                                correctionCommittees: bridge.correctionCommittees || [],
+                                grade11OptionalRows: bridge.grade11OptionalRows || {},
+                                grade12OptionalRows: bridge.grade12OptionalRows || {},
+                                restoredFromControlBridgeSnapshot: true,
+                                updatedAtLocal: new Date().toISOString()
+                            }));
+                        } catch(bridgeParseErr) {
+                            console.warn('تعذر تحويل monitoring_control_bridge_v1 إلى حالة مراقب ذكي', bridgeParseErr);
+                        }
+                    }
+                }
+
+                if (typeof stateString !== 'string' || stateString.length < 5) {
                     console.warn('لم أجد مفتاح بيانات المراقب داخل snapshot');
                     return false;
                 }
@@ -798,6 +822,15 @@
 
                 try { window.__LAST_MONITORING_STATE_STRING = stateString; } catch(e) {}
                 try { sessionStorage.setItem('demo_school_snapshot_loaded', '1'); } catch(e) {}
+                try {
+                    const parsedForCloud = JSON.parse(stateString);
+                    saveMonitoringStatePayloadNow({
+                        state: parsedForCloud,
+                        teachers: Array.isArray(parsedForCloud.teachers) ? parsedForCloud.teachers : [],
+                        reason: 'restore_school001_from_controlLocalStorage_snapshot',
+                        clientSavedAt: Date.now()
+                    }, { reason: 'restore_school001_from_controlLocalStorage_snapshot' }).catch(e => console.warn('تعذر حفظ بيانات school001 المسترجعة في monitoring/appData', e));
+                } catch(e) {}
 
                 setAuthStatus('تم تحميل بيانات demo_school من snapshot', 'success');
                 window.dispatchEvent(new Event('smart-data-refreshed'));
@@ -1048,6 +1081,7 @@
                     const key = localStorage.key(i) || '';
                     if (key === allowedSmartKey || key === allowedDemoKey) continue;
                     if (isProtectedSchool001StorageKey(key)) continue;
+                    if (key.startsWith(CONTROL_LOCAL_BACKUP_PREFIX)) continue;
 
                     if (/^monitoring_distribution_full_state_v4_/.test(key) && key !== allowedSmartKey && key !== allowedDemoKey) {
                         toRemove.push(key);
@@ -1092,7 +1126,7 @@ async function openSchoolForUser(user) {
                 setLoginError('هذا الحساب غير مفعل. اجعل active = true في schoolUsers.');
                 return;
             }
-            const previousSchoolId = window.currentSchoolId || '';
+            const previousSchoolId = window.currentSchoolId || window.__CONTROL_LAST_OPENED_SCHOOL_ID || '';
             window.currentSchoolId = resolveSchoolIdForUser(user, userData);
             const defaultOnly = isDefaultOnlySchoolUser(userData, window.currentSchoolId);
             const effectiveUserData = defaultOnly ? sanitizeDefaultOnlySchoolInfo(userData) : userData;
@@ -1105,6 +1139,18 @@ async function openSchoolForUser(user) {
                 resolvedSchoolId: window.currentSchoolId,
                 defaultOnly
             };
+
+            const switchReloadKey = `control_school_switch_reload_v2_${user.uid}_${window.currentSchoolId}`;
+            if (previousSchoolId && previousSchoolId !== window.currentSchoolId && window.__CONTROL_APP_MOUNTED__ && sessionStorage.getItem(switchReloadKey) !== '1') {
+                try {
+                    sessionStorage.setItem(switchReloadKey, '1');
+                    saveLocalControlSession(user, effectiveUserData);
+                    window.__CONTROL_LAST_OPENED_SCHOOL_ID = window.currentSchoolId;
+                    setAuthStatus('تم تبديل المستخدم، جاري فتح مساحة مستقلة...', 'loading');
+                } catch(e) {}
+                setTimeout(() => window.location.reload(), 80);
+                return;
+            }
 
             try {
                 await setDoc(fbDoc(db, 'schools', window.currentSchoolId), {
@@ -1136,19 +1182,23 @@ async function openSchoolForUser(user) {
                 clearDefaultOnlyRuntimeKeys(window.currentSchoolId);
             } else if (!isSchool001User(window.currentSchoolInfo || userData)) {
                 purgeAllOldControlFilesAndCaches();
+                restoreSchoolLocalRuntimeBackup(window.currentSchoolId);
             }
             await restoreSchoolLocalStorage(window.currentSchoolId);
             if (defaultOnly) {
                 clearDefaultOnlyRuntimeKeys(window.currentSchoolId);
             } else if (!isSchool001User(window.currentSchoolInfo || userData)) {
                 purgeAllOldControlFilesAndCaches();
-            }
-            if (isSchool001User(window.currentSchoolInfo || userData)) {
                 restoreSchoolLocalRuntimeBackup(window.currentSchoolId);
-                await forceLoadDemoSchoolSnapshotForSchool001();
+            }
+            let school001SnapshotRestored = false;
+            if (isSchool001User(window.currentSchoolInfo || userData)) {
+                clearDefaultOnlyRuntimeKeys(window.currentSchoolId);
+                restoreSchoolLocalRuntimeBackup(window.currentSchoolId);
+                school001SnapshotRestored = await forceLoadDemoSchoolSnapshotForSchool001();
             }
             purgeOldControlDerivedDataSmartOnly();
-            const smartDataRestored = defaultOnly ? false : await restoreMonitoringAppDataFromCloud(window.currentSchoolId);
+            const smartDataRestored = defaultOnly ? false : (school001SnapshotRestored ? true : await restoreMonitoringAppDataFromCloud(window.currentSchoolId));
             if (defaultOnly) {
                 enforceCleanDefaultMonitoringState(window.currentSchoolId);
             } else if (!isSchool001User(window.currentSchoolInfo || userData) && !smartDataRestored) {
@@ -1168,6 +1218,7 @@ async function openSchoolForUser(user) {
             } catch(e) {}
             saveLocalControlSession(user, effectiveUserData);
             lastOpenedAuthUid = user.uid;
+            window.__CONTROL_LAST_OPENED_SCHOOL_ID = window.currentSchoolId;
             window.CONTROL_APP_AUTH_READY = true;
             setAuthStatus('متصل: ' + window.currentSchoolId, 'success');
             showApp();
