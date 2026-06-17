@@ -13,71 +13,369 @@
     <!-- Babel removed: JSX precompiled in v4 -->
 <!-- font Cairo -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&display=swap" rel="stylesheet">
-    <!-- Local one-device version: Firebase disabled -->
+
+
+    <!-- Firebase School Login + Cloud Save: كل مدرسة تدخل بحسابها وتظهر بياناتها فقط -->
     <script>
         window.cloudDB = null;
-        window.monitoringFirebase = null;
-        window.currentSchoolId = 'local-school';
-        window.currentSchoolInfo = {
-            schoolId: 'local-school',
-            username: 'local-school',
-            schoolName: '',
-            directorate: ''
-        };
-        window.CONTROL_APP_AUTH_READY = true;
-        window.__CONTROL_LOCAL_MODE = true;
-
-        function hideLoginShowRoot() {
+        window.currentSchoolId = null;
+        window.currentSchoolInfo = null;
+        window.CONTROL_APP_AUTH_READY = false;
+        window.addEventListener('error', function(e) {
             try {
-                const login = document.getElementById('control-login-screen');
-                const root = document.getElementById('root');
-                if (login) login.style.display = 'none';
-                if (root) {
-                    root.style.display = 'block';
-                    root.style.minHeight = '100vh';
-                }
+                const el = document.getElementById('control-login-error');
+                if (el && !window.CONTROL_APP_AUTH_READY) el.textContent = 'حدث خطأ في تحميل ملفات البرنامج. تأكد من الاتصال بالإنترنت وفتح الملف من رابط مستضاف.';
+            } catch(_) {}
+        });
+    </script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc as fbDoc, getDoc, setDoc, deleteDoc, serverTimestamp, collection as fbCollection, onSnapshot, getDocs, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAnoRS_SN3iz3fdLAHkCyk90djaqWd6aSI",
+            authDomain: "monitoring-test-e6867.firebaseapp.com",
+            projectId: "monitoring-test-e6867",
+            storageBucket: "monitoring-test-e6867.firebasestorage.app",
+            messagingSenderId: "654033386790",
+            appId: "1:654033386790:web:c1c656ed6946358a7b55e7",
+            measurementId: "G-2JF9CT69ZZ"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        try { setPersistence(auth, browserLocalPersistence); } catch(e) { console.warn('تعذر تثبيت جلسة الدخول محليًا', e); }
+        const db = getFirestore(app);
+        const AUTH_LAST_ACTIVITY_KEY = 'control_auth_last_activity_v1';
+        const AUTH_LOCAL_SESSION_KEY = 'control_auth_local_session_v2';
+        const AUTH_SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 ساعة بدل الخروج السريع
+        let storageSaveTimer = null;
+        let restoringSchoolStorage = false;
+        let manualLoginInThisPage = false;
+        let lastOpenedAuthUid = null;
+
+        function setLoginError(message) {
+            const el = document.getElementById('control-login-error');
+            if (el) el.textContent = message || '';
+        }
+        function setAuthStatus(message, mode = 'neutral') {
+            const el = document.getElementById('control-auth-status');
+            if (!el) return;
+            el.textContent = message || '';
+            el.style.background = mode === 'success' ? '#dcfce7' : mode === 'error' ? '#fee2e2' : mode === 'loading' ? '#dbeafe' : '#f1f5f9';
+            el.style.color = mode === 'success' ? '#166534' : mode === 'error' ? '#991b1b' : mode === 'loading' ? '#1e40af' : '#475569';
+        }
+        function showLogin() {
+            const login = document.getElementById('control-login-screen');
+            const root = document.getElementById('root');
+            if (login) login.style.display = 'flex';
+            if (root) root.style.display = 'none';
+        }
+        function showApp() {
+            const login = document.getElementById('control-login-screen');
+            const root = document.getElementById('root');
+            if (login) login.style.display = 'none';
+            if (root) root.style.display = 'block';
+        }
+        function markActivity() {
+            try { localStorage.setItem(AUTH_LAST_ACTIVITY_KEY, String(Date.now())); } catch(e) {}
+        }
+        function saveLocalControlSession(user, userData) {
+            try {
+                const schoolId = userData.schoolId || userData.username || user.uid;
+                localStorage.setItem(AUTH_LOCAL_SESSION_KEY, JSON.stringify({
+                    uid: user.uid,
+                    schoolId,
+                    userData,
+                    savedAt: Date.now()
+                }));
             } catch(e) {}
         }
-
-        function fireLocalReadyEvents() {
+        function getLocalControlSession() {
             try {
-                window.CONTROL_APP_AUTH_READY = true;
-                window.dispatchEvent(new Event('firebase-ready'));
-                window.dispatchEvent(new Event('control-auth-ready'));
-                window.dispatchEvent(new Event('smart-data-refreshed'));
-            } catch(e) {}
+                const raw = localStorage.getItem(AUTH_LOCAL_SESSION_KEY);
+                if (!raw) return null;
+                const session = JSON.parse(raw);
+                if (!session || !session.schoolId) return null;
+                return session;
+            } catch(e) {
+                return null;
+            }
+        }
+        function clearLocalControlSession() {
+            try { localStorage.removeItem(AUTH_LOCAL_SESSION_KEY); } catch(e) {}
+        }
+        function sessionExpired() {
+            // تم تعطيل الخروج التلقائي القصير: لا يتم تسجيل الخروج إلا من زر الخروج.
+            // نحتفظ بالمفتاح فقط كمعلومة نشاط، ولا نستخدمه لطرد المستخدم أثناء العمل.
+            return false;
+        }
+        ['click','keydown','input','mousemove','touchstart'].forEach(evt => {
+            window.addEventListener(evt, () => { if (auth.currentUser) markActivity(); }, { passive: true });
+        });
+
+        function shouldPersistLocalKey(key) {
+            return /^(monitoring_|savedExamDate$|smart_monitor)/.test(String(key || '')) || String(key || '') === 'exam_control_committee_signatures_global'; // لا نحفظ control_bridge أو exam_sessions حتى لا ترجع بيانات الكنترول القديمة
+        }
+        function cleanupSchoolScopedLocalStorage() {
+            const keys = [];
+            try {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (/^(monitoring_|savedExamDate$|control_bridge_|exam_sessions_|exam_envelopes_|exam_daily_notes_|exam_proctoring_extra_|exam_second_period_proctoring_|exam_individual_absentee_|exam_violation_|exam_signatures_|exam_signature_deletes_)/.test(k || '') || k === 'exam_control_committee_signatures_global' || k === 'monitoring_control_bridge_v1' || k === 'control_proctoring_clean_version') keys.push(k);
+                }
+                keys.forEach(k => localStorage.removeItem(k));
+            } catch(e) { console.warn('تعذر تنظيف التخزين المحلي المؤقت', e); }
+        }
+        async function restoreSchoolLocalStorage(schoolId) {
+            cleanupSchoolScopedLocalStorage();
+            if (!schoolId) return;
+            restoringSchoolStorage = true;
+            try {
+                const snap = await getDoc(fbDoc(db, 'schools', schoolId, 'controlLocalStorage', 'snapshot'));
+                if (snap.exists()) {
+                    const data = snap.data() || {};
+                    const items = data.items || {};
+                    Object.keys(items).forEach(k => {
+                        if (shouldPersistLocalKey(k) && typeof items[k] === 'string') localStorage.setItem(k, items[k]);
+                    });
+                }
+            } catch(e) {
+                console.warn('تعذر استرجاع بيانات المراقب الذكي من السحابة', e);
+            } finally {
+                restoringSchoolStorage = false;
+            }
         }
 
-        window.loginWithControlUsername = function() {
-            hideLoginShowRoot();
-            fireLocalReadyEvents();
-        };
-
-        window.logoutControlSystem = function() {
-            try { location.reload(); } catch(e) {}
-        };
-
-        window.saveSchoolLocalStorageNow = async function() { return true; };
-
-        window.saveMonitoringAppDataNow = async function(options = {}) {
+        async function restoreMonitoringAppDataFromCloud(schoolId) {
+            if (!schoolId) return false;
             try {
-                if (options && options.flushIframe && typeof window.flushMonitoringIframeToLocalStorage === 'function') {
-                    window.flushMonitoringIframeToLocalStorage();
+                let data = {};
+                let hasData = false;
+                try {
+                    const snap = await getDoc(fbDoc(db, 'schools', schoolId, 'monitoring', 'appData'));
+                    if (snap.exists()) {
+                        data = snap.data() || {};
+                        hasData = true;
+                    }
+                } catch(innerAppErr) {
+                    console.warn('تعذر قراءة بيانات المراقب الذكي الكاملة من Firebase', innerAppErr);
+                }
+                try {
+                    const teachersSnap = await getDoc(fbDoc(db, 'schools', schoolId, 'monitoring', 'teachers'));
+                    if (teachersSnap.exists()) {
+                        const teachersData = teachersSnap.data() || {};
+                        if (Array.isArray(teachersData.teachers)) {
+                            data = { ...data, teachers: teachersData.teachers };
+                            hasData = true;
+                        }
+                    }
+                } catch(innerTeachersErr) {
+                    console.warn('تعذر قراءة نسخة المعلمين المباشرة من Firebase', innerTeachersErr);
+                }
+                if (!hasData) return false;
+                try {
+                    const stateString = JSON.stringify(data || {});
+                    localStorage.setItem('monitoring_distribution_full_state_v4', stateString);
+                    try { localStorage.setItem(`monitoring_distribution_full_state_v4_${schoolId}`, stateString); } catch(e) {}
+                } catch(e) { console.warn('تعذر تجهيز بيانات المراقب الذكي محليًا', e); }
+                return true;
+            } catch(e) {
+                console.warn('تعذر استرجاع بيانات المراقب الذكي المباشرة من Firebase', e);
+                return false;
+            }
+        }
+
+
+        function cleanFirestoreValue(value) {
+            if (value === undefined) return null;
+            if (value === null) return null;
+            if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+            if (typeof value === 'string' || typeof value === 'boolean') return value;
+            if (Array.isArray(value)) return value.map(item => cleanFirestoreValue(item));
+            if (value && typeof value === 'object') {
+                const out = {};
+                Object.keys(value).forEach(key => {
+                    const cleaned = cleanFirestoreValue(value[key]);
+                    if (cleaned !== undefined) out[key] = cleaned;
+                });
+                return out;
+            }
+            return String(value || '');
+        }
+
+        let monitoringAppSaveTimer = null;
+        let monitoringImmediateSaveInFlight = false;
+        let monitoringImmediateSaveQueued = false;
+        function getMonitoringIframeApp() {
+            try {
+                const frames = Array.from(document.querySelectorAll('iframe'));
+                for (const frame of frames) {
+                    const app = frame.contentWindow && frame.contentWindow.monitoringDistributionApp;
+                    if (app && typeof app.getSerializableState === 'function') return app;
                 }
             } catch(e) {}
+            return null;
+        }
+        let monitoringPayloadSaveInFlight = false;
+        let monitoringPayloadSaveQueued = null;
+        let monitoringPayloadDebounceTimer = null;
+        let monitoringPayloadDebounced = null;
+        function scheduleMonitoringStatePayloadSave(payload = {}, options = {}) {
+            // تخفيف البطء: نجمع التعديلات المتتالية في حفظ واحد بدلاً من رفع كامل البيانات مع كل نقرة.
+            monitoringPayloadDebounced = { payload, options };
+            clearTimeout(monitoringPayloadDebounceTimer);
+            monitoringPayloadDebounceTimer = setTimeout(() => {
+                const next = monitoringPayloadDebounced;
+                monitoringPayloadDebounced = null;
+                if (next) queueMonitoringStatePayloadSave(next.payload, next.options || {});
+            }, 1000);
             return true;
+        }
+        async function saveMonitoringStatePayloadNow(payload = {}, options = {}) {
+            if (!window.currentSchoolId) return false;
+            let state = payload && payload.state ? payload.state : payload;
+            if (!state || typeof state !== 'object') return false;
+            try {
+                state = cleanFirestoreValue(state);
+                const stateString = JSON.stringify(state);
+                try { localStorage.setItem('monitoring_distribution_full_state_v4', stateString); } catch(e) {}
+                try { localStorage.setItem(`monitoring_distribution_full_state_v4_${window.currentSchoolId}`, stateString); } catch(e) {}
+                try { window.__LAST_MONITORING_STATE_STRING = stateString; } catch(e) {}
+                const nowIso = new Date().toISOString();
+                await setDoc(fbDoc(db, 'schools', window.currentSchoolId, 'monitoring', 'appData'), {
+                    ...state,
+                    updatedAt: serverTimestamp(),
+                    updatedAtLocal: nowIso,
+                    forcedSaveReason: options.reason || payload.reason || 'payload_direct_save',
+                    clientSavedAt: payload.clientSavedAt || Date.now()
+                }, { merge: true });
+                const teachers = Array.isArray(state.teachers) ? state.teachers : (Array.isArray(payload.teachers) ? payload.teachers : null);
+                if (teachers) {
+                    await setDoc(fbDoc(db, 'schools', window.currentSchoolId, 'monitoring', 'teachers'), {
+                        teachers: cleanFirestoreValue(teachers),
+                        updatedAt: serverTimestamp(),
+                        updatedAtLocal: nowIso,
+                        forcedSaveReason: options.reason || payload.reason || 'teachers_direct_save',
+                        clientSavedAt: payload.clientSavedAt || Date.now()
+                    }, { merge: true });
+                }
+                // تم حفظ البيانات الأساسية في Firebase بنجاح هنا.
+                // لا نحفظ snapshot مع كل تعديل لأن ذلك كان يسبب بطئًا شديدًا داخل المراقب الذكي.
+                if (options && options.saveSnapshot === true) {
+                    try {
+                        await saveSchoolLocalStorageNow({ flushIframe: false, throwOnError: false });
+                    } catch(snapshotErr) {
+                        console.warn('تم حفظ بيانات المراقب الذكي في Firebase، لكن تعذر تحديث snapshot المحلي السحابي', snapshotErr);
+                    }
+                }
+                return true;
+            } catch(e) {
+                console.warn('تعذر حفظ رسالة المراقب الذكي المباشرة في Firebase', e);
+                if (options.throwOnError) throw e;
+                return false;
+            }
+        }
+        async function queueMonitoringStatePayloadSave(payload = {}, options = {}) {
+            monitoringPayloadSaveQueued = { payload, options };
+            if (monitoringPayloadSaveInFlight) return false;
+            monitoringPayloadSaveInFlight = true;
+            let lastResult = false;
+            try {
+                while (monitoringPayloadSaveQueued) {
+                    const next = monitoringPayloadSaveQueued;
+                    monitoringPayloadSaveQueued = null;
+                    lastResult = await saveMonitoringStatePayloadNow(next.payload, next.options || {});
+                }
+                return lastResult;
+            } finally {
+                monitoringPayloadSaveInFlight = false;
+            }
+        }
+        window.saveMonitoringStatePayloadNow = saveMonitoringStatePayloadNow;
+        window.queueMonitoringStatePayloadSave = queueMonitoringStatePayloadSave;
+        window.scheduleMonitoringStatePayloadSave = scheduleMonitoringStatePayloadSave;
+        window.addEventListener('message', function(event) {
+            try {
+                const data = event && event.data;
+                if (!data || (data.type !== 'monitoring_immediate_save_v2' && data.type !== 'monitoring_teachers_save_v2')) return;
+                scheduleMonitoringStatePayloadSave(data, { reason: data.reason || data.type });
+            } catch(e) {
+                console.warn('تعذر استقبال رسالة حفظ المراقب الذكي', e);
+            }
+        });
+        async function saveMonitoringAppDataNow(options = {}) {
+            if (!window.currentSchoolId) return false;
+            if (options.flushIframe) flushMonitoringIframeToLocalStorage();
+            const app = getMonitoringIframeApp();
+            let state = null;
+            try {
+                // نلغي أي مؤقت حفظ معلق داخل المراقب الذكي أو الصفحة الرئيسية حتى نأخذ آخر حالة فعلية فوراً.
+                clearTimeout(monitoringAppSaveTimer);
+                if (app && app.cloudSaveTimer) clearTimeout(app.cloudSaveTimer);
+                if (app && typeof app.ensureAllGrade11OptionalRows === 'function') app.ensureAllGrade11OptionalRows();
+                if (app && typeof app.getSerializableState === 'function') {
+                    state = app.getSerializableState();
+                } else {
+                    const scopedKey = `monitoring_distribution_full_state_v4_${window.currentSchoolId}`;
+                    const saved = localStorage.getItem(scopedKey) || localStorage.getItem('monitoring_distribution_full_state_v4');
+                    state = saved ? JSON.parse(saved) : null;
+                }
+                if (!state || typeof state !== 'object') {
+                    return await saveSchoolLocalStorageNow({ flushIframe: false, throwOnError: !!options.throwOnError });
+                }
+                return await saveMonitoringStatePayloadNow({
+                    state,
+                    teachers: Array.isArray(state.teachers) ? state.teachers : [],
+                    reason: options.reason || 'manual_or_logout_save',
+                    clientSavedAt: Date.now()
+                }, { reason: options.reason || 'manual_or_logout_save', throwOnError: !!options.throwOnError });
+            } catch(e) {
+                console.warn('تعذر حفظ بيانات المراقب الذكي المباشرة في Firebase، سيتم حفظ نسخة التخزين المحلي في Firebase بدلاً منها', e);
+                const snapshotSaved = await saveSchoolLocalStorageNow({ flushIframe: false, throwOnError: false });
+                if (options.throwOnError && !snapshotSaved) throw e;
+                return !!snapshotSaved;
+            }
+        }
+        async function runImmediateMonitoringSave(reason = 'immediate_edit_save') {
+            if (!window.currentSchoolId) return false;
+            clearTimeout(monitoringAppSaveTimer);
+            if (monitoringImmediateSaveInFlight) {
+                monitoringImmediateSaveQueued = true;
+                return false;
+            }
+            monitoringImmediateSaveInFlight = true;
+            try {
+                return await saveMonitoringAppDataNow({ flushIframe: false, reason });
+            } finally {
+                monitoringImmediateSaveInFlight = false;
+                if (monitoringImmediateSaveQueued) {
+                    monitoringImmediateSaveQueued = false;
+                    setTimeout(() => runImmediateMonitoringSave('queued_immediate_edit_save'), 0);
+                }
+            }
+        }
+        window.scheduleMonitoringAppDataSave = function() {
+            // حفظ سريع لكن غير مزعج: نؤجل الرفع ثانية واحدة ونحفظ آخر نسخة فقط.
+            if (!window.currentSchoolId) return;
+            clearTimeout(monitoringAppSaveTimer);
+            monitoringAppSaveTimer = setTimeout(() => runImmediateMonitoringSave('debounced_scheduled_from_smart_monitor'), 1000);
         };
-
-        window.flushMonitoringIframeToLocalStorage = function() {
+        window.saveMonitoringAppDataNow = saveMonitoringAppDataNow;
+        window.runImmediateMonitoringSave = runImmediateMonitoringSave;
+        function flushMonitoringIframeToLocalStorage() {
             try {
                 const frames = Array.from(document.querySelectorAll('iframe'));
                 frames.forEach(frame => {
                     try {
                         const w = frame.contentWindow;
-                        const app = w && w.monitoringDistributionApp;
+                        if (!w) return;
+                        const app = w.monitoringDistributionApp;
                         if (!app) return;
                         if (app.cloudSaveTimer) clearTimeout(app.cloudSaveTimer);
                         if (typeof app.ensureAllGrade11OptionalRows === 'function') app.ensureAllGrade11OptionalRows();
+                        // تحديث محلي صامت فقط: لا نستدعي saveAppData/saveTeachers هنا حتى لا يبدأ مؤقت حفظ جديد داخل iframe.
                         if (typeof app.getSerializableState === 'function' && typeof app.safeSaveLocalSnapshot === 'function') {
                             const state = app.getSerializableState();
                             app.safeSaveLocalSnapshot(state);
@@ -87,40 +385,344 @@
                     } catch(innerErr) {}
                 });
             } catch(e) {}
-        };
-
-        window.forceSaveMonitoringIframeNow = async function() {
-            try { window.flushMonitoringIframeToLocalStorage(); } catch(e) {}
-            return true;
-        };
-
-        window.scheduleSchoolLocalStorageSave = function() {};
-        window.scheduleMonitoringAppDataSave = function() {
-            try { window.flushMonitoringIframeToLocalStorage(); } catch(e) {}
-        };
-
-        window.addEventListener('DOMContentLoaded', function() {
-            hideLoginShowRoot();
-            fireLocalReadyEvents();
-            setTimeout(fireLocalReadyEvents, 300);
-            setTimeout(fireLocalReadyEvents, 1000);
-        });
-
-        window.addEventListener('load', function() {
-            hideLoginShowRoot();
-            fireLocalReadyEvents();
-        });
-
-        window.addEventListener('error', function(e) {
+        }
+        async function forceSaveMonitoringIframeNow() {
+            let ok = false;
             try {
-                const fallback = document.getElementById('local-loading-fallback');
-                if (fallback) {
-                    fallback.innerHTML = 'حدث خطأ أثناء تحميل الواجهة:<br><span style="font-size:12px;color:#b91c1c;">' + String(e.message || e.error || 'خطأ غير معروف') + '</span>';
+                const app = getMonitoringIframeApp();
+                if (app) {
+                    if (app.cloudSaveTimer) clearTimeout(app.cloudSaveTimer);
+                    if (typeof app.ensureAllGrade11OptionalRows === 'function') app.ensureAllGrade11OptionalRows();
+                    if (typeof app.getSerializableState === 'function' && typeof app.safeSaveLocalSnapshot === 'function') {
+                        const state = app.getSerializableState();
+                        app.safeSaveLocalSnapshot(state);
+                        try { window.__LAST_MONITORING_STATE_STRING = JSON.stringify(state); } catch(e) {}
+                        try {
+                            const payloadSaved = await saveMonitoringStatePayloadNow({
+                                state,
+                                teachers: Array.isArray(state.teachers) ? state.teachers : [],
+                                reason: 'force_iframe_state_before_logout',
+                                clientSavedAt: Date.now()
+                            }, { reason: 'force_iframe_state_before_logout' });
+                            ok = ok || !!payloadSaved;
+                        } catch(payloadErr) { console.warn('تعذر حفظ حالة iframe المباشرة قبل الخروج', payloadErr); }
+                    }
+                    if (typeof app.syncControlBridgeData === 'function') app.syncControlBridgeData();
+                    if (typeof app.saveCloudDataNow === 'function') {
+                        try { ok = await app.saveCloudDataNow(true, true); } catch(innerCloudErr) { console.warn('تعذر الحفظ المباشر من iframe', innerCloudErr); }
+                    }
                 }
-            } catch(_) {}
+            } catch(e) {
+                console.warn('تعذر تجهيز حفظ iframe للمراقب الذكي', e);
+            }
+            return ok;
+        }
+        async function saveSchoolLocalStorageNow(options = {}) {
+            if (!window.currentSchoolId || restoringSchoolStorage) return false;
+            if (options.flushIframe) flushMonitoringIframeToLocalStorage();
+            const items = {};
+            try {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (shouldPersistLocalKey(k)) {
+                        const v = localStorage.getItem(k);
+                        if (typeof v === 'string' && v.length < 850000) items[k] = v;
+                    }
+                }
+                await setDoc(fbDoc(db, 'schools', window.currentSchoolId, 'controlLocalStorage', 'snapshot'), {
+                    items,
+                    updatedAt: serverTimestamp(),
+                    updatedAtLocal: new Date().toISOString()
+                }, { merge: true });
+                return true;
+            } catch(e) {
+                console.warn('تعذر حفظ تخزين المراقب الذكي/الربط في السحابة', e);
+                if (options.throwOnError) throw e;
+                return false;
+            }
+        }
+        window.scheduleSchoolLocalStorageSave = function() {
+            if (!window.currentSchoolId || restoringSchoolStorage) return;
+            clearTimeout(storageSaveTimer);
+            // snapshot نسخة احتياطية ثقيلة؛ نؤخرها حتى لا تبطئ المراقب الذكي أثناء التعديل.
+            storageSaveTimer = setTimeout(saveSchoolLocalStorageNow, 5000);
+        };
+        const originalSetItem = localStorage.setItem.bind(localStorage);
+        localStorage.setItem = function(key, value) {
+            originalSetItem(key, value);
+            if (shouldPersistLocalKey(key)) window.scheduleSchoolLocalStorageSave();
+        };
+
+        function scopedDocPath(args) {
+            if (!window.currentSchoolId || !args.length) return args;
+            const first = String(args[0] || '');
+            const scopedCollections = ['exam_records', 'exam_signature_indexes', 'exam_signature_items'];
+            if (scopedCollections.includes(first)) return ['schools', window.currentSchoolId, ...args];
+            return args;
+        }
+        function scopedCollectionPath(args) {
+            if (!window.currentSchoolId || !args.length) return args;
+            const first = String(args[0] || '');
+            const scopedCollections = ['exam_records', 'exam_signature_indexes', 'exam_signature_items'];
+            if (scopedCollections.includes(first)) return ['schools', window.currentSchoolId, ...args];
+            return args;
+        }
+        const CONTROL_FIRESTORE_PURGE_VERSION = 'smart_monitor_assignments_only_purge_v2026_06_13_final';
+        async function purgeOldControlFirestoreData(schoolId) {
+            if (!schoolId) return false;
+            const markerRef = fbDoc(db, 'schools', schoolId, 'controlCleanup', 'smartMonitorOnlyPurge');
+            try {
+                const markerSnap = await getDoc(markerRef);
+                if (markerSnap.exists() && markerSnap.data()?.version === CONTROL_FIRESTORE_PURGE_VERSION) return true;
+            } catch (e) {
+                console.warn('تعذر قراءة علامة تنظيف بيانات الكنترول القديمة من Firebase', e);
+            }
+
+            let success = true;
+            try {
+                setAuthStatus('جاري تنظيف بيانات الكنترول القديمة من Firebase...', 'loading');
+                const recordsSnap = await getDocs(fbCollection(db, 'schools', schoolId, 'exam_records'));
+                for (const recordDoc of recordsSnap.docs) {
+                    await deleteDoc(recordDoc.ref);
+                }
+            } catch (e) {
+                success = false;
+                console.warn('تعذر حذف مجموعة exam_records القديمة من Firebase', e);
+            }
+
+            try {
+                await deleteDoc(fbDoc(db, 'schools', schoolId, 'controlLocalStorage', 'snapshot'));
+            } catch (e) {
+                success = false;
+                console.warn('تعذر حذف controlLocalStorage/snapshot القديم من Firebase', e);
+            }
+
+            if (success) {
+                try {
+                    await setDoc(markerRef, {
+                        version: CONTROL_FIRESTORE_PURGE_VERSION,
+                        cleanedAt: serverTimestamp(),
+                        removedCollections: ['exam_records'],
+                        removedDocs: ['controlLocalStorage/snapshot'],
+                        sourceMode: 'smart_monitor_assignments_only'
+                    }, { merge: true });
+                } catch (e) {
+                    console.warn('تم التنظيف لكن تعذر حفظ علامة التنظيف في Firebase', e);
+                }
+            }
+            return success;
+        }
+
+        function buildCloudDB() {
+            return {
+                db,
+                doc: (database, ...path) => fbDoc(database, ...scopedDocPath(path)),
+                collection: (database, ...path) => fbCollection(database, ...scopedCollectionPath(path)),
+                getDoc, setDoc, deleteDoc, serverTimestamp, onSnapshot, getDocs, arrayUnion
+            };
+        }
+        function restoreLocalControlSession(session) {
+            if (!session || !session.schoolId) return false;
+            window.currentSchoolId = session.schoolId;
+            window.currentSchoolInfo = session.userData || { schoolId: session.schoolId, username: session.schoolId };
+            window.cloudDB = buildCloudDB();
+            window.monitoringFirebase = window.cloudDB;
+            lastOpenedAuthUid = session.uid || lastOpenedAuthUid;
+            window.CONTROL_APP_AUTH_READY = true;
+            markActivity();
+            setLoginError('');
+            setAuthStatus('متصل: ' + window.currentSchoolId, 'success');
+            showApp();
+            window.dispatchEvent(new Event('firebase-ready'));
+            window.dispatchEvent(new Event('control-auth-ready'));
+            return true;
+        }
+        async function openSchoolForUser(user) {
+            if (!user) return;
+            if (window.CONTROL_APP_AUTH_READY && lastOpenedAuthUid === user.uid) {
+                showApp();
+                return;
+            }
+            setAuthStatus('جاري فتح بيانات المدرسة...', 'loading');
+            const userRef = fbDoc(db, 'schoolUsers', user.uid);
+            const userSnap = await getDoc(userRef);
+            if (!userSnap.exists()) {
+                await signOut(auth);
+                showLogin();
+                setLoginError('الحساب موجود في Authentication لكنه غير مربوط بمدرسة في schoolUsers.');
+                return;
+            }
+            const userData = userSnap.data() || {};
+            if (userData.active !== true) {
+                await signOut(auth);
+                showLogin();
+                setLoginError('هذا الحساب غير مفعل. اجعل active = true في schoolUsers.');
+                return;
+            }
+            window.currentSchoolId = userData.schoolId || userData.username || user.uid;
+            window.currentSchoolInfo = userData;
+
+            try {
+                await setDoc(fbDoc(db, 'schools', window.currentSchoolId), {
+                    schoolId: window.currentSchoolId,
+                    schoolName: userData.schoolName || '',
+                    username: userData.username || '',
+                    active: true,
+                    lastOpenAt: serverTimestamp()
+                }, { merge: true });
+            } catch(e) { console.warn('تعذر تحديث مستند المدرسة', e); }
+
+            await purgeOldControlFirestoreData(window.currentSchoolId);
+            await restoreSchoolLocalStorage(window.currentSchoolId);
+            await restoreMonitoringAppDataFromCloud(window.currentSchoolId);
+            window.cloudDB = buildCloudDB();
+            window.monitoringFirebase = window.cloudDB;
+            try { localStorage.setItem(`monitoring_distribution_full_state_v4_${window.currentSchoolId}`, localStorage.getItem('monitoring_distribution_full_state_v4') || '{}'); } catch(e) {}
+            saveLocalControlSession(user, userData);
+            lastOpenedAuthUid = user.uid;
+            window.CONTROL_APP_AUTH_READY = true;
+            setAuthStatus('متصل: ' + window.currentSchoolId, 'success');
+            showApp();
+            window.dispatchEvent(new Event('firebase-ready'));
+            window.dispatchEvent(new Event('control-auth-ready'));
+        }
+        window.loginWithControlUsername = async function() {
+            const username = (document.getElementById('control-login-username')?.value || '').trim().toLowerCase();
+            const password = (document.getElementById('control-login-password')?.value || '').trim();
+            if (!username || !password) {
+                setLoginError('يرجى إدخال اسم المستخدم وكلمة المرور.');
+                return;
+            }
+            const email = username.includes('@') ? username : `${username}@monitoring.local`;
+            try {
+                setLoginError('');
+                setAuthStatus('جاري تسجيل الدخول...', 'loading');
+                manualLoginInThisPage = true;
+                markActivity();
+                const credential = await signInWithEmailAndPassword(auth, email, password);
+                markActivity();
+                await openSchoolForUser(credential.user);
+            } catch(error) {
+                console.error(error);
+                setAuthStatus('تعذر الدخول', 'error');
+                setLoginError('تعذر تسجيل الدخول: ' + (error.code || error.message));
+            }
+        };
+        window.logoutControlSystem = function() {
+            // خروج سريع: لا ننتظر رفع Firebase عند الضغط على زر الخروج.
+            // الحفظ السحابي صار فوريًا أثناء التعديل، لذلك الخروج يكتفي بتفريغ آخر نسخة محلية ثم يسجل الخروج مباشرة.
+            if (window.__CONTROL_LOGOUT_RUNNING) return;
+            window.__CONTROL_LOGOUT_RUNNING = true;
+            window.__CONTROL_FAST_LOGOUT = true;
+            try {
+                setAuthStatus('جاري الخروج...', 'loading');
+                clearTimeout(storageSaveTimer);
+                clearTimeout(monitoringAppSaveTimer);
+                // تحديث محلي صامت فقط حتى لا يبدأ حفظ طويل عند الخروج.
+                try { flushMonitoringIframeToLocalStorage(); } catch(innerErr) {}
+            } catch(e) {
+                console.warn('تعذر تجهيز الخروج السريع', e);
+            }
+            try { localStorage.removeItem(AUTH_LAST_ACTIVITY_KEY); } catch(e) {}
+            clearLocalControlSession();
+            try {
+                const root = document.getElementById('root');
+                const login = document.getElementById('control-login-screen');
+                if (root) root.style.display = 'none';
+                if (login) login.style.display = 'flex';
+            } catch(e) {}
+
+            const finishReload = (() => {
+                let done = false;
+                return function() {
+                    if (done) return;
+                    done = true;
+                    try { location.reload(); } catch(e) {}
+                };
+            })();
+
+            try {
+                const signOutPromise = signOut(auth);
+                if (signOutPromise && typeof signOutPromise.then === 'function') {
+                    signOutPromise.then(finishReload).catch((e) => {
+                        console.warn('تعذر تسجيل الخروج من Firebase محلياً', e);
+                        finishReload();
+                    });
+                    // حد أقصى بسيط حتى لا يبقى زر الخروج معلقًا إذا تأخر Firebase.
+                    setTimeout(finishReload, 1200);
+                } else {
+                    finishReload();
+                }
+            } catch(e) {
+                console.warn('تعذر تسجيل الخروج من Firebase محلياً', e);
+                finishReload();
+            }
+        };
+        window.saveSchoolLocalStorageNow = saveSchoolLocalStorageNow;
+        window.saveMonitoringAppDataNow = saveMonitoringAppDataNow;
+        window.flushMonitoringIframeToLocalStorage = flushMonitoringIframeToLocalStorage;
+        window.forceSaveMonitoringIframeNow = forceSaveMonitoringIframeNow;
+        window.addEventListener('pagehide', () => {
+            try {
+                if (window.__CONTROL_FAST_LOGOUT) return;
+                flushMonitoringIframeToLocalStorage();
+                if (window.currentSchoolId) { saveMonitoringAppDataNow({ flushIframe: false }); saveSchoolLocalStorageNow({ flushIframe: false }); }
+            } catch(e) {}
+        });
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                try {
+                    if (window.__CONTROL_FAST_LOGOUT) return;
+                    flushMonitoringIframeToLocalStorage();
+                    if (window.currentSchoolId) { saveMonitoringAppDataNow({ flushIframe: false }); saveSchoolLocalStorageNow({ flushIframe: false }); }
+                } catch(e) {}
+            }
+        });
+
+        setInterval(() => {
+            // إبقاء الجلسة نشطة أثناء استخدام البرنامج وعدم إخراج المستخدم تلقائيًا.
+            if (auth.currentUser) markActivity();
+        }, 60000);
+
+        const startupLocalSession = getLocalControlSession();
+        if (startupLocalSession && !window.__CONTROL_FAST_LOGOUT) {
+            setAuthStatus('جاري استعادة الجلسة...', 'loading');
+            setTimeout(() => {
+                if (!window.CONTROL_APP_AUTH_READY) {
+                    restoreLocalControlSession(startupLocalSession);
+                }
+            }, 350);
+        }
+
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                if (!window.__CONTROL_FAST_LOGOUT && restoreLocalControlSession(getLocalControlSession())) {
+                    return;
+                }
+                window.currentSchoolId = null;
+                window.cloudDB = null;
+                window.CONTROL_APP_AUTH_READY = false;
+                showLogin();
+                setAuthStatus('غير متصل', 'neutral');
+                return;
+            }
+            try {
+                // السماح بفتح الجلسة المحفوظة إذا كانت ما زالت صالحة،
+                // وهذا يمنع بقاء الملف على حالة "غير متصل" عند وجود جلسة Firebase نشطة.
+                markActivity();
+                manualLoginInThisPage = true;
+                markActivity();
+                await openSchoolForUser(user);
+            } catch(error) {
+                console.error(error);
+                showLogin();
+                setLoginError('تعذر فتح بيانات المدرسة: ' + (error.code || error.message));
+                setAuthStatus('خطأ في فتح المدرسة', 'error');
+            }
         });
     </script>
 
+    
 <style>
 
         .control-fast-switching *, .control-fast-switching *::before, .control-fast-switching *::after {
@@ -353,7 +955,34 @@
 </head>
 <body class="bg-gray-50 text-gray-900 selection:bg-blue-100">
 
-    <div id="control-login-screen" class="no-print" style="min-height:100vh;display:none;align-items:center;justify-content:center;background:linear-gradient(135deg,#eff6ff,#f8fafc 55%,#ecfdf5);font-family:Cairo,Arial,sans-serif;direction:rtl;padding:20px;">
+<script>
+(function(){
+    function forceLoginUntilFirebaseAuthReady() {
+        try {
+            var login = document.getElementById('control-login-screen');
+            var root = document.getElementById('root');
+            if (!window.CONTROL_APP_AUTH_READY) {
+                if (login) login.style.display = 'flex';
+                if (root) root.style.display = 'none';
+            }
+        } catch(e) {}
+    }
+
+    window.addEventListener('DOMContentLoaded', forceLoginUntilFirebaseAuthReady);
+    window.addEventListener('load', forceLoginUntilFirebaseAuthReady);
+    window.addEventListener('control-auth-ready', function(){
+        try {
+            var login = document.getElementById('control-login-screen');
+            var root = document.getElementById('root');
+            if (login) login.style.display = 'none';
+            if (root) root.style.display = 'block';
+        } catch(e) {}
+    });
+})();
+</script>
+
+
+    <div id="control-login-screen" class="no-print" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#eff6ff,#f8fafc 55%,#ecfdf5);font-family:Cairo,Arial,sans-serif;direction:rtl;padding:20px;">
         <div style="width:410px;max-width:100%;background:white;padding:30px;border-radius:26px;box-shadow:0 22px 55px rgba(15,23,42,.18);border:1px solid #e2e8f0;">
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
                 <div style="width:54px;height:54px;border-radius:18px;background:linear-gradient(135deg,#1d4ed8,#059669);color:white;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 12px 24px rgba(29,78,216,.22);">🔐</div>
@@ -374,15 +1003,11 @@
             <p style="font-size:11px;color:#64748b;line-height:1.7;margin:14px 0 0;text-align:center;">استخدم نفس اسم المستخدم وكلمة المرور التي كانت تعمل في المراقب الذكي.</p>
         </div>
     </div>
-    <div id="root" style="display:block;min-height:100vh;">
-        <div id="local-loading-fallback" style="font-family:Cairo,Arial,sans-serif;direction:rtl;padding:30px;text-align:center;color:#334155;">
-            جاري تحميل نظام الكنترول المحلي...
-        </div>
-    </div>
+    <div id="root" style="display:none;"></div>
 
     <script>
 const { useState, useEffect, useRef } = React;
-const SMART_MONITOR_FILE = './smart_monitor.html';
+const SMART_MONITOR_FILE = 'smart_monitor.html';
 // شعار المدرسة للشريط العلوي للتطبيق فقط (تمت إزالته من ترويسة الطباعة)
 const Logo = ({ name, className = "h-16 w-auto" }) => {
     const logos = {
@@ -6642,7 +7267,6 @@ setTimeout(() => { if (!window.__CONTROL_APP_MOUNTED__) mountApp(); }, 800);
   }, true);
 })();
 </script>
-
 
 </body>
 </html>
