@@ -56,11 +56,18 @@
         let lastOpenedAuthUid = null;
 
         const CONTROL_LOGOUT_FLAG_KEY = 'control_force_logged_out_v1';
+        const USER_SCOPED_FIRESTORE_STORAGE = true; // الحفظ السحابي مستقل لكل Firebase UID
 
         function clearOldControlMonitorData() {
             try {
                 const exactKeys = [
                     'monitoringDistributionData',
+                    'monitoring_distribution_full_state_v4',
+                    'monitoring_distribution_full_state_v4_',
+                    'monitoring_control_bridge_v1',
+                    'control_proctoring_clean_version',
+                    'savedExamDate',
+                    'exam_control_committee_signatures_global',
                     'monitoringDistributionAppData',
                     'monitoringDistributionState',
                     'monitoringAppState',
@@ -100,7 +107,10 @@
                     'exam_individual_absentee_',
                     'exam_violation_',
                     'exam_signatures_',
-                    'exam_signature_deletes_'
+                    'exam_signature_deletes_',
+                    'monitoring_distribution_full_state_v4',
+                    'savedExamDate',
+                    'exam_control_committee_signatures_global'
                 ];
 
                 for (let i = localStorage.length - 1; i >= 0; i--) {
@@ -123,30 +133,6 @@
         }
 
         window.clearOldControlMonitorData = clearOldControlMonitorData;
-
-        function clearPreviousUserSessionData() {
-            try {
-                window.CONTROL_APP_AUTH_READY = false;
-                window.currentSchoolId = null;
-                window.currentSchoolInfo = null;
-                lastOpenedAuthUid = null;
-                clearLocalControlSession();
-                clearOldControlMonitorData();
-
-                try { localStorage.removeItem(AUTH_LOCAL_SESSION_KEY); } catch(e) {}
-                try { sessionStorage.removeItem(AUTH_LOCAL_SESSION_KEY); } catch(e) {}
-                try { localStorage.removeItem('currentSchoolId'); } catch(e) {}
-                try { localStorage.removeItem('currentSchoolInfo'); } catch(e) {}
-                try { sessionStorage.removeItem('currentSchoolId'); } catch(e) {}
-                try { sessionStorage.removeItem('currentSchoolInfo'); } catch(e) {}
-
-                const root = document.getElementById('root');
-                if (root) root.style.display = 'none';
-            } catch(e) {}
-        }
-
-        window.clearPreviousUserSessionData = clearPreviousUserSessionData;
-
 
 
         function setLoginError(message) {
@@ -633,7 +619,8 @@
         }
         async function openSchoolForUser(user) {
             if (!user) return;
-            if (window.CONTROL_APP_AUTH_READY && lastOpenedAuthUid === user.uid && window.currentSchoolInfo && window.currentSchoolInfo.__authUid === user.uid) {
+            try { clearOldControlMonitorData(); } catch(e) {}
+            if (window.CONTROL_APP_AUTH_READY && lastOpenedAuthUid === user.uid) {
                 showApp();
                 return;
             }
@@ -653,14 +640,24 @@
                 setLoginError('هذا الحساب غير مفعل. اجعل active = true في schoolUsers.');
                 return;
             }
-            window.currentSchoolId = userData.schoolId || userData.username || user.uid;
-            window.currentSchoolInfo = { ...userData, __authUid: user.uid };
+            const originalSchoolId = userData.schoolId || userData.username || user.uid;
+            const userScopedSchoolId = user.uid;
+            window.currentSchoolId = userScopedSchoolId;
+            window.currentSchoolInfo = {
+                ...userData,
+                schoolId: userScopedSchoolId,
+                originalSchoolId,
+                firebaseUid: user.uid,
+                username: userData.username || userData.email || user.email || user.uid
+            };
 
             try {
                 await setDoc(fbDoc(db, 'schools', window.currentSchoolId), {
                     schoolId: window.currentSchoolId,
+                    originalSchoolId,
+                    firebaseUid: user.uid,
                     schoolName: userData.schoolName || '',
-                    username: userData.username || '',
+                    username: userData.username || userData.email || user.email || user.uid,
                     active: true,
                     lastOpenAt: serverTimestamp()
                 }, { merge: true });
@@ -682,7 +679,6 @@
         }
         window.loginWithControlUsername = async function() {
             try {
-                clearPreviousUserSessionData();
                 localStorage.removeItem(CONTROL_LOGOUT_FLAG_KEY);
                 sessionStorage.removeItem(CONTROL_LOGOUT_FLAG_KEY);
                 clearOldControlMonitorData();
@@ -737,7 +733,6 @@
                 window.currentSchoolId = null;
                 window.currentSchoolInfo = null;
                 lastOpenedAuthUid = null;
-                try { clearPreviousUserSessionData(); } catch(e) {}
 
                 const root = document.getElementById('root');
                 const login = document.getElementById('control-login-screen');
@@ -785,11 +780,6 @@
                 markActivity();
                 manualLoginInThisPage = true;
                 markActivity();
-                try {
-                    if (lastOpenedAuthUid && lastOpenedAuthUid !== user.uid) {
-                        clearPreviousUserSessionData();
-                    }
-                } catch(e) {}
                 await openSchoolForUser(user);
             } catch(error) {
                 console.error(error);
@@ -1078,6 +1068,11 @@
             
             <button type="button" onclick="if(window.clearOldControlMonitorData){window.clearOldControlMonitorData(); const e=document.getElementById('control-login-error'); if(e){e.style.color='#166534';e.textContent='تم تنظيف بيانات المراقب والجداول القديمة من هذا المتصفح.';}}" style="width:100%;padding:10px;border:none;border-radius:13px;background:#f1f5f9;color:#334155;font-weight:900;font-size:13px;cursor:pointer;margin-bottom:10px;">
                 تنظيف بيانات المراقب والجداول القديمة
+            </button>
+
+            
+            <button type="button" onclick="try{localStorage.clear();sessionStorage.clear();location.reload();}catch(e){}" style="width:100%;padding:10px;border:none;border-radius:13px;background:#fee2e2;color:#991b1b;font-weight:900;font-size:13px;cursor:pointer;margin-bottom:10px;">
+                تنظيف شامل للبيانات القديمة مرة واحدة
             </button>
 
             <button onclick="loginWithControlUsername()" style="width:100%;padding:13px;border:none;border-radius:13px;background:linear-gradient(135deg,#1d4ed8,#059669);color:white;font-weight:900;font-size:15px;cursor:pointer;box-shadow:0 10px 22px rgba(29,78,216,.22);">
@@ -2761,6 +2756,7 @@ const SmartMonitorSection = React.memo(() => {
                         if (!w)
                             return;
                         w.currentSchoolId = window.currentSchoolId;
+                        try { w.sessionStorage.setItem('control_current_uid_scope', window.currentSchoolId || ''); } catch(e) {}
                         w.monitoringFirebase = window.monitoringFirebase || window.cloudDB;
                         if (w.monitoringDistributionApp) {
                             if (typeof w.monitoringDistributionApp.ensureParentFirebaseBridge === 'function')
