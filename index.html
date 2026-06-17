@@ -619,6 +619,46 @@
             return schoolId || userData.username || user.uid;
         }
 
+
+        async function forceLoadDemoSchoolSnapshotForSchool001() {
+            try {
+                if (window.currentSchoolId !== 'demo_school') return false;
+
+                const snap = await getDoc(fbDoc(db, 'schools', 'demo_school', 'controlLocalStorage', 'snapshot'));
+                if (!snap.exists()) {
+                    console.warn('لا يوجد snapshot في schools/demo_school/controlLocalStorage/snapshot');
+                    return false;
+                }
+
+                const data = snap.data() || {};
+                const items = data.items || {};
+                const stateString =
+                    items['monitoring_distribution_full_state_v4_demo_school'] ||
+                    items['monitoring_distribution_full_state_v4_demo_school'] ||
+                    items['monitoring_distribution_full_state_v4'];
+
+                if (typeof stateString !== 'string' || stateString.length < 5) {
+                    console.warn('لم أجد مفتاح بيانات المراقب داخل snapshot');
+                    return false;
+                }
+
+                // هذه المفاتيح الثلاثة تغطي طريقة قراءة الكنترول والمراقب الذكي.
+                localStorage.setItem('monitoring_distribution_full_state_v4', stateString);
+                localStorage.setItem('monitoring_distribution_full_state_v4_demo_school', stateString);
+                localStorage.setItem('monitoring_distribution_full_state_v4_demo_school', stateString);
+
+                try { window.__LAST_MONITORING_STATE_STRING = stateString; } catch(e) {}
+                try { sessionStorage.setItem('demo_school_snapshot_loaded', '1'); } catch(e) {}
+
+                setAuthStatus('تم تحميل بيانات demo_school من snapshot', 'success');
+                window.dispatchEvent(new Event('smart-data-refreshed'));
+                return true;
+            } catch(e) {
+                console.warn('تعذر تحميل بيانات demo_school من snapshot', e);
+                return false;
+            }
+        }
+
 async function openSchoolForUser(user) {
             if (!user) return;
             if (window.CONTROL_APP_AUTH_READY && lastOpenedAuthUid === user.uid) {
@@ -660,6 +700,7 @@ async function openSchoolForUser(user) {
 
             await purgeOldControlFirestoreData(window.currentSchoolId);
             await restoreSchoolLocalStorage(window.currentSchoolId);
+            await forceLoadDemoSchoolSnapshotForSchool001();
             await restoreMonitoringAppDataFromCloud(window.currentSchoolId);
             window.cloudDB = buildCloudDB();
             window.monitoringFirebase = window.cloudDB;
@@ -2740,7 +2781,7 @@ const SmartMonitorSection = React.memo(() => {
                     " \u0627\u0644\u0645\u0631\u0627\u0642\u0628 \u0627\u0644\u0630\u0643\u064A"),
                 React.createElement("p", { className: "text-xs text-gray-500 mt-1" }, "\u0623\u062F\u062E\u0644 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0639\u0644\u0645\u064A\u0646 \u0648\u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A \u0648\u0634\u063A\u0651\u0644 \u0627\u0644\u062A\u0648\u0632\u064A\u0639 \u0627\u0644\u0630\u0643\u064A\u060C \u0648\u0633\u062A\u0646\u062A\u0642\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u062A\u0644\u0642\u0627\u0626\u064A\u064B\u0627 \u0625\u0644\u0649 \u062A\u0648\u0632\u064A\u0639 \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629 \u0648\u0627\u0644\u062A\u0642\u0631\u064A\u0631 \u0627\u0644\u064A\u0648\u0645\u064A \u0648\u0645\u062D\u0636\u0631 \u0641\u062A\u062D \u0627\u0644\u0645\u063A\u0644\u0641\u0627\u062A \u0639\u0646\u062F \u0627\u062E\u062A\u064A\u0627\u0631 \u0627\u0644\u062A\u0627\u0631\u064A\u062E."))),
         React.createElement("div", { className: "rounded-2xl overflow-hidden border border-gray-200 shadow bg-white" },
-            React.createElement("iframe", { title: "\u0627\u0644\u0645\u0631\u0627\u0642\u0628 \u0627\u0644\u0630\u0643\u064A", src: SMART_MONITOR_FILE, className: "w-full min-h-[1200px] bg-white", style: { border: '0' }, loading: "lazy", onLoad: (e) => {
+            React.createElement("iframe", { title: "\u0627\u0644\u0645\u0631\u0627\u0642\u0628 \u0627\u0644\u0630\u0643\u064A", src: (window.currentSchoolId ? ('smart_monitor.html?schoolId=' + encodeURIComponent(window.currentSchoolId)) : SMART_MONITOR_FILE), className: "w-full min-h-[1200px] bg-white", style: { border: '0' }, loading: "lazy", onLoad: (e) => {
                     try {
                         const w = e.currentTarget.contentWindow;
                         if (!w)
