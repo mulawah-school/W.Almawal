@@ -246,7 +246,8 @@
                 }
                 if (!hasData) return false;
                 try {
-                    const stateString = JSON.stringify(data || {});
+                    const stateString = JSON.stringify(stripOldControlDerivedFieldsFromState(data || {}));
+                    purgeOldControlDerivedDataSmartOnly();
                     localStorage.setItem('monitoring_distribution_full_state_v4', stateString);
                     try { localStorage.setItem(`monitoring_distribution_full_state_v4_${schoolId}`, stateString); } catch(e) {}
                 } catch(e) { console.warn('تعذر تجهيز بيانات المراقب الذكي محليًا', e); }
@@ -308,6 +309,7 @@
             let state = payload && payload.state ? payload.state : payload;
             if (!state || typeof state !== 'object') return false;
             try {
+                state = stripOldControlDerivedFieldsFromState(state);
                 state = cleanFirestoreValue(state);
                 const stateString = JSON.stringify(state);
                 try { localStorage.setItem('monitoring_distribution_full_state_v4', stateString); } catch(e) {}
@@ -642,9 +644,15 @@
                     return false;
                 }
 
-                // هذه المفاتيح الثلاثة تغطي طريقة قراءة الكنترول والمراقب الذكي.
+                try {
+                    const parsedState = JSON.parse(stateString);
+                    stateString = JSON.stringify(stripOldControlDerivedFieldsFromState(parsedState));
+                } catch(e) {}
+
+                purgeOldControlDerivedDataSmartOnly();
+
+                // هذه المفاتيح تغطي طريقة قراءة الكنترول والمراقب الذكي، بعد تنظيف بيانات الكنترول القديمة.
                 localStorage.setItem('monitoring_distribution_full_state_v4', stateString);
-                localStorage.setItem('monitoring_distribution_full_state_v4_demo_school', stateString);
                 localStorage.setItem('monitoring_distribution_full_state_v4_demo_school', stateString);
 
                 try { window.__LAST_MONITORING_STATE_STRING = stateString; } catch(e) {}
@@ -659,8 +667,78 @@
             }
         }
 
+
+        function purgeOldControlDerivedDataSmartOnly() {
+            try {
+                const keepPatterns = [
+                    /^monitoring_distribution_full_state_v4/,
+                    /^monitoring_distribution_teachers_v2/
+                ];
+
+                const removePatterns = [
+                    /^control_bridge_/,
+                    /^monitoring_control_bridge_v1$/,
+                    /^exam_sessions_/,
+                    /^exam_envelopes_/,
+                    /^exam_daily_notes_/,
+                    /^exam_proctoring_extra_/,
+                    /^exam_second_period_proctoring_/,
+                    /^exam_individual_absentee_/,
+                    /^exam_violation_/,
+                    /^exam_signatures_/,
+                    /^exam_signature_deletes_/,
+                    /^exam_control_committee_signatures_global$/,
+                    /^savedExamDate$/,
+                    /^control_proctoring_clean_version$/,
+                    /^old_control_/,
+                    /^legacy_control_/
+                ];
+
+                const toRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i) || '';
+                    if (keepPatterns.some((r) => r.test(key))) continue;
+                    if (removePatterns.some((r) => r.test(key))) toRemove.push(key);
+                }
+                toRemove.forEach((key) => {
+                    try { localStorage.removeItem(key); } catch(e) {}
+                });
+
+                try { window.__CONTROL_SMART_ONLY_CLEANED = true; } catch(e) {}
+                return true;
+            } catch(e) {
+                console.warn('تعذر تنظيف بيانات الكنترول القديمة', e);
+                return false;
+            }
+        }
+
+        function stripOldControlDerivedFieldsFromState(state) {
+            try {
+                if (!state || typeof state !== 'object') return state;
+                const clean = { ...state };
+
+                // لا نسمح للكنترول باستخدام جلسات/توزيعات جاهزة قديمة من ملف الكنترول.
+                delete clean.sessionsByDate;
+                delete clean.dailyReports;
+                delete clean.envelopeOpenings;
+                delete clean.controlBridge;
+                delete clean.examSessions;
+                delete clean.oldControlSessions;
+                delete clean.legacyControlData;
+                delete clean.proctoringByDate;
+                delete clean.exceptionsByDate;
+
+                // نبقي مصادر الحقيقة من المراقب الذكي فقط.
+                // teachers / exams / assignments / schoolClasses / grade11OptionalRows / grade12OptionalRows
+                return clean;
+            } catch(e) {
+                return state;
+            }
+        }
+
 async function openSchoolForUser(user) {
             if (!user) return;
+            purgeOldControlDerivedDataSmartOnly();
             if (window.CONTROL_APP_AUTH_READY && lastOpenedAuthUid === user.uid) {
                 showApp();
                 return;
@@ -701,6 +779,7 @@ async function openSchoolForUser(user) {
             await purgeOldControlFirestoreData(window.currentSchoolId);
             await restoreSchoolLocalStorage(window.currentSchoolId);
             await forceLoadDemoSchoolSnapshotForSchool001();
+            purgeOldControlDerivedDataSmartOnly();
             await restoreMonitoringAppDataFromCloud(window.currentSchoolId);
             window.cloudDB = buildCloudDB();
             window.monitoringFirebase = window.cloudDB;
@@ -1443,7 +1522,11 @@ const sanitizeSmartBridgeForControl = (bridge) => {
     // الكنترول يبني الصفوف من exams + assignments + teachers فقط.
     return {
         ...bridge,
-        sessionsByDate: {}
+        sessionsByDate: {},
+        dailyReports: {},
+        envelopeOpenings: {},
+        controlBridge: null,
+        examSessions: null
     };
 };
 const cacheSmartBridge = (bridge) => {
