@@ -601,13 +601,25 @@
             window.CONTROL_APP_AUTH_READY = true;
             markActivity();
             setLoginError('');
-            setAuthStatus('متصل: ' + window.currentSchoolId, 'success');
+            setAuthStatus('متصل بالسحابة: ' + window.currentSchoolId, 'success');
             showApp();
             window.dispatchEvent(new Event('firebase-ready'));
             window.dispatchEvent(new Event('control-auth-ready'));
             return true;
         }
-        async function openSchoolForUser(user) {
+        
+        function resolveSchoolIdForUser(user, userData = {}) {
+            const username = String(userData.username || '').trim().toLowerCase();
+            const schoolId = String(userData.schoolId || '').trim();
+
+            // استرجاع بيانات school001 القديمة من مسار demo_school.
+            // هذا مؤقت وآمن: فقط الحساب الذي username حقه school001 يفتح demo_school.
+            if (username === 'school001') return 'demo_school';
+
+            return schoolId || userData.username || user.uid;
+        }
+
+async function openSchoolForUser(user) {
             if (!user) return;
             if (window.CONTROL_APP_AUTH_READY && lastOpenedAuthUid === user.uid) {
                 showApp();
@@ -629,8 +641,12 @@
                 setLoginError('هذا الحساب غير مفعل. اجعل active = true في schoolUsers.');
                 return;
             }
-            window.currentSchoolId = userData.schoolId || userData.username || user.uid;
-            window.currentSchoolInfo = userData;
+            window.currentSchoolId = resolveSchoolIdForUser(user, userData);
+            window.currentSchoolInfo = {
+                ...userData,
+                schoolId: window.currentSchoolId,
+                resolvedSchoolId: window.currentSchoolId
+            };
 
             try {
                 await setDoc(fbDoc(db, 'schools', window.currentSchoolId), {
