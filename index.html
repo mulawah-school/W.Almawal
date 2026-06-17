@@ -66,7 +66,29 @@
             }
         }
 
-        function isScopedLocalKey(key) {
+        
+        function getSmartMonitorUrlForCurrentUser() {
+            const uid = getCurrentUserScopeId ? getCurrentUserScopeId() : (window.currentSchoolId || '');
+            return 'smart_monitor.html?uid=' + encodeURIComponent(uid || '') + '&scope=' + encodeURIComponent(uid || '') + '&v=' + Date.now();
+        }
+
+        function reloadSmartMonitorForCurrentUser() {
+            try {
+                const uid = getCurrentUserScopeId ? getCurrentUserScopeId() : (window.currentSchoolId || '');
+                if (!uid) return;
+                sessionStorage.setItem('control_current_uid_scope', uid);
+                const frames = Array.from(document.querySelectorAll('iframe'));
+                frames.forEach((frame) => {
+                    const title = frame.getAttribute('title') || '';
+                    const src = frame.getAttribute('src') || '';
+                    if (title.includes('المراقب') || src.includes('smart_monitor')) {
+                        frame.src = getSmartMonitorUrlForCurrentUser();
+                    }
+                });
+            } catch(e) {}
+        }
+
+function isScopedLocalKey(key) {
             key = String(key || '');
             return /^(monitoring_|smart_monitor|smartMonitor|control_bridge_|exam_sessions_|exam_envelopes_|exam_daily_notes_|exam_proctoring_extra_|exam_second_period_proctoring_|exam_individual_absentee_|exam_violation_|exam_signatures_|exam_signature_deletes_|savedExamDate$|exam_control_committee_signatures_global$)/.test(key);
         }
@@ -696,6 +718,7 @@
             const userScopedSchoolId = user.uid;
             window.currentSchoolId = userScopedSchoolId;
             removeUnscopedLegacyData();
+            try { sessionStorage.setItem('control_current_uid_scope', window.currentSchoolId); } catch(e) {}
             window.currentSchoolInfo = {
                 ...userData,
                 schoolId: userScopedSchoolId,
@@ -724,8 +747,10 @@
             saveLocalControlSession(user, userData);
             lastOpenedAuthUid = user.uid;
             window.CONTROL_APP_AUTH_READY = true;
-            setAuthStatus('متصل: ' + window.currentSchoolId, 'success');
+            setAuthStatus('متصل UID: ' + window.currentSchoolId, 'success');
             showApp();
+            setTimeout(reloadSmartMonitorForCurrentUser, 250);
+            setTimeout(reloadSmartMonitorForCurrentUser, 1000);
             window.dispatchEvent(new Event('firebase-ready'));
             window.dispatchEvent(new Event('control-auth-ready'));
         }
@@ -747,6 +772,11 @@
                 setAuthStatus('جاري تسجيل الدخول...', 'loading');
                 manualLoginInThisPage = true;
                 markActivity();
+                try {
+                    if (auth.currentUser && auth.currentUser.email !== email) {
+                        await signOut(auth);
+                    }
+                } catch(e) {}
                 const credential = await signInWithEmailAndPassword(auth, email, password);
                 markActivity();
                 await openSchoolForUser(credential.user);
@@ -1137,7 +1167,7 @@
 
     <script>
 const { useState, useEffect, useRef } = React;
-const SMART_MONITOR_FILE = 'smart_monitor.html';
+const SMART_MONITOR_FILE = 'smart_monitor.html?waitingForUid=1';
 // شعار المدرسة للشريط العلوي للتطبيق فقط (تمت إزالته من ترويسة الطباعة)
 const Logo = ({ name, className = "h-16 w-auto" }) => {
     const logos = {
@@ -2809,6 +2839,12 @@ const SmartMonitorSection = React.memo(() => {
                             return;
                         w.currentSchoolId = window.currentSchoolId;
                         try { w.sessionStorage.setItem('control_current_uid_scope', window.currentSchoolId || ''); } catch(e) {}
+                        try {
+                            if (window.currentSchoolId && !String(e.currentTarget.src || '').includes('uid=')) {
+                                e.currentTarget.src = getSmartMonitorUrlForCurrentUser();
+                                return;
+                            }
+                        } catch(innerReloadErr) {}
                         w.monitoringFirebase = window.monitoringFirebase || window.cloudDB;
                         if (w.monitoringDistributionApp) {
                             if (typeof w.monitoringDistributionApp.ensureParentFirebaseBridge === 'function')
