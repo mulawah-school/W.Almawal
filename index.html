@@ -58,6 +58,56 @@
         const CONTROL_LOGOUT_FLAG_KEY = 'control_force_logged_out_v1';
         const USER_SCOPED_FIRESTORE_STORAGE = true; // الحفظ السحابي مستقل لكل Firebase UID
 
+        function getCurrentUserScopeId() {
+            try {
+                return (auth && auth.currentUser && auth.currentUser.uid) || window.currentSchoolId || '';
+            } catch(e) {
+                return window.currentSchoolId || '';
+            }
+        }
+
+        function isScopedLocalKey(key) {
+            key = String(key || '');
+            return /^(monitoring_|smart_monitor|smartMonitor|control_bridge_|exam_sessions_|exam_envelopes_|exam_daily_notes_|exam_proctoring_extra_|exam_second_period_proctoring_|exam_individual_absentee_|exam_violation_|exam_signatures_|exam_signature_deletes_|savedExamDate$|exam_control_committee_signatures_global$)/.test(key);
+        }
+
+        function makeScopedLocalKey(key, scopeId = getCurrentUserScopeId()) {
+            key = String(key || '');
+            if (!isScopedLocalKey(key)) return key;
+            if (key.indexOf('__uidscope__') === 0) return key;
+            return '__uidscope__' + scopeId + '__' + key;
+        }
+
+        function removeUnscopedLegacyData() {
+            try {
+                const patterns = [
+                    /^monitoring_/,
+                    /^smart_monitor/,
+                    /^smartMonitor/,
+                    /^control_bridge_/,
+                    /^exam_sessions_/,
+                    /^exam_envelopes_/,
+                    /^exam_daily_notes_/,
+                    /^exam_proctoring_extra_/,
+                    /^exam_second_period_proctoring_/,
+                    /^exam_individual_absentee_/,
+                    /^exam_violation_/,
+                    /^exam_signatures_/,
+                    /^exam_signature_deletes_/,
+                    /^savedExamDate$/,
+                    /^exam_control_committee_signatures_global$/
+                ];
+                for (let i = localStorage.length - 1; i >= 0; i--) {
+                    const key = localStorage.key(i) || '';
+                    if (key.indexOf('__uidscope__') === 0) continue;
+                    if (patterns.some((r) => r.test(key))) {
+                        try { localStorage.removeItem(key); } catch(e) {}
+                    }
+                }
+            } catch(e) {}
+        }
+
+
         function clearOldControlMonitorData() {
             try {
                 const exactKeys = [
@@ -162,15 +212,8 @@
             try { localStorage.setItem(AUTH_LAST_ACTIVITY_KEY, String(Date.now())); } catch(e) {}
         }
         function saveLocalControlSession(user, userData) {
-            try {
-                const schoolId = userData.schoolId || userData.username || user.uid;
-                localStorage.setItem(AUTH_LOCAL_SESSION_KEY, JSON.stringify({
-                    uid: user.uid,
-                    schoolId,
-                    userData,
-                    savedAt: Date.now()
-                }));
-            } catch(e) {}
+            // تعطيل حفظ جلسة محلية مشتركة حتى لا تنتقل بيانات مستخدم إلى مستخدم آخر.
+            return false;
         }
         function getLocalControlSession() {
             try {
@@ -196,7 +239,10 @@
         });
 
         function shouldPersistLocalKey(key) {
-            return /^(monitoring_|savedExamDate$|smart_monitor)/.test(String(key || '')) || String(key || '') === 'exam_control_committee_signatures_global'; // لا نحفظ control_bridge أو exam_sessions حتى لا ترجع بيانات الكنترول القديمة
+            key = String(key || '');
+            const scopeId = getCurrentUserScopeId();
+            if (!scopeId) return false;
+            return key.indexOf('__uidscope__' + scopeId + '__') === 0;
         }
         function cleanupSchoolScopedLocalStorage() {
             const keys = [];
@@ -218,7 +264,11 @@
                     const data = snap.data() || {};
                     const items = data.items || {};
                     Object.keys(items).forEach(k => {
-                        if (shouldPersistLocalKey(k) && typeof items[k] === 'string') localStorage.setItem(k, items[k]);
+                        if (typeof items[k] === 'string') {
+                            const rawKey = String(k || '').replace(/^__uidscope__[^_]+__/, '');
+                            const scopedKey = makeScopedLocalKey(rawKey, schoolId);
+                            if (shouldPersistLocalKey(scopedKey)) localStorage.setItem(scopedKey, items[k]);
+                        }
                     });
                 }
             } catch(e) {
@@ -257,8 +307,8 @@
                 if (!hasData) return false;
                 try {
                     const stateString = JSON.stringify(data || {});
-                    localStorage.setItem('monitoring_distribution_full_state_v4', stateString);
-                    try { localStorage.setItem(`monitoring_distribution_full_state_v4_${schoolId}`, stateString); } catch(e) {}
+                    localStorage.setItem(makeScopedLocalKey('monitoring_distribution_full_state_v4', schoolId), stateString);
+                    try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
                 } catch(e) { console.warn('تعذر تجهيز بيانات المراقب الذكي محليًا', e); }
                 return true;
             } catch(e) {
@@ -320,8 +370,8 @@
             try {
                 state = cleanFirestoreValue(state);
                 const stateString = JSON.stringify(state);
-                try { localStorage.setItem('monitoring_distribution_full_state_v4', stateString); } catch(e) {}
-                try { localStorage.setItem(`monitoring_distribution_full_state_v4_${window.currentSchoolId}`, stateString); } catch(e) {}
+                try { localStorage.setItem(makeScopedLocalKey('monitoring_distribution_full_state_v4'), stateString); } catch(e) {}
+                try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
                 try { window.__LAST_MONITORING_STATE_STRING = stateString; } catch(e) {}
                 const nowIso = new Date().toISOString();
                 await setDoc(fbDoc(db, 'schools', window.currentSchoolId, 'monitoring', 'appData'), {
@@ -398,8 +448,8 @@
                 if (app && typeof app.getSerializableState === 'function') {
                     state = app.getSerializableState();
                 } else {
-                    const scopedKey = `monitoring_distribution_full_state_v4_${window.currentSchoolId}`;
-                    const saved = localStorage.getItem(scopedKey) || localStorage.getItem('monitoring_distribution_full_state_v4');
+                    const scopedKey = makeScopedLocalKey('monitoring_distribution_full_state_v4');
+                    const saved = localStorage.getItem(scopedKey);
                     state = saved ? JSON.parse(saved) : null;
                 }
                 if (!state || typeof state !== 'object') {
@@ -528,9 +578,22 @@
             storageSaveTimer = setTimeout(saveSchoolLocalStorageNow, 5000);
         };
         const originalSetItem = localStorage.setItem.bind(localStorage);
+        const originalGetItem = localStorage.getItem.bind(localStorage);
+        const originalRemoveItem = localStorage.removeItem.bind(localStorage);
         localStorage.setItem = function(key, value) {
-            originalSetItem(key, value);
-            if (shouldPersistLocalKey(key)) window.scheduleSchoolLocalStorageSave();
+            const scopedKey = makeScopedLocalKey(key);
+            originalSetItem(scopedKey, value);
+            if (shouldPersistLocalKey(scopedKey)) window.scheduleSchoolLocalStorageSave();
+        };
+        localStorage.getItem = function(key) {
+            const scopedKey = makeScopedLocalKey(key);
+            const val = originalGetItem(scopedKey);
+            if (val !== null) return val;
+            return isScopedLocalKey(key) ? null : originalGetItem(key);
+        };
+        localStorage.removeItem = function(key) {
+            originalRemoveItem(makeScopedLocalKey(key));
+            if (!isScopedLocalKey(key)) originalRemoveItem(key);
         };
 
         function scopedDocPath(args) {
@@ -602,24 +665,13 @@
             };
         }
         function restoreLocalControlSession(session) {
-            if (!session || !session.schoolId) return false;
-            window.currentSchoolId = session.schoolId;
-            window.currentSchoolInfo = session.userData || { schoolId: session.schoolId, username: session.schoolId };
-            window.cloudDB = buildCloudDB();
-            window.monitoringFirebase = window.cloudDB;
-            lastOpenedAuthUid = session.uid || lastOpenedAuthUid;
-            window.CONTROL_APP_AUTH_READY = true;
-            markActivity();
-            setLoginError('');
-            setAuthStatus('متصل: ' + window.currentSchoolId, 'success');
-            showApp();
-            window.dispatchEvent(new Event('firebase-ready'));
-            window.dispatchEvent(new Event('control-auth-ready'));
-            return true;
+            // مع تعدد اليوزرات لا نسترجع جلسة محلية قديمة إطلاقًا.
+            // مصدر الحقيقة هو Firebase Auth الحالي + schoolUsers/{uid}.
+            return false;
         }
         async function openSchoolForUser(user) {
             if (!user) return;
-            try { clearOldControlMonitorData(); } catch(e) {}
+            try { clearOldControlMonitorData(); removeUnscopedLegacyData(); } catch(e) {}
             if (window.CONTROL_APP_AUTH_READY && lastOpenedAuthUid === user.uid) {
                 showApp();
                 return;
@@ -643,6 +695,7 @@
             const originalSchoolId = userData.schoolId || userData.username || user.uid;
             const userScopedSchoolId = user.uid;
             window.currentSchoolId = userScopedSchoolId;
+            removeUnscopedLegacyData();
             window.currentSchoolInfo = {
                 ...userData,
                 schoolId: userScopedSchoolId,
@@ -668,7 +721,6 @@
             await restoreMonitoringAppDataFromCloud(window.currentSchoolId);
             window.cloudDB = buildCloudDB();
             window.monitoringFirebase = window.cloudDB;
-            try { localStorage.setItem(`monitoring_distribution_full_state_v4_${window.currentSchoolId}`, localStorage.getItem('monitoring_distribution_full_state_v4') || '{}'); } catch(e) {}
             saveLocalControlSession(user, userData);
             lastOpenedAuthUid = user.uid;
             window.CONTROL_APP_AUTH_READY = true;
