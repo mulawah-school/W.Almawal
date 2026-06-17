@@ -1,6 +1,112 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
+
+<script>
+(function(){
+  function purgeOldSmartBridgeCachesFinal(){
+    try {
+      var remove = [];
+      var patterns = [
+        /^monitoring_control_bridge_v1$/,
+        /^control_bridge_/,
+        /^exam_/,
+        /^sessionsByDate/,
+        /^dailyReports/,
+        /^proctor/,
+        /^observer/,
+        /^exceptions_/,
+        /^savedExamDate$/
+      ];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i) || '';
+        if (patterns.some(function(r){ return r.test(k); })) remove.push(k);
+      }
+      remove.forEach(function(k){ try { localStorage.removeItem(k); } catch(e) {} });
+    } catch(e) {}
+  }
+  window.purgeOldSmartBridgeCachesFinal = purgeOldSmartBridgeCachesFinal;
+  purgeOldSmartBridgeCachesFinal();
+  window.addEventListener('load', purgeOldSmartBridgeCachesFinal);
+})();
+</script>
+
+
+<script>
+(function(){
+  function cleanGenericStateForNonDemoSchool(){
+    try {
+      var sid = window.currentSchoolId ||
+                new URLSearchParams(location.search).get('schoolId') ||
+                new URLSearchParams(location.search).get('uid') ||
+                sessionStorage.getItem('control_current_uid_scope') ||
+                '';
+      if (sid === 'demo_school') return;
+
+      // لا تسمح لأي يوزر جديد بقراءة بيانات school001 العامة.
+      localStorage.removeItem('monitoring_distribution_full_state_v4');
+      localStorage.removeItem('monitoring_distribution_full_state_v4_demo_school');
+      localStorage.removeItem('monitoring_distribution_full_state_v4_school001');
+    } catch(e) {}
+  }
+  cleanGenericStateForNonDemoSchool();
+  window.addEventListener('load', cleanGenericStateForNonDemoSchool);
+})();
+</script>
+
+
+<script>
+(function(){
+  function purgeOldControlDerivedDataSmartOnly(){
+    try {
+      var removePatterns = [
+        /^control_bridge_/,
+        /^monitoring_control_bridge_v1$/,
+        /^exam_sessions_/,
+        /^exam_envelopes_/,
+        /^exam_daily_notes_/,
+        /^exam_proctoring_extra_/,
+        /^exam_second_period_proctoring_/,
+        /^exam_individual_absentee_/,
+        /^exam_violation_/,
+        /^exam_signatures_/,
+        /^exam_signature_deletes_/,
+        /^exam_control_committee_signatures_global$/,
+        /^savedExamDate$/,
+        /^control_proctoring_clean_version$/
+      ];
+      var remove = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i) || '';
+        if (removePatterns.some(function(r){ return r.test(k); })) remove.push(k);
+      }
+      remove.forEach(function(k){ try { localStorage.removeItem(k); } catch(e) {} });
+    } catch(e) {}
+  }
+  window.purgeOldControlDerivedDataSmartOnly = purgeOldControlDerivedDataSmartOnly;
+  purgeOldControlDerivedDataSmartOnly();
+  window.addEventListener('load', purgeOldControlDerivedDataSmartOnly);
+})();
+</script>
+
+
+<script>
+(function(){
+  function loadDemoSchoolSnapshotKey(){
+    try {
+      var sid = window.currentSchoolId || new URLSearchParams(location.search).get('schoolId');
+      if (sid !== 'demo_school') return;
+      var v = localStorage.getItem('monitoring_distribution_full_state_v4_demo_school') || localStorage.getItem('monitoring_distribution_full_state_v4_school001');
+      if (v) {
+        try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
+      }
+    } catch(e) {}
+  }
+  loadDemoSchoolSnapshotKey();
+  window.addEventListener('load', loadDemoSchoolSnapshotKey);
+})();
+</script>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>نظام التوزيع الذكي لمراقبة الامتحانات</title>
@@ -1142,7 +1248,7 @@
                 <div class="mb-6 bg-slate-50 dark:bg-slate-700/30 p-4 rounded-xl flex flex-wrap gap-4 items-center no-print">
                     <div class="flex-1 min-w-[200px]">
                         <label class="block text-xs font-bold text-slate-500 mb-1">اختر يوم الامتحان لمراجعته</label>
-                        <select x-model="selectedDailyExamId" @change="saveAppData()" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500">
+                        <select x-model="selectedDailyExamId" @change="handleDailyExamDateChange()" class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500">
                             <option value="">-- اختر يوماً من الجدول --</option>
                             <template x-for="day in getDailyExamDays()" :key="day.date">
                                 <option :value="day.date" x-text="formatDateArabic(day.date)"></option>
@@ -1702,7 +1808,14 @@
     </div>
     <!-- Firebase/Auth disabled inside the merged control file -->
     <script>
-        window.currentSchoolId = null;
+        window.currentSchoolId = (function(){
+            try {
+                return new URLSearchParams(location.search).get('schoolId') ||
+                       new URLSearchParams(location.search).get('uid') ||
+                       sessionStorage.getItem('control_current_uid_scope') ||
+                       null;
+            } catch(e) { return null; }
+        })();
         window.currentUserRole = 'local_control';
         window.currentUsername = 'local_control';
         window.monitoringFirebase = null;
@@ -1743,7 +1856,7 @@
                 },
 
                 // App core states with explicit Name, Speciality, Phone structure matching Excel
-                teachers: [
+                teachers: (window.currentSchoolId && window.currentSchoolId !== 'demo_school') ? [] : [
                     { id: 1, name: 'سالم بن أحمد البوسعيدي', speciality: 'اللغة العربية', phone: '+96891112222', inControl: false },
                     { id: 2, name: 'فاطمة بنت عبدالله البلوشية', speciality: 'الرياضيات والعلوم', phone: '+96892223333', inControl: false },
                     { id: 3, name: 'علي بن حسن العجمي', speciality: 'اللغة الإنجليزية', phone: '+96893334444', inControl: false },
@@ -1755,7 +1868,7 @@
                     { id: 9, name: 'أحمد بن خميس الجابري', speciality: 'اللغة الإنجليزية', phone: '+96899990000', inControl: false },
                     { id: 10, name: 'ليلى بنت ناصر الوهيبية', speciality: 'اللغة العربية', phone: '+96891110000', inControl: false },
                 ],
-                schoolClasses: [
+                schoolClasses: (window.currentSchoolId && window.currentSchoolId !== 'demo_school') ? [] : [
                     { id: 1, className: '5/1', regularCount: 36, adultCount: 0, committeeName: 'اللجنة 1' },
                     { id: 2, className: '5/2', regularCount: 37, adultCount: 0, committeeName: 'اللجنة 2' },
                     { id: 3, className: '5/3', regularCount: 37, adultCount: 0, committeeName: 'اللجنة 3' },
@@ -1786,13 +1899,13 @@
                     { id: 28, className: '11/7', regularCount: 27, adultCount: 0, committeeName: 'اللجنة 28' },
                     { id: 29, className: '11/8', regularCount: 24, adultCount: 0, committeeName: 'اللجنة 29' },
                 ],
-                exams: [
+                exams: (window.currentSchoolId && window.currentSchoolId !== 'demo_school') ? [] : [
                     { id: 101, date: '2026-06-07', period: '08:00 ص', subject: 'اللغة العربية', duration: 2.5, observersNeeded: 1, selectedClasses: [1, 2, 3] },
                     { id: 102, date: '2026-06-08', period: '10:00 ص', subject: 'الرياضيات والعلوم', duration: 2, observersNeeded: 1, selectedClasses: [1, 2, 4] },
                     { id: 103, date: '2026-06-09', period: '08:00 ص', subject: 'الفيزياء', duration: 3, observersNeeded: 1, selectedClasses: [2, 3, 4] }
                 ],
                 statsExamVersion: 0,
-                subjectRestrictions: [
+                subjectRestrictions: (window.currentSchoolId && window.currentSchoolId !== 'demo_school') ? [] : [
                     { id: 1, date: '2026-06-07', speciality: 'اللغة العربية' } 
                 ],
                 teacherRestrictions: [],
@@ -1948,7 +2061,7 @@
                                     const dataUrl = canvas.toDataURL('image/png');
                                     this.schoolSettings = { ...this.schoolSettings, logoDataUrl: dataUrl, ministry: 'وزارة التعليم' };
                                     this.saveAppData({ silent: true });
-                                    if (typeof this.syncControlBridgeData === 'function') this.syncControlBridgeData();
+                                    if (typeof this.syncControlBridgeData === 'function') this.scheduleControlBridgeSync ? this.scheduleControlBridgeSync('deferred_sync') : this.syncControlBridgeData();
                                     if (window.parent && window.parent !== window) {
                                         try { window.parent.postMessage({ type: 'request_monitoring_control_bridge_v1' }, '*'); } catch(e) {}
                                     }
@@ -1980,7 +2093,7 @@
                 removeSchoolLogo() {
                     this.schoolSettings = { ...this.schoolSettings, logoDataUrl: '', ministry: 'وزارة التعليم' };
                     this.saveAppData({ silent: true });
-                    if (typeof this.syncControlBridgeData === 'function') this.syncControlBridgeData();
+                    if (typeof this.syncControlBridgeData === 'function') this.scheduleControlBridgeSync ? this.scheduleControlBridgeSync('deferred_sync') : this.syncControlBridgeData();
                     this.showToast('تم حذف شعار المدرسة من الطباعة.');
                 },
 
@@ -2034,7 +2147,8 @@
                         subjectRestrictions: clone(this.subjectRestrictions),
                         teacherRestrictions: clone(this.teacherRestrictions),
                         smartSettings: { ...this.smartSettings },
-                        selectedDailyExamId: this.selectedDailyExamId,
+                        // selectedDailyExamId عرض فقط ولا يحفظ حتى لا يسبب بطء عند تغيير التاريخ
+                        selectedDailyExamId: '',
                         grade11OptionalRows: clone(this.grade11OptionalRows),
                         grade12OptionalRows: clone(this.grade12OptionalRows)
                     };
@@ -2124,7 +2238,7 @@
                     if (!window.currentSchoolId || this.isLoadingCloudData) return false;
                     try {
                         this.safeSaveLocalSnapshot(this.getSerializableState());
-                        this.syncControlBridgeData();
+                        this.scheduleControlBridgeSync ? this.scheduleControlBridgeSync('deferred_sync') : this.syncControlBridgeData();
                     } catch(e) {}
                     let sentToParentForFirebase = false;
                     try {
@@ -2220,7 +2334,7 @@
                                 this.selectedDailyExamId = this.exams[0].id;
                             }
                             this.safeSaveLocalSnapshot(this.getSerializableState());
-                            this.syncControlBridgeData();
+                            this.scheduleControlBridgeSync ? this.scheduleControlBridgeSync('deferred_sync') : this.syncControlBridgeData();
                             if (this.exams.length > 0 && this.assignments.length === 0) this.runSmartDistribution(true);
                             if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('متصل بالسحابة', 'success');
                         } else {
@@ -2235,8 +2349,8 @@
                             if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('متصل بالسحابة', 'success');
                         }
                     } catch (e) {
-                        console.warn('تعذر تحميل البيانات المباشرة من Firebase، سيتم استخدام النسخة المحلية المسترجعة من الصفحة الرئيسية', e);
-                        if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('تم استخدام النسخة المحفوظة', 'success');
+                        console.warn('تعذر تحميل البيانات المباشرة من Firebase، تم تحميل البيانات', e);
+                        if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('تم تحميل البيانات', 'success');
                     } finally {
                         this.isLoadingCloudData = false;
                         this.cloudDataLoadedOnce = true;
@@ -2261,20 +2375,26 @@
                 },
 
                 saveAppData(options = {}) {
+                    const reason = options.reason || 'smart_monitor_direct_edit';
+                    if (options && options.viewOnly === true) {
+                        this.handleDailyExamDateChange();
+                        return;
+                    }
+
                     const state = this.getSerializableState();
                     this.safeSaveLocalSnapshot(state);
-                    this.syncControlBridgeData();
+                    this.scheduleControlBridgeSync ? this.scheduleControlBridgeSync('deferred_sync') : this.syncControlBridgeData();
                     const showStatus = !(options && options.silent === true);
-                    const reason = options.reason || 'smart_monitor_direct_edit';
                     if (showStatus && typeof window.updateCloudStatus === 'function') window.updateCloudStatus('جاري الحفظ...', 'loading');
 
                     // داخل ملف الكنترول: نرسل نسخة واحدة للصفحة الرئيسية، والصفحة الرئيسية تجمع التعديلات وتحفظ آخر حالة في Firebase.
                     // إلغاء الحفظ المباشر المكرر هنا هو سبب تسريع المراقب الذكي.
                     if (window.parent && window.parent !== window) {
+                        try { window.parent.__LAST_MONITORING_STATE_STRING = JSON.stringify(state); } catch(e) {}
                         this.sendStateToParent(reason);
                         if (showStatus && typeof window.updateCloudStatus === 'function') {
                             clearTimeout(this._parentSaveStatusTimer);
-                            this._parentSaveStatusTimer = setTimeout(() => window.updateCloudStatus('تم الحفظ', 'success'), 1400);
+                            this._parentSaveStatusTimer = setTimeout(() => window.updateCloudStatus('تم الحفظ', 'success'), 1200);
                         }
                         return;
                     }
@@ -2464,32 +2584,67 @@
                     return changed;
                 },
 
-                exportControlBridgeData() {
-                    this.ensureMissingObserverAssignments();
-                    // الكنترول يبني كشوف القاعات من exams + assignments مباشرة؛ لا نرسل sessionsByDate حتى يبقى الجسر خفيفاً.
-                    const sessionsByDate = {};
-                    return {
-                        version: 'monitoring_control_bridge_v1',
+                exportControlBridgeData(options = {}) {
+                    // الجسر الآن خفيف ومخزن مؤقتاً: لا يعيد بناء كل شيء مع كل تغيير تاريخ.
+                    const signature = [
+                        (this.teachers || []).length,
+                        (this.exams || []).length,
+                        (this.assignments || []).length,
+                        (this.schoolClasses || []).length,
+                        JSON.stringify(this.schoolSettings || {}).length
+                    ].join('|');
+
+                    if (!options.force && this.__lastBridgeSignature === signature && this.__cachedControlBridgeData) {
+                        return this.__cachedControlBridgeData;
+                    }
+
+                    // لا نشغل التوليد الناقص إلا عند عدم وجود أي توزيع.
+                    if ((!Array.isArray(this.assignments) || this.assignments.length === 0) && typeof this.ensureMissingObserverAssignments === 'function') {
+                        this.ensureMissingObserverAssignments();
+                    }
+
+                    const data = {
+                        version: 'monitoring_control_bridge_v2_fast',
                         updatedAt: new Date().toISOString(),
                         schoolSettings: { ...this.schoolSettings, ministry: 'وزارة التعليم' },
                         teachers: this.normalizeTeacherList(this.teachers),
-                        controlMembers: this.normalizeTeacherList(this.teachers.filter(t => t.inControl)),
+                        controlMembers: this.normalizeTeacherList((this.teachers || []).filter(t => t.inControl)),
                         correctionCommittees: this.getCorrectionCommitteesForControl(),
                         schoolClasses: this.schoolClasses,
                         grade11OptionalRows: this.grade11OptionalRows,
                         grade12OptionalRows: this.grade12OptionalRows,
                         exams: this.exams,
                         assignments: this.assignments,
-                        sessionsByDate
+                        sessionsByDate: {}
                     };
+
+                    this.__lastBridgeSignature = signature;
+                    this.__cachedControlBridgeData = data;
+                    return data;
                 },
-                syncControlBridgeData() {
+                syncControlBridgeData(options = {}) {
                     try {
-                        const data = this.exportControlBridgeData();
+                        const now = Date.now();
+                        const force = !!(options && options.force);
+                        if (!force && this.__lastBridgeSyncAt && now - this.__lastBridgeSyncAt < 1800) return window.monitoringDistributionBridge || null;
+                        this.__lastBridgeSyncAt = now;
+
+                        const data = this.exportControlBridgeData({ force });
                         window.monitoringDistributionBridge = data;
+                        return data;
                     } catch (e) {
                         console.warn('تعذر تجهيز بيانات الربط مع الكنترول', e);
+                        return null;
                     }
+                },
+
+                scheduleControlBridgeSync(reason = 'scheduled_bridge_sync') {
+                    try {
+                        clearTimeout(this.__bridgeSyncTimer);
+                        this.__bridgeSyncTimer = setTimeout(() => {
+                            this.syncControlBridgeData({ reason });
+                        }, 600);
+                    } catch(e) {}
                 },
 
                 init() {
@@ -2505,15 +2660,23 @@
                     this.ensureAllGrade11OptionalRows();
                     this.ensureAllGrade12OptionalRows();
                     if(this.exams.length > 0) {
+                        try {
+                            const savedDailyId = sessionStorage.getItem('smart_monitor_selected_daily_exam_id');
+                            if (savedDailyId && this.exams.some(e => e.id == savedDailyId)) {
+                                this.selectedDailyExamId = savedDailyId;
+                            }
+                        } catch(e) {}
+
                         if (!this.selectedDailyExamId || !this.exams.some(e => e.id == this.selectedDailyExamId)) {
                             this.selectedDailyExamId = this.exams[0].id;
-                            this.safeSaveLocalSnapshot(this.getSerializableState());
+                            // اختيار يوم افتراضي عرض فقط، لا نحفظ الحالة الكبيرة.
                         }
-                        // لا نعيد تشغيل التوزيع الذكي عند كل فتح إذا كانت assignments موجودة؛ هذا كان يسبب توقف/تكدس ثواني.
+
+                        // لا نعيد تشغيل التوزيع الذكي ولا الجسر الثقيل عند كل فتح أو تغيير تاريخ.
                         if (!Array.isArray(this.assignments) || this.assignments.length === 0) {
                             this.runSmartDistribution(true);
-                        } else {
-                            this.syncControlBridgeData();
+                        } else if (typeof this.scheduleControlBridgeSync === 'function') {
+                            this.scheduleControlBridgeSync('init_existing_assignments');
                         }
                     }
                     if (!window.__SMART_CLOUD_LOAD_REQUESTED) {
@@ -2917,7 +3080,7 @@
                     this.ensureAllGrade12OptionalRows();
                     // حفظ سريع أثناء الكتابة: نحفظ محليًا ونحدث الجسر فورًا، ثم نؤجل الرفع السحابي حتى لا تتعطل الواجهة.
                     this.saveAppData();
-                    try { if (typeof this.syncControlBridgeData === 'function') this.syncControlBridgeData(); } catch(e) {}
+                    try { if (typeof this.syncControlBridgeData === 'function') this.scheduleControlBridgeSync ? this.scheduleControlBridgeSync('deferred_sync') : this.syncControlBridgeData(); } catch(e) {}
                     if (!showMessage) {
                         try {
                             const state = (typeof this.getSerializableState === 'function') ? this.getSerializableState() : null;
@@ -4369,7 +4532,7 @@
                         // هذا يمنع رجوع أسماء ملف الكنترول/الإكسل القديمة عند الانتقال إلى سجل توزيع المراقبة.
                         try {
                             this.saveAppData({ silent: !!silent });
-                            if (typeof this.syncControlBridgeData === 'function') this.syncControlBridgeData();
+                            if (typeof this.syncControlBridgeData === 'function') this.scheduleControlBridgeSync ? this.scheduleControlBridgeSync('deferred_sync') : this.syncControlBridgeData();
                             const bridgeData = (typeof this.exportControlBridgeData === 'function') ? this.exportControlBridgeData() : null;
                             if (bridgeData && window.parent && window.parent !== window) {
                                 window.parent.postMessage({ type: 'monitoring_control_bridge_v1', payload: bridgeData }, '*');
@@ -4666,7 +4829,7 @@
                 commitAssignmentChanges(message) {
                     this.assignments = [...(this.assignments || [])];
                     try {
-                        if (typeof this.syncControlBridgeData === 'function') this.syncControlBridgeData();
+                        if (typeof this.syncControlBridgeData === 'function') this.scheduleControlBridgeSync ? this.scheduleControlBridgeSync('deferred_sync') : this.syncControlBridgeData();
                         const bridgeData = (typeof this.exportControlBridgeData === 'function') ? this.exportControlBridgeData() : null;
                         if (bridgeData && window.parent && window.parent !== window) {
                             window.parent.postMessage({ type: 'monitoring_control_bridge_v1', payload: bridgeData }, '*');

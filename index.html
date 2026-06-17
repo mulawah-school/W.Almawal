@@ -153,7 +153,7 @@
         }
         function saveLocalControlSession(user, userData) {
             try {
-                const schoolId = userData.schoolId || userData.username || user.uid;
+                const schoolId = window.currentSchoolId || resolveSchoolIdForUser(user, userData || {});
                 localStorage.setItem(AUTH_LOCAL_SESSION_KEY, JSON.stringify({
                     uid: user.uid,
                     schoolId,
@@ -186,7 +186,8 @@
         });
 
         function shouldPersistLocalKey(key) {
-            return /^(monitoring_|savedExamDate$|smart_monitor)/.test(String(key || '')) || String(key || '') === 'exam_control_committee_signatures_global'; // لا نحفظ control_bridge أو exam_sessions حتى لا ترجع بيانات الكنترول القديمة
+            // تم تعطيل snapshot الثقيل: بيانات المراقب تحفظ الآن في monitoring/appData و teachers مباشرة.
+            return false;
         }
         function cleanupSchoolScopedLocalStorage() {
             const keys = [];
@@ -199,9 +200,10 @@
             } catch(e) { console.warn('تعذر تنظيف التخزين المحلي المؤقت', e); }
         }
         async function restoreSchoolLocalStorage(schoolId) {
+            if (!schoolId || schoolId !== 'demo_school') return false;
             cleanupSchoolScopedLocalStorage();
-            if (!schoolId) return;
             restoringSchoolStorage = true;
+            let restored = false;
             try {
                 const snap = await getDoc(fbDoc(db, 'schools', schoolId, 'controlLocalStorage', 'snapshot'));
                 if (snap.exists()) {
@@ -210,12 +212,15 @@
                     Object.keys(items).forEach(k => {
                         if (shouldPersistLocalKey(k) && typeof items[k] === 'string') localStorage.setItem(k, items[k]);
                     });
+                    restored = true;
                 }
             } catch(e) {
                 console.warn('تعذر استرجاع بيانات المراقب الذكي من السحابة', e);
+                return false;
             } finally {
                 restoringSchoolStorage = false;
             }
+            return restored;
         }
 
         async function restoreMonitoringAppDataFromCloud(schoolId) {
@@ -584,7 +589,7 @@
 
             let success = true;
             try {
-                setAuthStatus('جاري تنظيف بيانات الكنترول القديمة من Firebase...', 'loading');
+                if (!window.CONTROL_APP_AUTH_READY) setAuthStatus('جاري تنظيف بيانات الكنترول القديمة من Firebase...', 'loading');
                 const recordsSnap = await getDocs(fbCollection(db, 'schools', schoolId, 'exam_records'));
                 for (const recordDoc of recordsSnap.docs) {
                     await deleteDoc(recordDoc.ref);
@@ -630,7 +635,7 @@
             window.currentSchoolId = session.schoolId;
             window.currentSchoolInfo = session.userData || { schoolId: session.schoolId, username: session.schoolId };
             
-            if (!isSchool001User(window.currentSchoolInfo || userData)) {
+            if (!isSchool001User(window.currentSchoolInfo || {})) {
                 clearMonitoringKeysForFreshUser(window.currentSchoolId);
                 prepareCleanDefaultMonitoringStateForNewUser(window.currentSchoolId);
             }
@@ -669,9 +674,9 @@
 
                 const data = snap.data() || {};
                 const items = data.items || {};
-                const stateString =
+                let stateString =
                     items['monitoring_distribution_full_state_v4_demo_school'] ||
-                    items['monitoring_distribution_full_state_v4_demo_school'] ||
+                    items['monitoring_distribution_full_state_v4_school001'] ||
                     items['monitoring_distribution_full_state_v4'];
 
                 if (typeof stateString !== 'string' || stateString.length < 5) {
@@ -835,7 +840,6 @@
                     grade11OptionalRows: {},
                     grade12OptionalRows: {},
                     schoolSettings: { ministry: 'وزارة التعليم' },
-                    sessionsByDate: {},
                     updatedAtLocal: new Date().toISOString(),
                     defaultForNewUser: true
                 };
@@ -950,7 +954,7 @@ async function openSchoolForUser(user) {
                 }, { merge: true });
             } catch(e) { console.warn('تعذر تحديث مستند المدرسة', e); }
 
-            await purgeOldControlFirestoreData(window.currentSchoolId);
+            purgeOldControlFirestoreData(window.currentSchoolId).catch(e => console.warn('تعذر تشغيل تنظيف بيانات الكنترول القديمة في الخلفية', e));
             
             if (isSchool001User(window.currentSchoolInfo || userData)) {
                 // school001 فقط يسترجع بيانات demo_school القديمة.
@@ -964,10 +968,20 @@ async function openSchoolForUser(user) {
             purgeAllOldControlFilesAndCaches();
             if (isSchool001User(window.currentSchoolInfo || userData)) await forceLoadDemoSchoolSnapshotForSchool001();
             purgeOldControlDerivedDataSmartOnly();
-            await restoreMonitoringAppDataFromCloud(window.currentSchoolId);
+            const smartDataRestored = await restoreMonitoringAppDataFromCloud(window.currentSchoolId);
+            if (!isSchool001User(window.currentSchoolInfo || userData) && !smartDataRestored) {
+                clearMonitoringKeysForFreshUser(window.currentSchoolId);
+                prepareCleanDefaultMonitoringStateForNewUser(window.currentSchoolId);
+            }
             window.cloudDB = buildCloudDB();
             window.monitoringFirebase = window.cloudDB;
-            try { localStorage.setItem(`monitoring_distribution_full_state_v4_${window.currentSchoolId}`, localStorage.getItem('monitoring_distribution_full_state_v4') || '{}'); } catch(e) {}
+            try {
+                localStorage.removeItem('monitoring_distribution_full_state_v4');
+                const scopedKey = `monitoring_distribution_full_state_v4_${window.currentSchoolId}`;
+                if (!localStorage.getItem(scopedKey) && !isSchool001User(window.currentSchoolInfo || userData)) {
+                    prepareCleanDefaultMonitoringStateForNewUser(window.currentSchoolId);
+                }
+            } catch(e) {}
             saveLocalControlSession(user, userData);
             lastOpenedAuthUid = user.uid;
             window.CONTROL_APP_AUTH_READY = true;
@@ -1725,8 +1739,13 @@ const cacheSmartBridge = (bridge) => {
     catch (e) { }
     return cleanBridge;
 };
-const getLiveSmartBridgeFromIframe = () => {
+let liveSmartBridgeCache = null;
+let liveSmartBridgeReadAt = 0;
+const getLiveSmartBridgeFromIframe = (options = {}) => {
     try {
+        const now = Date.now();
+        if (!options.force && liveSmartBridgeCache && now - liveSmartBridgeReadAt < 1500)
+            return liveSmartBridgeCache;
         const frames = Array.from(document.querySelectorAll('iframe'));
         for (const frame of frames) {
             try {
@@ -1734,17 +1753,23 @@ const getLiveSmartBridgeFromIframe = () => {
                 const app = w && w.monitoringDistributionApp;
                 if (!app)
                     continue;
-                if (typeof app.syncControlBridgeData === 'function')
-                    app.syncControlBridgeData();
+                if (options.forceSync && typeof app.syncControlBridgeData === 'function')
+                    app.syncControlBridgeData({ silent: true, reason: 'parent_forced_bridge_refresh' });
                 if (typeof app.exportControlBridgeData === 'function') {
                     const bridge = app.exportControlBridgeData();
-                    if (bridge && bridge.version === 'monitoring_control_bridge_v1')
-                        return sanitizeSmartBridgeForControl(bridge);
+                    if (bridge && bridge.version === 'monitoring_control_bridge_v1') {
+                        liveSmartBridgeCache = sanitizeSmartBridgeForControl(bridge);
+                        liveSmartBridgeReadAt = now;
+                        return liveSmartBridgeCache;
+                    }
                 }
                 if (typeof app.getSerializableState === 'function') {
                     const bridge = buildSmartBridgeFromStoredState(app.getSerializableState());
-                    if (bridge)
-                        return bridge;
+                    if (bridge) {
+                        liveSmartBridgeCache = bridge;
+                        liveSmartBridgeReadAt = now;
+                        return liveSmartBridgeCache;
+                    }
                 }
             }
             catch (innerError) { }
@@ -1764,7 +1789,8 @@ const getStoredSmartBridge = () => {
         const stateKeys = [];
         if (window.currentSchoolId)
             stateKeys.push(`monitoring_distribution_full_state_v4_${window.currentSchoolId}`);
-        stateKeys.push('monitoring_distribution_full_state_v4');
+        else
+            stateKeys.push('monitoring_distribution_full_state_v4');
         for (const key of stateKeys) {
             try {
                 const rawState = localStorage.getItem(key);
@@ -1893,7 +1919,8 @@ const getSmartStateStorageKeys = () => {
             keys.push(`monitoring_distribution_full_state_v4_${window.currentSchoolId}`);
     }
     catch (e) { }
-    keys.push('monitoring_distribution_full_state_v4');
+    if (!window.currentSchoolId)
+        keys.push('monitoring_distribution_full_state_v4');
     return keys;
 };
 const readSmartFullStateForEdit = () => {
@@ -2391,6 +2418,7 @@ const getAllStoredProctoringDatesForCleanup = () => {
     return Array.from(dates).filter(Boolean);
 };
 let proctorNamesCleanupDoneInPage = false;
+let proctorNamesCleanupLastRunAt = 0;
 const clearStoredProctorNamesForCleanControl = (force = false) => {
     try {
         const alreadyCleaned = localStorage.getItem('control_proctoring_clean_version') === PROCTORING_CLEAN_VERSION;
@@ -2398,6 +2426,10 @@ const clearStoredProctorNamesForCleanControl = (force = false) => {
             return;
         if (alreadyCleaned && !force)
             return;
+        const now = Date.now();
+        if (force && proctorNamesCleanupDoneInPage && now - proctorNamesCleanupLastRunAt < 60000)
+            return;
+        proctorNamesCleanupLastRunAt = now;
         try {
             const hasFullSmartState = !!(localStorage.getItem('monitoring_distribution_full_state_v4') || (window.currentSchoolId && localStorage.getItem(`monitoring_distribution_full_state_v4_${window.currentSchoolId}`)));
             if (hasFullSmartState) {
@@ -5369,6 +5401,7 @@ const App = () => {
     const [smartBridgeVersion, setSmartBridgeVersion] = useState(0);
     const smartBridgeFingerprintRef = useRef('');
     const smartBridgeLastRefreshRef = useRef(0);
+    const smartApplyLastRef = useRef({ date: '', bridgeVersion: -1, at: 0 });
     // تسريع عام: لا نعيد بناء الكنترول من الجسر إلا إذا تغيرت بيانات المراقب الذكي فعلاً.
     // كان الجسر يرسل نفس البيانات دورياً، وهذا يسبب تأخرًا بسيطًا عند الضغط على الأيقونات.
     const getSmartBridgeFingerprint = (bridge) => {
@@ -5399,6 +5432,11 @@ const App = () => {
         }
         smartBridgeFingerprintRef.current = fingerprint;
         window.monitoringDistributionBridge = cleanBridge;
+        try {
+            liveSmartBridgeCache = cleanBridge;
+            liveSmartBridgeReadAt = Date.now();
+        }
+        catch (e) { }
         try {
             localStorage.removeItem('monitoring_control_bridge_v1');
             const stateLike = {
@@ -5493,17 +5531,7 @@ const App = () => {
         }, 700);
         return () => clearTimeout(t);
     }, [activeTab, currentDate, smartBridgeVersion]);
-    useEffect(() => {
-        if (activeTab !== 'proctoring')
-            return;
-        const t = setTimeout(() => {
-            try {
-                rebuildControlRowsFromSmartMonitorOnly(currentDate, false);
-            }
-            catch (e) { }
-        }, 1400);
-        return () => clearTimeout(t);
-    }, [activeTab, currentDate, smartBridgeVersion]);
+    // إعادة بناء سجل التوزيع تتم في المؤثر السابق فقط حتى لا يتكرر نفس العمل عند فتح القسم.
     // حالات الحفظ السحابي Firebase
     const [cloudDB, setCloudDB] = useState(window.cloudDB || null);
     const [isCloudConnected, setIsCloudConnected] = useState(!!window.cloudDB);
@@ -7424,6 +7452,12 @@ const App = () => {
         setTimeout(() => window.print(), 80);
     };
     const applySmartMonitorDataForDate = (dateToApply = currentDate) => {
+        const safeDate = getSafeCurrentDate(dateToApply, currentDate || CONTROL_DEFAULT_DATE);
+        const now = Date.now();
+        const lastApply = smartApplyLastRef.current || {};
+        if (lastApply.date === safeDate && lastApply.bridgeVersion === smartBridgeVersion && now - lastApply.at < 700)
+            return;
+        smartApplyLastRef.current = { date: safeDate, bridgeVersion: smartBridgeVersion, at: now };
         try {
             clearStoredProctorNamesForCleanControl(true);
         }
@@ -7436,7 +7470,6 @@ const App = () => {
             getStoredSmartBridge();
         }
         catch (e) { }
-        const safeDate = getSafeCurrentDate(dateToApply, currentDate || CONTROL_DEFAULT_DATE);
         const autoRows = buildExamSessionsForDate(safeDate);
         const withMonitors = applyMonitorAssignmentsToSessions(autoRows, safeDate);
         const linkedRows = mergeRowsWithManualSessionFields(withMonitors.length ? withMonitors : [], safeDate, sessionsData);
