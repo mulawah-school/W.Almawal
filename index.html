@@ -57,6 +57,7 @@
 
         const CONTROL_LOGOUT_FLAG_KEY = 'control_force_logged_out_v1';
         const CONTROL_DEFAULT_ONLY_SCHOOL_IDS = new Set(['school002']);
+        const CONTROL_LOCAL_BACKUP_PREFIX = 'control_school_local_backup_v1_';
 
         function normalizeSchoolUserId(value) {
             return String(value || '').trim().toLowerCase();
@@ -81,6 +82,69 @@
                 logoDataUrl: '',
                 schoolLogoDataUrl: ''
             };
+        }
+
+        function shouldBackupControlRuntimeKey(key) {
+            return /^(monitoring_|savedExamDate$|control_bridge_|exam_sessions_|exam_envelopes_|exam_daily_notes_|exam_proctoring_extra_|exam_second_period_proctoring_|exam_individual_absentee_|exam_violation_|exam_signatures_|exam_signature_deletes_)/.test(String(key || '')) ||
+                   String(key || '') === 'exam_control_committee_signatures_global' ||
+                   String(key || '') === 'monitoring_control_bridge_v1' ||
+                   String(key || '') === 'control_proctoring_clean_version';
+        }
+
+        function backupSchoolLocalRuntimeKeys(schoolId) {
+            const safeSchoolId = normalizeSchoolUserId(schoolId);
+            if (!safeSchoolId || CONTROL_DEFAULT_ONLY_SCHOOL_IDS.has(safeSchoolId)) return false;
+            try {
+                const items = {};
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i) || '';
+                    if (!shouldBackupControlRuntimeKey(key)) continue;
+                    const value = localStorage.getItem(key);
+                    if (typeof value === 'string') items[key] = value;
+                }
+                localStorage.setItem(CONTROL_LOCAL_BACKUP_PREFIX + safeSchoolId, JSON.stringify({ items, savedAt: Date.now() }));
+                return true;
+            } catch(e) {
+                console.warn('تعذر حفظ نسخة محلية مؤقتة قبل تبديل المدرسة', e);
+                return false;
+            }
+        }
+
+        function restoreSchoolLocalRuntimeBackup(schoolId) {
+            const safeSchoolId = normalizeSchoolUserId(schoolId);
+            if (!safeSchoolId) return false;
+            try {
+                const raw = localStorage.getItem(CONTROL_LOCAL_BACKUP_PREFIX + safeSchoolId);
+                if (!raw) return false;
+                const backup = JSON.parse(raw);
+                const items = backup && backup.items ? backup.items : {};
+                Object.keys(items).forEach(key => {
+                    if (typeof items[key] === 'string') localStorage.setItem(key, items[key]);
+                });
+                return true;
+            } catch(e) {
+                console.warn('تعذر استرجاع النسخة المحلية المؤقتة للمدرسة', e);
+                return false;
+            }
+        }
+
+        function clearDefaultOnlyRuntimeKeys(currentSchoolId) {
+            try {
+                const keepKey = currentSchoolId ? ('monitoring_distribution_full_state_v4_' + currentSchoolId) : '';
+                const toRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i) || '';
+                    if (key === keepKey || isProtectedSchool001StorageKey(key) || key.startsWith(CONTROL_LOCAL_BACKUP_PREFIX)) continue;
+                    if (shouldBackupControlRuntimeKey(key) || key === ('monitoring_distribution_teachers_v2_' + currentSchoolId)) toRemove.push(key);
+                }
+                [...new Set(toRemove)].forEach(key => {
+                    try { localStorage.removeItem(key); } catch(e) {}
+                });
+                return true;
+            } catch(e) {
+                console.warn('تعذر تنظيف بيانات المستخدم الافتراضي فقط', e);
+                return false;
+            }
         }
 
         function clearOldControlMonitorData() {
@@ -132,6 +196,7 @@
                 for (let i = localStorage.length - 1; i >= 0; i--) {
                     const key = localStorage.key(i);
                     if (!key) continue;
+                    if (isProtectedSchool001StorageKey(key)) continue;
                     if (patterns.some((p) => key.includes(p))) {
                         try { localStorage.removeItem(key); } catch(e) {}
                     }
@@ -606,6 +671,7 @@
         const CONTROL_FIRESTORE_PURGE_VERSION = 'smart_monitor_assignments_only_purge_v2026_06_13_final';
         async function purgeOldControlFirestoreData(schoolId) {
             if (!schoolId) return false;
+            if (String(schoolId || '').trim().toLowerCase() === 'demo_school') return false;
             const markerRef = fbDoc(db, 'schools', schoolId, 'controlCleanup', 'smartMonitorOnlyPurge');
             try {
                 const markerSnap = await getDoc(markerRef);
@@ -818,6 +884,14 @@
             return username === 'school001' || schoolId === 'demo_school';
         }
 
+        function isProtectedSchool001StorageKey(key) {
+            const value = String(key || '').toLowerCase();
+            return value === 'monitoring_distribution_full_state_v4_demo_school' ||
+                   value === 'monitoring_distribution_full_state_v4_school001' ||
+                   value === 'monitoring_distribution_teachers_v2_demo_school' ||
+                   value === 'monitoring_distribution_teachers_v2_school001';
+        }
+
         function clearMonitoringKeysForFreshUser(currentSchoolId) {
             try {
                 const keepKey = currentSchoolId ? ('monitoring_distribution_full_state_v4_' + currentSchoolId) : '';
@@ -845,6 +919,7 @@
                 for (let i = 0; i < localStorage.length; i++) {
                     const key = localStorage.key(i) || '';
                     if (keepKey && key === keepKey) continue;
+                    if (isProtectedSchool001StorageKey(key)) continue;
                     if (removePatterns.some((r) => r.test(key))) toRemove.push(key);
                 }
 
@@ -972,6 +1047,7 @@
                 for (let i = 0; i < localStorage.length; i++) {
                     const key = localStorage.key(i) || '';
                     if (key === allowedSmartKey || key === allowedDemoKey) continue;
+                    if (isProtectedSchool001StorageKey(key)) continue;
 
                     if (/^monitoring_distribution_full_state_v4_/.test(key) && key !== allowedSmartKey && key !== allowedDemoKey) {
                         toRemove.push(key);
@@ -1016,9 +1092,13 @@ async function openSchoolForUser(user) {
                 setLoginError('هذا الحساب غير مفعل. اجعل active = true في schoolUsers.');
                 return;
             }
+            const previousSchoolId = window.currentSchoolId || '';
             window.currentSchoolId = resolveSchoolIdForUser(user, userData);
             const defaultOnly = isDefaultOnlySchoolUser(userData, window.currentSchoolId);
             const effectiveUserData = defaultOnly ? sanitizeDefaultOnlySchoolInfo(userData) : userData;
+            if (previousSchoolId && previousSchoolId !== window.currentSchoolId) {
+                backupSchoolLocalRuntimeKeys(previousSchoolId);
+            }
             window.currentSchoolInfo = {
                 ...effectiveUserData,
                 schoolId: window.currentSchoolId,
@@ -1037,9 +1117,12 @@ async function openSchoolForUser(user) {
                 }, { merge: true });
             } catch(e) { console.warn('تعذر تحديث مستند المدرسة', e); }
 
-            purgeOldControlFirestoreData(window.currentSchoolId).catch(e => console.warn('تعذر تشغيل تنظيف بيانات الكنترول القديمة في الخلفية', e));
+            if (!isSchool001User(window.currentSchoolInfo || userData)) {
+                purgeOldControlFirestoreData(window.currentSchoolId).catch(e => console.warn('تعذر تشغيل تنظيف بيانات الكنترول القديمة في الخلفية', e));
+            }
             
             if (defaultOnly) {
+                clearDefaultOnlyRuntimeKeys(window.currentSchoolId);
                 enforceCleanDefaultMonitoringState(window.currentSchoolId);
                 resetDefaultOnlyMonitoringDataInCloud(window.currentSchoolId).catch(e => console.warn('تعذر تصفير school002 في الخلفية', e));
             } else if (isSchool001User(window.currentSchoolInfo || userData)) {
@@ -1049,10 +1132,21 @@ async function openSchoolForUser(user) {
                 prepareCleanDefaultMonitoringStateForNewUser(window.currentSchoolId);
             }
 
-            purgeAllOldControlFilesAndCaches();
+            if (defaultOnly) {
+                clearDefaultOnlyRuntimeKeys(window.currentSchoolId);
+            } else if (!isSchool001User(window.currentSchoolInfo || userData)) {
+                purgeAllOldControlFilesAndCaches();
+            }
             await restoreSchoolLocalStorage(window.currentSchoolId);
-            purgeAllOldControlFilesAndCaches();
-            if (isSchool001User(window.currentSchoolInfo || userData)) await forceLoadDemoSchoolSnapshotForSchool001();
+            if (defaultOnly) {
+                clearDefaultOnlyRuntimeKeys(window.currentSchoolId);
+            } else if (!isSchool001User(window.currentSchoolInfo || userData)) {
+                purgeAllOldControlFilesAndCaches();
+            }
+            if (isSchool001User(window.currentSchoolInfo || userData)) {
+                restoreSchoolLocalRuntimeBackup(window.currentSchoolId);
+                await forceLoadDemoSchoolSnapshotForSchool001();
+            }
             purgeOldControlDerivedDataSmartOnly();
             const smartDataRestored = defaultOnly ? false : await restoreMonitoringAppDataFromCloud(window.currentSchoolId);
             if (defaultOnly) {

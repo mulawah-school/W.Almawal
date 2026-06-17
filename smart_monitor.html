@@ -47,10 +47,8 @@
                 '';
       if (sid === 'demo_school') return;
 
-      // لا تسمح لأي يوزر جديد بقراءة بيانات school001 العامة.
+      // لا نستخدم المفتاح العام لأي مدرسة حقيقية، ولا نمس بيانات school001/demo_school.
       localStorage.removeItem('monitoring_distribution_full_state_v4');
-      localStorage.removeItem('monitoring_distribution_full_state_v4_demo_school');
-      localStorage.removeItem('monitoring_distribution_full_state_v4_school001');
       if (isDefaultOnlySchoolId(sid)) {
         localStorage.removeItem('monitoring_distribution_full_state_v4_school002');
         localStorage.removeItem('monitoring_distribution_teachers_v2_school002');
