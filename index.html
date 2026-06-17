@@ -63,6 +63,29 @@
             return LEGACY_SCHOOL_ID_BY_UID[uid] || userData.schoolId || userData.username || uid;
         }
 
+        function copyLegacyMonitoringItemsToCurrentUser(items, currentUid, legacySchoolId) {
+            try {
+                if (!items || typeof items !== 'object' || !currentUid) return items || {};
+                const out = { ...items };
+                const legacyKey = 'monitoring_distribution_full_state_v4_' + legacySchoolId;
+                const uidKey = 'monitoring_distribution_full_state_v4_' + currentUid;
+
+                if (typeof out[legacyKey] === 'string') {
+                    out[uidKey] = out[legacyKey];
+                    out['monitoring_distribution_full_state_v4'] = out[legacyKey];
+                }
+
+                if (typeof out['monitoring_distribution_full_state_v4_demo_school'] === 'string') {
+                    out[uidKey] = out['monitoring_distribution_full_state_v4_demo_school'];
+                    out['monitoring_distribution_full_state_v4'] = out['monitoring_distribution_full_state_v4_demo_school'];
+                }
+
+                return out;
+            } catch(e) {
+                return items || {};
+            }
+        }
+
 
         const CONTROL_LOGOUT_FLAG_KEY = 'control_force_logged_out_v1';
 
@@ -215,7 +238,11 @@
                 const snap = await getDoc(fbDoc(db, 'schools', schoolId, 'controlLocalStorage', 'snapshot'));
                 if (snap.exists()) {
                     const data = snap.data() || {};
-                    const items = data.items || {};
+                    let items = data.items || {};
+                    try {
+                        const legacyId = (window.currentSchoolInfo && window.currentSchoolInfo.originalSchoolId) || getLegacySchoolIdForUid(window.currentSchoolId, window.currentSchoolInfo || {});
+                        items = copyLegacyMonitoringItemsToCurrentUser(items, window.currentSchoolId, legacyId);
+                    } catch(e) {}
                     Object.keys(items).forEach(k => {
                         if (shouldPersistLocalKey(k) && typeof items[k] === 'string') localStorage.setItem(k, items[k]);
                     });
@@ -627,74 +654,32 @@
             }
         }
 
-        function hasMeaningfulMonitoringData(data) {
-            if (!data || typeof data !== 'object') return false;
-            return (Array.isArray(data.teachers) && data.teachers.length > 0) ||
-                   (Array.isArray(data.exams) && data.exams.length > 0) ||
-                   (Array.isArray(data.assignments) && data.assignments.length > 0) ||
-                   (Array.isArray(data.schoolClasses) && data.schoolClasses.length > 0);
-        }
-
-        async function migrateLegacySchoolDataToUidIfNeeded(uid, legacySchoolId) {
+        async function migrateLegacyControlLocalStorageToUid(uid, legacySchoolId) {
             if (!uid || !legacySchoolId || uid === legacySchoolId) return false;
             try {
-                const targetAppRef = fbDoc(db, 'schools', uid, 'monitoring', 'appData');
-                const targetApp = await getDocDataSafe(targetAppRef);
-
-                // لا نكتب فوق بيانات فعلية موجودة في UID.
-                if (hasMeaningfulMonitoringData(targetApp)) return false;
-
-                const legacyApp = await getDocDataSafe(fbDoc(db, 'schools', legacySchoolId, 'monitoring', 'appData'));
-                const legacyTeachers = await getDocDataSafe(fbDoc(db, 'schools', legacySchoolId, 'monitoring', 'teachers'));
                 const legacyStorage = await getDocDataSafe(fbDoc(db, 'schools', legacySchoolId, 'controlLocalStorage', 'snapshot'));
-                const legacyRoot = await getDocDataSafe(fbDoc(db, 'schools', legacySchoolId));
+                if (!legacyStorage || !legacyStorage.items) return false;
 
-                const legacyHasData = hasMeaningfulMonitoringData(legacyApp) ||
-                    (legacyTeachers && Array.isArray(legacyTeachers.teachers) && legacyTeachers.teachers.length > 0) ||
-                    (legacyStorage && legacyStorage.items && Object.keys(legacyStorage.items).length > 0) ||
-                    !!legacyRoot;
+                const convertedItems = copyLegacyMonitoringItemsToCurrentUser(legacyStorage.items, uid, legacySchoolId);
 
-                if (!legacyHasData) return false;
+                await setDoc(fbDoc(db, 'schools', uid, 'controlLocalStorage', 'snapshot'), {
+                    ...legacyStorage,
+                    items: convertedItems,
+                    migratedFromSchoolId: legacySchoolId,
+                    migratedAt: serverTimestamp()
+                }, { merge: true });
 
-                if (legacyRoot) {
-                    await setDoc(fbDoc(db, 'schools', uid), {
-                        ...legacyRoot,
-                        migratedFromSchoolId: legacySchoolId,
-                        firebaseUid: uid,
-                        schoolId: uid,
-                        originalSchoolId: legacySchoolId,
-                        migratedAt: serverTimestamp()
-                    }, { merge: true });
-                }
-
-                if (legacyApp) {
-                    await setDoc(targetAppRef, {
-                        ...legacyApp,
-                        migratedFromSchoolId: legacySchoolId,
-                        migratedAt: serverTimestamp()
-                    }, { merge: true });
-                }
-
-                if (legacyTeachers) {
-                    await setDoc(fbDoc(db, 'schools', uid, 'monitoring', 'teachers'), {
-                        ...legacyTeachers,
-                        migratedFromSchoolId: legacySchoolId,
-                        migratedAt: serverTimestamp()
-                    }, { merge: true });
-                }
-
-                if (legacyStorage && legacyStorage.items) {
-                    await setDoc(fbDoc(db, 'schools', uid, 'controlLocalStorage', 'snapshot'), {
-                        ...legacyStorage,
-                        migratedFromSchoolId: legacySchoolId,
-                        migratedAt: serverTimestamp()
-                    }, { merge: true });
-                }
+                // جهّز البيانات محليًا فورًا قبل فتح المراقب الذكي.
+                Object.keys(convertedItems).forEach((k) => {
+                    try {
+                        if (typeof convertedItems[k] === 'string') localStorage.setItem(k, convertedItems[k]);
+                    } catch(e) {}
+                });
 
                 try { setAuthStatus('تم تحميل بيانات ' + legacySchoolId + ' تلقائيًا', 'success'); } catch(e) {}
                 return true;
             } catch(e) {
-                console.warn('تعذر ترحيل بيانات المدرسة القديمة إلى UID', e);
+                console.warn('تعذر نقل controlLocalStorage القديم إلى UID', e);
                 return false;
             }
         }
@@ -745,7 +730,7 @@ async function openSchoolForUser(user) {
             } catch(e) { console.warn('تعذر تحديث مستند المدرسة', e); }
 
             await purgeOldControlFirestoreData(window.currentSchoolId);
-            await migrateLegacySchoolDataToUidIfNeeded(user.uid, originalSchoolId);
+            await migrateLegacyControlLocalStorageToUid(user.uid, originalSchoolId);
             await restoreSchoolLocalStorage(window.currentSchoolId);
             await restoreMonitoringAppDataFromCloud(window.currentSchoolId);
             window.cloudDB = buildCloudDB();
