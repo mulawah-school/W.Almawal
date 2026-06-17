@@ -368,18 +368,36 @@
         window.saveMonitoringStatePayloadNow = saveMonitoringStatePayloadNow;
         window.queueMonitoringStatePayloadSave = queueMonitoringStatePayloadSave;
         window.scheduleMonitoringStatePayloadSave = scheduleMonitoringStatePayloadSave;
+        let __LAST_PARENT_MONITORING_MESSAGE_AT = 0;
         window.addEventListener('message', function(event) {
             try {
                 const data = event && event.data;
                 if (!data || (data.type !== 'monitoring_immediate_save_v2' && data.type !== 'monitoring_teachers_save_v2')) return;
-                scheduleMonitoringStatePayloadSave(data, { reason: data.reason || data.type });
+
+                const reason = String(data.reason || data.type || '');
+                const now = Date.now();
+
+                // تغيير التاريخ داخل المراقب لا يحتاج حفظ سحابي كامل؛ كان سبب البطء.
+                if (/date|daily|selectedDailyExamId|view_only/i.test(reason)) return;
+
+                // تجميع الرسائل المتتابعة من iframe حتى لا نحفظ الحالة الكبيرة أكثر من مرة.
+                if (now - __LAST_PARENT_MONITORING_MESSAGE_AT < 1800) {
+                    clearTimeout(window.__PARENT_MONITORING_MESSAGE_TIMER);
+                    window.__PARENT_MONITORING_MESSAGE_TIMER = setTimeout(() => {
+                        scheduleMonitoringStatePayloadSave(data, { reason: reason || data.type });
+                    }, 1800);
+                    return;
+                }
+
+                __LAST_PARENT_MONITORING_MESSAGE_AT = now;
+                scheduleMonitoringStatePayloadSave(data, { reason: reason || data.type });
             } catch(e) {
                 console.warn('تعذر استقبال رسالة حفظ المراقب الذكي', e);
             }
         });
         async function saveMonitoringAppDataNow(options = {}) {
             if (!window.currentSchoolId) return false;
-            if (options.flushIframe) flushMonitoringIframeToLocalStorage();
+            if (options.flushIframe) flushMonitoringIframeToLocalStorage({ force: true });
             const app = getMonitoringIframeApp();
             let state = null;
             try {
@@ -436,8 +454,14 @@
         };
         window.saveMonitoringAppDataNow = saveMonitoringAppDataNow;
         window.runImmediateMonitoringSave = runImmediateMonitoringSave;
-        function flushMonitoringIframeToLocalStorage() {
+        let __LAST_IFRAME_FLUSH_AT = 0;
+        function flushMonitoringIframeToLocalStorage(options = {}) {
             try {
+                const now = Date.now();
+                const force = !!(options && options.force);
+                if (!force && now - __LAST_IFRAME_FLUSH_AT < 2500) return false;
+                __LAST_IFRAME_FLUSH_AT = now;
+
                 const frames = Array.from(document.querySelectorAll('iframe'));
                 frames.forEach(frame => {
                     try {
@@ -445,18 +469,23 @@
                         if (!w) return;
                         const app = w.monitoringDistributionApp;
                         if (!app) return;
-                        if (app.cloudSaveTimer) clearTimeout(app.cloudSaveTimer);
-                        if (typeof app.ensureAllGrade11OptionalRows === 'function') app.ensureAllGrade11OptionalRows();
-                        // تحديث محلي صامت فقط: لا نستدعي saveAppData/saveTeachers هنا حتى لا يبدأ مؤقت حفظ جديد داخل iframe.
-                        if (typeof app.getSerializableState === 'function' && typeof app.safeSaveLocalSnapshot === 'function') {
+
+                        // لا نسحب الحالة كاملة عند تغيير التاريخ؛ هذا كان يسبب بطء.
+                        // نسحب الحالة فقط عند الحفظ الإجباري أو الخروج.
+                        if (force && typeof app.getSerializableState === 'function' && typeof app.safeSaveLocalSnapshot === 'function') {
                             const state = app.getSerializableState();
                             app.safeSaveLocalSnapshot(state);
                             try { window.__LAST_MONITORING_STATE_STRING = JSON.stringify(state); } catch(e) {}
                         }
-                        if (typeof app.syncControlBridgeData === 'function') app.syncControlBridgeData();
+
+                        // لا نشغل syncControlBridgeData هنا إلا عند force.
+                        if (force && typeof app.syncControlBridgeData === 'function') app.syncControlBridgeData({ silent: true, reason: 'forced_parent_flush' });
                     } catch(innerErr) {}
                 });
-            } catch(e) {}
+                return true;
+            } catch(e) {
+                return false;
+            }
         }
         async function forceSaveMonitoringIframeNow() {
             let ok = false;
@@ -491,7 +520,7 @@
         }
         async function saveSchoolLocalStorageNow(options = {}) {
             if (!window.currentSchoolId || restoringSchoolStorage) return false;
-            if (options.flushIframe) flushMonitoringIframeToLocalStorage();
+            if (options.flushIframe) flushMonitoringIframeToLocalStorage({ force: true });
             const items = {};
             try {
                 for (let i = 0; i < localStorage.length; i++) {
@@ -835,7 +864,7 @@ async function openSchoolForUser(user) {
                 setAuthStatus('جاري الخروج...', 'loading');
                 clearTimeout(storageSaveTimer);
                 clearTimeout(monitoringAppSaveTimer);
-                try { flushMonitoringIframeToLocalStorage(); } catch(innerErr) {}
+                try { flushMonitoringIframeToLocalStorage({ force: true }); } catch(innerErr) {}
             } catch(e) {
                 console.warn('تعذر تجهيز الخروج السريع', e);
             }
@@ -7466,8 +7495,12 @@ setTimeout(() => { if (!window.__CONTROL_APP_MOUNTED__) mountApp(); }, 800);
 
 <script>
 (function(){
+  let __LAST_BRIDGE_SMART_MONITOR_AT = 0;
   function bridgeSmartMonitor(){
     try {
+      const now = Date.now();
+      if (now - __LAST_BRIDGE_SMART_MONITOR_AT < 900) return;
+      __LAST_BRIDGE_SMART_MONITOR_AT = now;
       if (!window.currentSchoolId) return;
       var frames = Array.from(document.querySelectorAll('iframe'));
       frames.forEach(function(frame){
