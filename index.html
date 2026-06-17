@@ -626,6 +626,12 @@
             if (!session || !session.schoolId) return false;
             window.currentSchoolId = session.schoolId;
             window.currentSchoolInfo = session.userData || { schoolId: session.schoolId, username: session.schoolId };
+            
+            if (!isSchool001User(window.currentSchoolInfo || userData)) {
+                clearMonitoringKeysForFreshUser(window.currentSchoolId);
+                prepareCleanDefaultMonitoringStateForNewUser(window.currentSchoolId);
+            }
+
             window.cloudDB = buildCloudDB();
             window.monitoringFirebase = window.cloudDB;
             lastOpenedAuthUid = session.uid || lastOpenedAuthUid;
@@ -640,20 +646,17 @@
         }
         
         function resolveSchoolIdForUser(user, userData = {}) {
-            const username = String(userData.username || '').trim().toLowerCase();
+            if (isSchool001User(userData)) return 'demo_school';
             const schoolId = String(userData.schoolId || '').trim();
-
-            // استرجاع بيانات school001 القديمة من مسار demo_school.
-            // هذا مؤقت وآمن: فقط الحساب الذي username حقه school001 يفتح demo_school.
-            if (username === 'school001') return 'demo_school';
-
-            return schoolId || userData.username || user.uid;
+            const username = String(userData.username || '').trim();
+            return schoolId || username || user.uid;
         }
 
 
         async function forceLoadDemoSchoolSnapshotForSchool001() {
             try {
                 if (window.currentSchoolId !== 'demo_school') return false;
+                if (!window.currentSchoolInfo || !isSchool001User(window.currentSchoolInfo)) return false;
 
                 const snap = await getDoc(fbDoc(db, 'schools', 'demo_school', 'controlLocalStorage', 'snapshot'));
                 if (!snap.exists()) {
@@ -765,6 +768,83 @@
             }
         }
 
+
+        function isSchool001User(userData = {}) {
+            const username = String(userData.username || '').trim().toLowerCase();
+            const schoolId = String(userData.schoolId || '').trim().toLowerCase();
+            return username === 'school001' || schoolId === 'demo_school';
+        }
+
+        function clearMonitoringKeysForFreshUser(currentSchoolId) {
+            try {
+                const keepKey = currentSchoolId ? ('monitoring_distribution_full_state_v4_' + currentSchoolId) : '';
+                const removePatterns = [
+                    /^monitoring_distribution_full_state_v4$/,
+                    /^monitoring_distribution_full_state_v4_/,
+                    /^monitoring_distribution_teachers_v2$/,
+                    /^control_bridge_/,
+                    /^monitoring_control_bridge_v1$/,
+                    /^exam_sessions_/,
+                    /^exam_envelopes_/,
+                    /^exam_daily_notes_/,
+                    /^exam_proctoring_extra_/,
+                    /^exam_second_period_proctoring_/,
+                    /^exam_individual_absentee_/,
+                    /^exam_violation_/,
+                    /^exam_signatures_/,
+                    /^exam_signature_deletes_/,
+                    /^savedExamDate$/,
+                    /^exam_control_committee_signatures_global$/,
+                    /^control_proctoring_clean_version$/
+                ];
+
+                const toRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i) || '';
+                    if (keepKey && key === keepKey) continue;
+                    if (removePatterns.some((r) => r.test(key))) toRemove.push(key);
+                }
+
+                toRemove.forEach((key) => {
+                    try { localStorage.removeItem(key); } catch(e) {}
+                });
+
+                try { window.__LAST_MONITORING_STATE_STRING = ''; } catch(e) {}
+                return true;
+            } catch(e) {
+                console.warn('تعذر تنظيف مفاتيح المستخدم الجديد', e);
+                return false;
+            }
+        }
+
+        function prepareCleanDefaultMonitoringStateForNewUser(currentSchoolId) {
+            try {
+                if (!currentSchoolId) return false;
+                const key = 'monitoring_distribution_full_state_v4_' + currentSchoolId;
+                if (localStorage.getItem(key)) return false;
+
+                const blankState = {
+                    teachers: [],
+                    exams: [],
+                    assignments: [],
+                    schoolClasses: [],
+                    correctionCommittees: [],
+                    grade11OptionalRows: {},
+                    grade12OptionalRows: {},
+                    schoolSettings: { ministry: 'وزارة التعليم' },
+                    sessionsByDate: {},
+                    updatedAtLocal: new Date().toISOString(),
+                    defaultForNewUser: true
+                };
+
+                localStorage.setItem(key, JSON.stringify(blankState));
+                return true;
+            } catch(e) {
+                console.warn('تعذر تجهيز بيانات افتراضية للمستخدم الجديد', e);
+                return false;
+            }
+        }
+
 async function openSchoolForUser(user) {
             if (!user) return;
             purgeOldControlDerivedDataSmartOnly();
@@ -806,8 +886,16 @@ async function openSchoolForUser(user) {
             } catch(e) { console.warn('تعذر تحديث مستند المدرسة', e); }
 
             await purgeOldControlFirestoreData(window.currentSchoolId);
+            
+            if (isSchool001User(window.currentSchoolInfo || userData)) {
+                // school001 فقط يسترجع بيانات demo_school القديمة.
+            } else {
+                clearMonitoringKeysForFreshUser(window.currentSchoolId);
+                prepareCleanDefaultMonitoringStateForNewUser(window.currentSchoolId);
+            }
+
             await restoreSchoolLocalStorage(window.currentSchoolId);
-            await forceLoadDemoSchoolSnapshotForSchool001();
+            if (isSchool001User(window.currentSchoolInfo || userData)) await forceLoadDemoSchoolSnapshotForSchool001();
             purgeOldControlDerivedDataSmartOnly();
             await restoreMonitoringAppDataFromCloud(window.currentSchoolId);
             window.cloudDB = buildCloudDB();
