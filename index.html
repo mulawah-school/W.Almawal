@@ -30,7 +30,7 @@
     </script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc as fbDoc, getDoc, setDoc, deleteDoc, serverTimestamp, collection as fbCollection, onSnapshot, getDocs, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -45,17 +45,18 @@
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
-        try { setPersistence(auth, inMemoryPersistence); } catch(e) { console.warn('تعذر تعطيل جلسة الدخول المحلية', e); }
+        try { setPersistence(auth, browserSessionPersistence); } catch(e) { console.warn('تعذر تثبيت جلسة الدخول في المتصفح', e); }
         const db = getFirestore(app);
         const AUTH_LAST_ACTIVITY_KEY = 'control_auth_last_activity_v1';
         const AUTH_LOCAL_SESSION_KEY = 'control_auth_local_session_v2';
-        const AUTH_SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 ساعة بدل الخروج السريع
+        const AUTH_SESSION_TIMEOUT_MS = 5 * 60 * 1000;
         let storageSaveTimer = null;
         let restoringSchoolStorage = false;
         let manualLoginInThisPage = false;
         let lastOpenedAuthUid = null;
 
         const CONTROL_LOGOUT_FLAG_KEY = 'control_force_logged_out_v1';
+        const CONTROL_TIMEOUT_FLAG_KEY = 'control_session_timeout_v1';
         const CONTROL_DEFAULT_ONLY_SCHOOL_IDS = new Set(['school002']);
         const CONTROL_LOCAL_BACKUP_PREFIX = 'control_school_local_backup_v1_';
 
@@ -252,6 +253,20 @@
                 if (password) password.value = '';
             } catch(e) {}
         }
+        function resetControlRuntimeForLogin() {
+            try {
+                window.CONTROL_APP_AUTH_READY = false;
+                window.currentSchoolId = null;
+                window.currentSchoolInfo = null;
+                window.cloudDB = null;
+                window.monitoringFirebase = null;
+                lastOpenedAuthUid = null;
+                manualLoginInThisPage = false;
+                clearLocalControlSession();
+                if (typeof window.resetControlAppShell === 'function') window.resetControlAppShell();
+                showLogin();
+            } catch(e) {}
+        }
         function saveLocalControlSession(user, userData) {
             try {
                 localStorage.removeItem(AUTH_LOCAL_SESSION_KEY);
@@ -264,12 +279,41 @@
             try { localStorage.removeItem(AUTH_LOCAL_SESSION_KEY); } catch(e) {}
         }
         function sessionExpired() {
-            // تم تعطيل الخروج التلقائي القصير: لا يتم تسجيل الخروج إلا من زر الخروج.
-            // نحتفظ بالمفتاح فقط كمعلومة نشاط، ولا نستخدمه لطرد المستخدم أثناء العمل.
-            return false;
+            try {
+                const last = Number(localStorage.getItem(AUTH_LAST_ACTIVITY_KEY) || 0);
+                if (!last) return false;
+                return Date.now() - last > AUTH_SESSION_TIMEOUT_MS;
+            } catch(e) {
+                return false;
+            }
+        }
+        function requireFreshLoginAfterTimeout() {
+            try {
+                localStorage.setItem(CONTROL_LOGOUT_FLAG_KEY, '1');
+                localStorage.setItem(CONTROL_TIMEOUT_FLAG_KEY, '1');
+                sessionStorage.setItem(CONTROL_LOGOUT_FLAG_KEY, '1');
+                sessionStorage.setItem(CONTROL_TIMEOUT_FLAG_KEY, '1');
+                localStorage.removeItem(AUTH_LAST_ACTIVITY_KEY);
+            } catch(e) {}
+            resetControlRuntimeForLogin();
+            setAuthStatus('انتهت الجلسة', 'neutral');
+            setLoginError('انتهت مدة الجلسة بعد 5 دقائق بدون حركة. أدخل بيانات المدرسة للدخول من جديد.');
+            try { signOut(auth); } catch(e) {}
+        }
+        function handleAuthActivity(event) {
+            if (!auth.currentUser) return;
+            if (sessionExpired()) {
+                try {
+                    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+                    if (event && typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+                } catch(e) {}
+                requireFreshLoginAfterTimeout();
+                return;
+            }
+            markActivity();
         }
         ['click','keydown','input','mousemove','touchstart'].forEach(evt => {
-            window.addEventListener(evt, () => { if (auth.currentUser) markActivity(); }, { passive: true });
+            window.addEventListener(evt, handleAuthActivity, true);
         });
 
         function shouldPersistLocalKey(key) {
@@ -1212,7 +1256,9 @@ async function openSchoolForUser(user) {
         window.loginWithControlUsername = async function() {
             try {
                 localStorage.removeItem(CONTROL_LOGOUT_FLAG_KEY);
+                localStorage.removeItem(CONTROL_TIMEOUT_FLAG_KEY);
                 sessionStorage.removeItem(CONTROL_LOGOUT_FLAG_KEY);
+                sessionStorage.removeItem(CONTROL_TIMEOUT_FLAG_KEY);
                 clearLocalControlSession();
                 clearOldControlMonitorData();
             } catch(e) {}
@@ -1226,7 +1272,7 @@ async function openSchoolForUser(user) {
             try {
                 setLoginError('');
                 setAuthStatus('جاري تسجيل الدخول...', 'loading');
-                try { await setPersistence(auth, inMemoryPersistence); } catch(e) {}
+                try { await setPersistence(auth, browserSessionPersistence); } catch(e) {}
                 manualLoginInThisPage = true;
                 markActivity();
                 const credential = await signInWithEmailAndPassword(auth, email, password);
@@ -1246,7 +1292,9 @@ async function openSchoolForUser(user) {
 
             try {
                 localStorage.setItem(CONTROL_LOGOUT_FLAG_KEY, '1');
+                localStorage.removeItem(CONTROL_TIMEOUT_FLAG_KEY);
                 sessionStorage.setItem(CONTROL_LOGOUT_FLAG_KEY, '1');
+                sessionStorage.removeItem(CONTROL_TIMEOUT_FLAG_KEY);
             } catch(e) {}
 
             try { clearOldControlMonitorData(); } catch(e) {}
@@ -1292,51 +1340,35 @@ async function openSchoolForUser(user) {
         onAuthStateChanged(auth, async (user) => {
             try {
                 if (localStorage.getItem(CONTROL_LOGOUT_FLAG_KEY) === '1' || sessionStorage.getItem(CONTROL_LOGOUT_FLAG_KEY) === '1') {
+                    const timedOut = localStorage.getItem(CONTROL_TIMEOUT_FLAG_KEY) === '1' || sessionStorage.getItem(CONTROL_TIMEOUT_FLAG_KEY) === '1';
                     if (user) {
                         try { await signOut(auth); } catch(e) {}
                     }
-                    window.CONTROL_APP_AUTH_READY = false;
-                    window.currentSchoolId = null;
-                    window.currentSchoolInfo = null;
-                    window.cloudDB = null;
-                    window.monitoringFirebase = null;
-                    lastOpenedAuthUid = null;
-                    manualLoginInThisPage = false;
-                    clearLocalControlSession();
-                    if (typeof window.resetControlAppShell === 'function') window.resetControlAppShell();
-                    showLogin();
-                    setAuthStatus('تم تسجيل الخروج', 'neutral');
-                    setLoginError('تم تسجيل الخروج. أدخل بيانات المدرسة للدخول من جديد.');
+                    resetControlRuntimeForLogin();
+                    setAuthStatus(timedOut ? 'انتهت الجلسة' : 'تم تسجيل الخروج', 'neutral');
+                    setLoginError(timedOut ? 'انتهت مدة الجلسة بعد 5 دقائق بدون حركة. أدخل بيانات المدرسة للدخول من جديد.' : 'تم تسجيل الخروج. أدخل بيانات المدرسة للدخول من جديد.');
                     return;
                 }
             } catch(e) {}
             if (!user) {
-                clearLocalControlSession();
-                window.currentSchoolId = null;
-                window.cloudDB = null;
-                window.monitoringFirebase = null;
-                window.currentSchoolInfo = null;
-                window.CONTROL_APP_AUTH_READY = false;
-                lastOpenedAuthUid = null;
-                manualLoginInThisPage = false;
-                if (typeof window.resetControlAppShell === 'function') window.resetControlAppShell();
-                showLogin();
-                setAuthStatus('غير متصل بالسحابة', 'neutral');
+                const timedOut = localStorage.getItem(CONTROL_TIMEOUT_FLAG_KEY) === '1' || sessionStorage.getItem(CONTROL_TIMEOUT_FLAG_KEY) === '1';
+                resetControlRuntimeForLogin();
+                setAuthStatus(timedOut ? 'انتهت الجلسة' : 'غير متصل بالسحابة', 'neutral');
+                if (timedOut) setLoginError('انتهت مدة الجلسة بعد 5 دقائق بدون حركة. أدخل بيانات المدرسة للدخول من جديد.');
                 return;
             }
-            if (!manualLoginInThisPage) {
-                clearLocalControlSession();
-                window.CONTROL_APP_AUTH_READY = false;
-                window.currentSchoolId = null;
-                window.currentSchoolInfo = null;
-                window.cloudDB = null;
-                window.monitoringFirebase = null;
-                lastOpenedAuthUid = null;
-                if (typeof window.resetControlAppShell === 'function') window.resetControlAppShell();
+            if (!manualLoginInThisPage && sessionExpired()) {
+                try {
+                    localStorage.setItem(CONTROL_LOGOUT_FLAG_KEY, '1');
+                    localStorage.setItem(CONTROL_TIMEOUT_FLAG_KEY, '1');
+                    sessionStorage.setItem(CONTROL_LOGOUT_FLAG_KEY, '1');
+                    sessionStorage.setItem(CONTROL_TIMEOUT_FLAG_KEY, '1');
+                    localStorage.removeItem(AUTH_LAST_ACTIVITY_KEY);
+                } catch(e) {}
+                resetControlRuntimeForLogin();
                 try { await signOut(auth); } catch(e) {}
-                showLogin();
-                setAuthStatus('يرجى تسجيل الدخول بالسحابة', 'neutral');
-                setLoginError('');
+                setAuthStatus('انتهت الجلسة', 'neutral');
+                setLoginError('انتهت مدة الجلسة بعد 5 دقائق بدون حركة. أدخل بيانات المدرسة للدخول من جديد.');
                 return;
             }
             try {
@@ -3253,10 +3285,11 @@ const getEnvelopeRowsForDate = (date) => {
 // مكون لوحة ومساحة التوقيع التفاعلية
 const SignatureArea = ({ id, signatures, onSignClick, onClearSig, label = "اضغط للتوقيع" }) => {
     const signature = signatures[id];
+    const canClearSignature = !String(id || '').startsWith('control-') || (typeof window !== 'undefined' && window.__CONTROL_ACTIVE_TAB === 'controlCommittee');
     return (React.createElement("div", { className: "relative group flex items-center justify-center min-h-[42px] border border-dashed border-gray-300 rounded hover:bg-blue-50/40 transition cursor-pointer print:border-none print:hover:bg-transparent w-full" },
         signature ? (React.createElement("div", { className: "relative w-full flex justify-center" },
             React.createElement("img", { src: signature, alt: "\u062A\u0648\u0642\u064A\u0639", className: "max-h-10 max-w-full object-contain print:max-h-12", onClick: () => onSignClick(id) }),
-            React.createElement("button", { onClick: (e) => { e.stopPropagation(); onClearSig(id); }, className: "absolute -top-1 -left-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition no-print shadow", title: "\u062D\u0630\u0641 \u0627\u0644\u062A\u0648\u0642\u064A\u0639" }, "\u2715"))) : (React.createElement("span", { onClick: () => onSignClick(id), className: "text-[10px] text-gray-400 no-print text-center px-1 py-1 w-full" }, label)),
+            canClearSignature && React.createElement("button", { onClick: (e) => { e.stopPropagation(); onClearSig(id); }, className: "absolute -top-1 -left-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition no-print shadow", title: "\u062D\u0630\u0641 \u0627\u0644\u062A\u0648\u0642\u064A\u0639" }, "\u2715"))) : (React.createElement("span", { onClick: () => onSignClick(id), className: "text-[10px] text-gray-400 no-print text-center px-1 py-1 w-full" }, label)),
         !signature && React.createElement("span", { className: "hidden print:inline text-xs font-serif text-gray-300 select-none" }, "...................")));
 };
 // مكون نافذة رسم التوقيع بالقلم
@@ -5654,6 +5687,7 @@ const ViolationExclusionForm = ({ violationData, setViolationData, dayName, curr
 };
 const App = () => {
     const [activeTab, setActiveTab] = useState('home');
+    try { window.__CONTROL_ACTIVE_TAB = activeTab; } catch (e) { }
     const fastNavAtRef = useRef(0);
     useEffect(() => {
         try {
@@ -7622,6 +7656,11 @@ const App = () => {
     const clearSignature = (id) => {
         if (!id)
             return;
+        if (isControlSignatureId(id) && activeTab !== 'controlCommittee') {
+            setAlertMessage({ text: "لا يمكن حذف توقيع عضو الكنترول من هذه الصفحة. يتم الحذف من صفحة لجنة الكنترول فقط." });
+            setTimeout(() => setAlertMessage(null), 3500);
+            return;
+        }
         const updatedDeletes = { ...signatureDeletes, [id]: Date.now() };
         if (pendingLocalSignaturesRef.current && pendingLocalSignaturesRef.current[id]) {
             delete pendingLocalSignaturesRef.current[id];
