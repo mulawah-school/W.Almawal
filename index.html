@@ -394,12 +394,14 @@
                             const localMs = Number(localState?.clientSavedAt || Date.parse(localState?.updatedAtLocal || '') || 0);
                             const cloudMs = Number(cleanedCloudState?.clientSavedAt || Date.parse(cleanedCloudState?.updatedAtLocal || '') || 0);
                             if (localMs > cloudMs + 500) {
+                                try { window.__LAST_MONITORING_STATE_STRING = JSON.stringify(localState); } catch(e) {}
                                 Promise.resolve(saveMonitoringStatePayloadNow({
+                                    schoolId,
                                     state: localState,
                                     teachers: Array.isArray(localState.teachers) ? localState.teachers : [],
                                     reason: 'restore_local_newer_monitoring_state',
                                     clientSavedAt: localMs || Date.now()
-                                }, { reason: 'restore_local_newer_monitoring_state' })).catch(function(){});
+                                }, { reason: 'restore_local_newer_monitoring_state', schoolId })).catch(function(){});
                                 return true;
                             }
                         }
@@ -408,6 +410,8 @@
                     purgeOldControlDerivedDataSmartOnly();
                     try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
                     try { localStorage.setItem(scopedKey, stateString); } catch(e) {}
+                    try { window.__LAST_MONITORING_STATE_STRING = stateString; } catch(e) {}
+                    try { sessionStorage.removeItem('demo_school_snapshot_loaded'); } catch(e) {}
                 } catch(e) { console.warn('تعذر تجهيز بيانات المراقب الذكي محليًا', e); }
                 return true;
             } catch(e) {
@@ -477,6 +481,7 @@
                 const nowIso = new Date().toISOString();
                 await setDoc(fbDoc(db, 'schools', targetSchoolId, 'monitoring', 'appData'), {
                     ...state,
+                    schoolId: targetSchoolId,
                     updatedAt: serverTimestamp(),
                     updatedAtLocal: nowIso,
                     forcedSaveReason: options.reason || payload.reason || 'payload_direct_save',
@@ -559,6 +564,7 @@
 
                 const reason = String(data.reason || data.type || '');
                 const now = Date.now();
+                const messageSchoolId = data.schoolId || window.currentSchoolId || window.__CONTROL_LAST_OPENED_SCHOOL_ID || '';
 
                 // تغيير التاريخ داخل المراقب لا يحتاج حفظ سحابي كامل؛ كان سبب البطء.
                 if (/date|daily|selectedDailyExamId|view_only/i.test(reason)) return;
@@ -567,13 +573,13 @@
                 if (now - __LAST_PARENT_MONITORING_MESSAGE_AT < 1800) {
                     clearTimeout(window.__PARENT_MONITORING_MESSAGE_TIMER);
                     window.__PARENT_MONITORING_MESSAGE_TIMER = setTimeout(() => {
-                        scheduleMonitoringStatePayloadSave(data, { reason: reason || data.type });
+                        scheduleMonitoringStatePayloadSave({ ...data, schoolId: messageSchoolId }, { reason: reason || data.type, schoolId: messageSchoolId });
                     }, 1800);
                     return;
                 }
 
                 __LAST_PARENT_MONITORING_MESSAGE_AT = now;
-                scheduleMonitoringStatePayloadSave(data, { reason: reason || data.type });
+                scheduleMonitoringStatePayloadSave({ ...data, schoolId: messageSchoolId }, { reason: reason || data.type, schoolId: messageSchoolId });
             } catch(e) {
                 console.warn('تعذر استقبال رسالة حفظ المراقب الذكي', e);
             }
@@ -602,11 +608,12 @@
                     return await saveSchoolLocalStorageNow({ flushIframe: false, throwOnError: !!options.throwOnError });
                 }
                 return await saveMonitoringStatePayloadNow({
+                    schoolId: window.currentSchoolId,
                     state,
                     teachers: Array.isArray(state.teachers) ? state.teachers : [],
                     reason: options.reason || 'manual_or_logout_save',
                     clientSavedAt: Date.now()
-                }, { reason: options.reason || 'manual_or_logout_save', throwOnError: !!options.throwOnError });
+                }, { reason: options.reason || 'manual_or_logout_save', schoolId: window.currentSchoolId, throwOnError: !!options.throwOnError });
             } catch(e) {
                 console.warn('تعذر حفظ بيانات المراقب الذكي المباشرة في Firebase، سيتم حفظ نسخة التخزين المحلي في Firebase بدلاً منها', e);
                 const snapshotSaved = await saveSchoolLocalStorageNow({ flushIframe: false, throwOnError: false });
@@ -940,11 +947,12 @@
                 try {
                     const parsedForCloud = JSON.parse(stateString);
                     saveMonitoringStatePayloadNow({
+                        schoolId: window.currentSchoolId || 'demo_school',
                         state: parsedForCloud,
                         teachers: Array.isArray(parsedForCloud.teachers) ? parsedForCloud.teachers : [],
                         reason: 'restore_school001_from_controlLocalStorage_snapshot',
                         clientSavedAt: Date.now()
-                    }, { reason: 'restore_school001_from_controlLocalStorage_snapshot' }).catch(e => console.warn('تعذر حفظ بيانات school001 المسترجعة في monitoring/appData', e));
+                    }, { reason: 'restore_school001_from_controlLocalStorage_snapshot', schoolId: window.currentSchoolId || 'demo_school' }).catch(e => console.warn('تعذر حفظ بيانات school001 المسترجعة في monitoring/appData', e));
                 } catch(e) {}
 
                 setAuthStatus('تم تحميل بيانات demo_school من snapshot', 'success');
@@ -1315,13 +1323,17 @@ async function openSchoolForUser(user) {
                 restoreSchoolLocalRuntimeBackup(window.currentSchoolId);
             }
             let school001SnapshotRestored = false;
+            let school001CloudRestored = false;
             if (isSchool001User(window.currentSchoolInfo || normalizedUserData)) {
                 clearDefaultOnlyRuntimeKeys(window.currentSchoolId);
                 restoreSchoolLocalRuntimeBackup(window.currentSchoolId);
-                school001SnapshotRestored = await forceLoadDemoSchoolSnapshotForSchool001();
+                school001CloudRestored = await restoreMonitoringAppDataFromCloud(window.currentSchoolId);
+                if (!school001CloudRestored) {
+                    school001SnapshotRestored = await forceLoadDemoSchoolSnapshotForSchool001();
+                }
             }
             purgeOldControlDerivedDataSmartOnly();
-            const smartDataRestored = defaultOnly ? false : (school001SnapshotRestored ? true : await restoreMonitoringAppDataFromCloud(window.currentSchoolId));
+            const smartDataRestored = defaultOnly ? false : (school001CloudRestored || school001SnapshotRestored ? true : await restoreMonitoringAppDataFromCloud(window.currentSchoolId));
             if (defaultOnly) {
                 enforceCleanDefaultMonitoringState(window.currentSchoolId);
             } else if (!isSchool001User(window.currentSchoolInfo || normalizedUserData) && !smartDataRestored) {

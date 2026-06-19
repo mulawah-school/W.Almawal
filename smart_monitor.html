@@ -2222,6 +2222,7 @@
                     if (typeof this.ensureAllGrade12OptionalRows === 'function') this.ensureAllGrade12OptionalRows();
                     const clone = (value) => JSON.parse(JSON.stringify(value || (Array.isArray(value) ? [] : {})));
                     return {
+                        schoolId: window.currentSchoolId || '',
                         schoolSettings: { ...this.schoolSettings, ministry: 'وزارة التعليم' },
                         teachers: clone(this.teachers),
                         schoolClasses: clone(this.schoolClasses),
@@ -2333,6 +2334,7 @@
                         if (window.parent && window.parent !== window) {
                             window.parent.postMessage({
                                 type: 'monitoring_immediate_save_v2',
+                                schoolId: window.currentSchoolId || '',
                                 reason,
                                 state,
                                 teachers: Array.isArray(state.teachers) ? state.teachers : [],
@@ -2357,11 +2359,12 @@
                         const stateForParent = this.cleanForFirestore(this.getSerializableState());
                         if (window.parent && window.parent !== window && typeof window.parent.saveMonitoringStatePayloadNow === 'function') {
                             const ok = await window.parent.saveMonitoringStatePayloadNow({
+                                schoolId: window.currentSchoolId || '',
                                 state: stateForParent,
                                 teachers: Array.isArray(stateForParent.teachers) ? stateForParent.teachers : [],
                                 reason: 'iframe_direct_state_save',
                                 clientSavedAt: Date.now()
-                            }, { reason: 'iframe_direct_state_save' });
+                            }, { reason: 'iframe_direct_state_save', schoolId: window.currentSchoolId || '' });
                             if (ok) {
                                 if (showStatus && typeof window.updateCloudStatus === 'function') window.updateCloudStatus('تم الحفظ في Firebase', 'success');
                                 return true;
@@ -2372,11 +2375,12 @@
                         if (window.parent && window.parent !== window && typeof window.parent.queueMonitoringStatePayloadSave === 'function') {
                             sentToParentForFirebase = true;
                             Promise.resolve(window.parent.queueMonitoringStatePayloadSave({
+                                schoolId: window.currentSchoolId || '',
                                 state: stateForParent,
                                 teachers: Array.isArray(stateForParent.teachers) ? stateForParent.teachers : [],
                                 reason: 'iframe_queued_state_save',
                                 clientSavedAt: Date.now()
-                            }, { reason: 'iframe_queued_state_save' })).then((ok) => {
+                            }, { reason: 'iframe_queued_state_save', schoolId: window.currentSchoolId || '' })).then((ok) => {
                                 if (ok && typeof window.updateCloudStatus === 'function') window.updateCloudStatus('تم الحفظ في Firebase', 'success');
                             }).catch((queueErr) => console.warn('تعذر حفظ قائمة انتظار المراقب الذكي في Firebase', queueErr));
                             if (showStatus && typeof window.updateCloudStatus === 'function') window.updateCloudStatus('تم إرسال الحفظ إلى Firebase', 'success');
@@ -2398,7 +2402,7 @@
                         const state = this.cleanForFirestore(this.getSerializableState());
                         await setDoc(
                             doc(db, 'schools', window.currentSchoolId, 'monitoring', 'appData'),
-                            { ...state, updatedAt: serverTimestamp(), updatedAtLocal: new Date().toISOString() },
+                            { ...state, schoolId: window.currentSchoolId, updatedAt: serverTimestamp(), updatedAtLocal: new Date().toISOString() },
                             { merge: true }
                         );
                         if (showStatus && typeof window.updateCloudStatus === 'function') window.updateCloudStatus('تم الحفظ', 'success');
@@ -2550,6 +2554,7 @@
                             }
                         } catch(e) {}
                         const parentPayload = {
+                            schoolId: window.currentSchoolId || '',
                             state: this.cleanForFirestore(state),
                             teachers: Array.isArray(state.teachers) ? state.teachers : [],
                             reason,
@@ -2557,9 +2562,9 @@
                         };
                         try {
                             if (typeof window.parent.scheduleMonitoringStatePayloadSave === 'function') {
-                                window.parent.scheduleMonitoringStatePayloadSave(parentPayload, { reason });
+                                window.parent.scheduleMonitoringStatePayloadSave(parentPayload, { reason, schoolId: window.currentSchoolId || '' });
                             } else if (typeof window.parent.queueMonitoringStatePayloadSave === 'function') {
-                                Promise.resolve(window.parent.queueMonitoringStatePayloadSave(parentPayload, { reason })).catch((err) => console.warn('تعذر حفظ بيانات المراقب الذكي عبر الكنترول', err));
+                                Promise.resolve(window.parent.queueMonitoringStatePayloadSave(parentPayload, { reason, schoolId: window.currentSchoolId || '' })).catch((err) => console.warn('تعذر حفظ بيانات المراقب الذكي عبر الكنترول', err));
                             } else {
                                 this.sendStateToParent(reason, state);
                             }
@@ -2603,11 +2608,12 @@
                             try {
                                 if (typeof window.parent.scheduleMonitoringStatePayloadSave === 'function') {
                                     window.parent.scheduleMonitoringStatePayloadSave({
+                                        schoolId: window.currentSchoolId || '',
                                         state: this.cleanForFirestore(state),
                                         teachers: Array.isArray(state.teachers) ? state.teachers : [],
                                         reason,
                                         clientSavedAt: Date.now()
-                                    }, { reason });
+                                    }, { reason, schoolId: window.currentSchoolId || '' });
                                 }
                             } catch(e) {}
                         }
