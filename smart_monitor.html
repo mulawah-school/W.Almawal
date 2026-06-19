@@ -377,7 +377,7 @@
             </div>
 
             <!-- Tab 1: Teachers & Specialities -->
-            <section x-show="currentTab === 'teachers'" x-transition x-cloak>
+            <section x-show="currentTab === 'teachers'" x-cloak>
                 <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
                     <div>
                         <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -596,7 +596,7 @@
             </section>
 
             <!-- Tab 2: Classes & Committees -->
-            <section x-show="currentTab === 'classes'" x-transition x-cloak>
+            <section x-show="currentTab === 'classes'" x-cloak>
                 <div class="mb-6">
                     <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         <i class="fa-solid fa-school text-blue-500"></i>
@@ -839,7 +839,7 @@
             </section>
 
             <!-- Tab 3: Exams & Schedule -->
-            <section x-show="currentTab === 'exams'" x-transition x-cloak>
+            <section x-show="currentTab === 'exams'" x-cloak>
                 <div class="mb-6">
                     <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         <i class="fa-solid fa-calendar-check text-indigo-500"></i>
@@ -1042,7 +1042,7 @@
             </section>
 
             <!-- Tab 4: Teacher Availability & Restrictions -->
-            <section x-show="currentTab === 'availability'" x-transition x-cloak>
+            <section x-show="currentTab === 'availability'" x-cloak>
                 <div class="mb-6">
                     <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         <i class="fa-solid fa-user-lock text-red-500"></i>
@@ -1153,7 +1153,7 @@
             </section>
 
             <!-- Tab 5: Smart Auto-Distribution -->
-            <section x-show="currentTab === 'smart-dist'" x-transition x-cloak>
+            <section x-show="currentTab === 'smart-dist'" x-cloak>
                 <div class="mb-6">
                     <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         <i class="fa-solid fa-brain text-purple-500"></i>
@@ -1226,7 +1226,7 @@
             </section>
 
             <!-- Tab 6: Daily View & SMS/WhatsApp Gateway -->
-            <section x-show="currentTab === 'daily-view'" x-transition x-cloak>
+            <section x-show="currentTab === 'daily-view'" x-cloak>
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 no-print">
                     <div>
                         <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -1291,7 +1291,7 @@
                     </div>
 
                     <!-- Selected Day Info Summary -->
-                    <template x-if="getSelectedDailyExams().length">
+                    <template x-if="currentTab === 'daily-view' && getSelectedDailyExams().length">
                         <div class="mb-4">
                             <!-- جدول اختبارات اليوم -->
                             <div class="mb-6 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
@@ -1312,7 +1312,7 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <template x-for="(exam, idx) in getSelectedDailyExams()" :key="'exam-table-' + exam.id">
+                                            <template x-for="(exam, idx) in (currentTab === 'daily-view' ? getSelectedDailyExams() : [])" :key="'exam-table-' + exam.id">
                                                 <tr class="bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/50">
                                                     <td class="px-3 py-2 border border-slate-200 dark:border-slate-700 text-center font-bold" x-text="idx + 1"></td>
                                                     <td class="px-3 py-2 border border-slate-200 dark:border-slate-700 font-bold" x-text="exam.subject"></td>
@@ -1350,7 +1350,7 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <template x-for="(row, idx) in getDailyScheduleRows(getSelectedDailyDate())" :key="row.id">
+                                            <template x-for="(row, idx) in (currentTab === 'daily-view' ? getDailyScheduleRows(getSelectedDailyDate()) : [])" :key="row.id">
                                                 <tr class="bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/50">
                                                     <td class="px-3 py-2 border border-slate-200 dark:border-slate-700 text-center font-bold" x-text="idx + 1"></td>
                                                     <td class="px-3 py-2 border border-slate-200 dark:border-slate-700 font-bold" x-text="row.committeeName"></td>
@@ -1391,7 +1391,7 @@
                                                     </td>
                                                 </tr>
                                             </template>
-                                            <tr x-show="getDailyScheduleRows(getSelectedDailyDate()).length === 0">
+                                            <tr x-show="currentTab === 'daily-view' && getDailyScheduleRows(getSelectedDailyDate()).length === 0">
                                                 <td colspan="7" class="text-center py-8 text-slate-400 border border-slate-200 dark:border-slate-700">لا توجد بيانات مراقبة لهذا اليوم. يرجى تشغيل التوزيع الذكي.</td>
                                             </tr>
                                         </tbody>
@@ -1403,7 +1403,7 @@
                                 <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-yellow-50/20 dark:bg-yellow-950/10">
                                     <h4 class="font-bold text-xs text-yellow-600 dark:text-yellow-400 mb-2 uppercase tracking-wider"><i class="fa-solid fa-users-viewfinder ml-1"></i> مراقب الدور المكلف لليوم</h4>
                                     <div class="space-y-2">
-                                        <template x-for="item in getDailyFloorObserversForDay(getSelectedDailyDate())" :key="item.id">
+                                        <template x-for="item in (currentTab === 'daily-view' ? getDailyFloorObserversForDay(getSelectedDailyDate()) : [])" :key="item.id">
                                             <div class="p-2 bg-white dark:bg-slate-900 rounded border border-slate-200/50 text-xs font-semibold flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                                                 <div class="flex flex-col gap-1 min-w-0">
                                                     <span x-text="item.teacherName"></span>
@@ -1417,14 +1417,14 @@
                                                 </select>
                                             </div>
                                         </template>
-                                        <div x-show="getDailyFloorObserversForDay(getSelectedDailyDate()).length === 0" class="text-xs text-slate-400 py-2">لا يوجد مراقب دور أو لم يتم التوزيع بعد.</div>
+                                        <div x-show="currentTab === 'daily-view' && getDailyFloorObserversForDay(getSelectedDailyDate()).length === 0" class="text-xs text-slate-400 py-2">لا يوجد مراقب دور أو لم يتم التوزيع بعد.</div>
                                     </div>
                                 </div>
 
                                 <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-orange-50/20 dark:bg-orange-950/10">
                                     <h4 class="font-bold text-xs text-orange-600 dark:text-orange-400 mb-2 uppercase tracking-wider"><i class="fa-solid fa-circle-exclamation ml-1"></i> مراقبو الاحتياط العام لليوم</h4>
                                     <div class="space-y-2">
-                                        <template x-for="item in getDailyBackupObserversForDay(getSelectedDailyDate())" :key="item.id">
+                                        <template x-for="item in (currentTab === 'daily-view' ? getDailyBackupObserversForDay(getSelectedDailyDate()) : [])" :key="item.id">
                                             <div class="p-2 bg-white dark:bg-slate-900 rounded border border-slate-200/50 text-xs font-semibold flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                                                 <div class="flex flex-col gap-1 min-w-0">
                                                     <span x-text="item.teacherName"></span>
@@ -1438,20 +1438,20 @@
                                                 </select>
                                             </div>
                                         </template>
-                                        <div x-show="getDailyBackupObserversForDay(getSelectedDailyDate()).length === 0" class="text-xs text-slate-400 py-2">لا يوجد احتياطي مكلف أو لم يتم التوزيع بعد.</div>
+                                        <div x-show="currentTab === 'daily-view' && getDailyBackupObserversForDay(getSelectedDailyDate()).length === 0" class="text-xs text-slate-400 py-2">لا يوجد احتياطي مكلف أو لم يتم التوزيع بعد.</div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </template>
-                    <template x-if="!getSelectedDailyExams().length">
+                    <template x-if="currentTab === 'daily-view' && !getSelectedDailyExams().length">
                         <div class="text-center py-20 text-slate-400">يرجى تحديد يوم امتحان من القائمة أعلاه لعرض الجدول اليومي وتوزيع اللجان والطباعة.</div>
                     </template>
                 </div>
             </section>
 
             <!-- Tab 7: Statistics & Reports -->
-            <section x-show="currentTab === 'statistics'" x-transition x-cloak>
+            <section x-show="currentTab === 'statistics'" x-cloak>
                 <div class="mb-6">
                     <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         <i class="fa-solid fa-chart-pie text-rose-500"></i>
@@ -1513,7 +1513,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <template x-for="row in getStatsExamDisplayRows()" :key="'stats-' + statsExamVersion + '-' + row.key">
+                                <template x-for="row in (currentTab === 'statistics' ? getStatsExamDisplayRows() : [])" :key="'stats-' + statsExamVersion + '-' + row.key">
                                     <tr :class="row.type === 'day' ? 'bg-indigo-50/80 dark:bg-indigo-950/30 border-b border-indigo-100 dark:border-indigo-900' : 'border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50'">
                                         <template x-if="row.type === 'day'">
                                             <td colspan="6" class="px-4 py-3">
@@ -1653,7 +1653,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <template x-for="day in getDailyUnassignedTeachersReport()" :key="day.date">
+                            <template x-for="day in (currentTab === 'statistics' ? getDailyUnassignedTeachersReport() : [])" :key="day.date">
                                 <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50">
                                     <td class="px-4 py-3 font-semibold bg-slate-50/50 dark:bg-slate-800/40">
                                         <div class="font-bold text-slate-900 dark:text-white" x-text="formatDateArabic(day.date)"></div>
@@ -1684,7 +1684,7 @@
                                     </td>
                                 </tr>
                             </template>
-                            <tr x-show="getDailyUnassignedTeachersReport().length === 0">
+                            <tr x-show="currentTab === 'statistics' && getDailyUnassignedTeachersReport().length === 0">
                                 <td colspan="4" class="text-center py-8 text-slate-400">لا يوجد جدول اختبارات لعرض كشف المعلمين غير المكلفين.</td>
                             </tr>
                         </tbody>
@@ -1702,7 +1702,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <template x-for="exam in exams" :key="exam.id">
+                            <template x-for="exam in (currentTab === 'statistics' ? exams : [])" :key="exam.id">
                                 <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50/50">
                                     <td class="px-4 py-3 font-semibold bg-slate-50/50 dark:bg-slate-800/40">
                                         <div class="font-bold text-slate-900 dark:text-white" x-text="exam.subject"></div>
@@ -1729,7 +1729,7 @@
                                     </td>
                                 </tr>
                             </template>
-                            <tr x-show="exams.length === 0">
+                            <tr x-show="currentTab === 'statistics' && exams.length === 0">
                                 <td colspan="2" class="text-center py-8 text-slate-400">لا يوجد أي امتحانات مبرمجة حالياً لرسم الكشف العام.</td>
                             </tr>
                         </tbody>
@@ -2325,9 +2325,9 @@
                     this.cloudSaveTimer = setTimeout(() => this.saveCloudDataNow(false, showStatus), this.cloudSaveDelay);
                 },
 
-                sendStateToParent(reason = 'smart_monitor_edit') {
+                sendStateToParent(reason = 'smart_monitor_edit', existingState = null) {
                     try {
-                        const state = this.cleanForFirestore(this.getSerializableState());
+                        const state = this.cleanForFirestore(existingState || this.getSerializableState());
                         if (window.parent && window.parent !== window) {
                             window.parent.postMessage({
                                 type: 'monitoring_immediate_save_v2',
@@ -2509,9 +2509,10 @@
                         return;
                     }
 
+                    this.__bridgeDataRevision = (Number(this.__bridgeDataRevision || 0) + 1);
                     const state = this.getSerializableState();
                     this.safeSaveLocalSnapshot(state);
-                    this.scheduleControlBridgeSync ? this.scheduleControlBridgeSync('deferred_sync') : this.syncControlBridgeData();
+                    const bridgeData = this.syncControlBridgeData({ force: true, reason });
                     const showStatus = !(options && options.silent === true);
                     if (showStatus && typeof window.updateCloudStatus === 'function') window.updateCloudStatus('جاري الحفظ...', 'loading');
 
@@ -2519,10 +2520,33 @@
                     // إلغاء الحفظ المباشر المكرر هنا هو سبب تسريع المراقب الذكي.
                     if (window.parent && window.parent !== window) {
                         try { window.parent.__LAST_MONITORING_STATE_STRING = JSON.stringify(state); } catch(e) {}
-                        this.sendStateToParent(reason);
+                        try {
+                            if (bridgeData) {
+                                window.parent.monitoringDistributionBridge = bridgeData;
+                                window.parent.postMessage({ type: 'monitoring_control_bridge_v1', payload: bridgeData }, '*');
+                                window.parent.dispatchEvent(new window.parent.Event('smart-data-refreshed'));
+                            }
+                        } catch(e) {}
+                        const parentPayload = {
+                            state: this.cleanForFirestore(state),
+                            teachers: Array.isArray(state.teachers) ? state.teachers : [],
+                            reason,
+                            clientSavedAt: Date.now()
+                        };
+                        try {
+                            if (typeof window.parent.queueMonitoringStatePayloadSave === 'function') {
+                                Promise.resolve(window.parent.queueMonitoringStatePayloadSave(parentPayload, { reason })).catch((err) => console.warn('تعذر حفظ بيانات المراقب الذكي عبر الكنترول', err));
+                            } else if (typeof window.parent.scheduleMonitoringStatePayloadSave === 'function') {
+                                window.parent.scheduleMonitoringStatePayloadSave(parentPayload, { reason });
+                            } else {
+                                this.sendStateToParent(reason, state);
+                            }
+                        } catch(e) {
+                            this.sendStateToParent(reason, state);
+                        }
                         if (showStatus && typeof window.updateCloudStatus === 'function') {
                             clearTimeout(this._parentSaveStatusTimer);
-                            this._parentSaveStatusTimer = setTimeout(() => window.updateCloudStatus('تم الحفظ', 'success'), 1200);
+                            this._parentSaveStatusTimer = setTimeout(() => window.updateCloudStatus('تم الحفظ', 'success'), 450);
                         }
                         return;
                     }
@@ -2715,6 +2739,7 @@
                 exportControlBridgeData(options = {}) {
                     // الجسر الآن خفيف ومخزن مؤقتاً: لا يعيد بناء كل شيء مع كل تغيير تاريخ.
                     const signature = [
+                        this.__bridgeDataRevision || 0,
                         (this.teachers || []).length,
                         (this.exams || []).length,
                         (this.assignments || []).length,
@@ -2732,7 +2757,7 @@
                     }
 
                     const data = {
-                        version: 'monitoring_control_bridge_v2_fast',
+                        version: 'monitoring_control_bridge_v1',
                         updatedAt: new Date().toISOString(),
                         schoolSettings: { ...this.schoolSettings, ministry: 'وزارة التعليم' },
                         teachers: this.normalizeTeacherList(this.teachers),
@@ -4967,13 +4992,15 @@
                 commitAssignmentChanges(message) {
                     this.assignments = [...(this.assignments || [])];
                     try {
-                        if (typeof this.syncControlBridgeData === 'function') this.scheduleControlBridgeSync ? this.scheduleControlBridgeSync('deferred_sync') : this.syncControlBridgeData();
-                        const bridgeData = (typeof this.exportControlBridgeData === 'function') ? this.exportControlBridgeData() : null;
+                        this.__bridgeDataRevision = (Number(this.__bridgeDataRevision || 0) + 1);
+                        const bridgeData = (typeof this.syncControlBridgeData === 'function') ? this.syncControlBridgeData({ force: true, reason: 'assignment_changed' }) : ((typeof this.exportControlBridgeData === 'function') ? this.exportControlBridgeData({ force: true }) : null);
                         if (bridgeData && window.parent && window.parent !== window) {
+                            try { window.parent.monitoringDistributionBridge = bridgeData; } catch(e) {}
                             window.parent.postMessage({ type: 'monitoring_control_bridge_v1', payload: bridgeData }, '*');
+                            try { window.parent.dispatchEvent(new window.parent.Event('smart-data-refreshed')); } catch(e) {}
                         }
                     } catch (e) { console.warn('تعذر تحديث الربط بعد تعديل المراقب', e); }
-                    this.saveAppData();
+                    this.saveAppData({ reason: 'assignment_changed' });
                     this.showToast(message || 'تم تحديث المراقبين والإحصائيات والكنترول.');
                 },
                 updateAssignmentTeacher(assignmentId, teacherId) {

@@ -2033,6 +2033,9 @@ const buildSmartBridgeFromStoredState = (state) => {
         sessionsByDate: {}
     };
 };
+const isSmartMonitorBridgePayload = (bridge) => {
+    return !!(bridge && /^monitoring_control_bridge_/.test(String(bridge.version || '')));
+};
 const sanitizeSmartBridgeForControl = (bridge) => {
     if (!bridge || typeof bridge !== 'object')
         return bridge;
@@ -2040,6 +2043,7 @@ const sanitizeSmartBridgeForControl = (bridge) => {
     // الكنترول يبني الصفوف من exams + assignments + teachers فقط.
     return {
         ...bridge,
+        version: 'monitoring_control_bridge_v1',
         sessionsByDate: {},
         dailyReports: {},
         envelopeOpenings: {},
@@ -2048,7 +2052,7 @@ const sanitizeSmartBridgeForControl = (bridge) => {
     };
 };
 const cacheSmartBridge = (bridge) => {
-    if (!bridge || bridge.version !== 'monitoring_control_bridge_v1')
+    if (!isSmartMonitorBridgePayload(bridge))
         return null;
     const cleanBridge = sanitizeSmartBridgeForControl(bridge);
     window.monitoringDistributionBridge = cleanBridge;
@@ -2077,7 +2081,7 @@ const getLiveSmartBridgeFromIframe = (options = {}) => {
                     app.syncControlBridgeData({ silent: true, reason: 'parent_forced_bridge_refresh' });
                 if (typeof app.exportControlBridgeData === 'function') {
                     const bridge = app.exportControlBridgeData();
-                    if (bridge && bridge.version === 'monitoring_control_bridge_v1') {
+                    if (isSmartMonitorBridgePayload(bridge)) {
                         liveSmartBridgeCache = sanitizeSmartBridgeForControl(bridge);
                         liveSmartBridgeReadAt = now;
                         return liveSmartBridgeCache;
@@ -2123,7 +2127,7 @@ const getStoredSmartBridge = () => {
             catch (stateError) { }
         }
         // المصدر الثالث والأخير: جسر الجلسة الحالي فقط، بعد تنظيفه من sessionsByDate.
-        if (window.monitoringDistributionBridge && window.monitoringDistributionBridge.version === 'monitoring_control_bridge_v1') {
+        if (isSmartMonitorBridgePayload(window.monitoringDistributionBridge)) {
             return cacheSmartBridge(window.monitoringDistributionBridge);
         }
         // تم حذف الاعتماد على monitoring_control_bridge_v1 من التخزين المحلي نهائياً
@@ -3401,7 +3405,7 @@ const SmartMonitorSection = React.memo(() => {
                     " \u0627\u0644\u0645\u0631\u0627\u0642\u0628 \u0627\u0644\u0630\u0643\u064A"),
                 React.createElement("p", { className: "text-xs text-gray-500 mt-1" }, "\u0623\u062F\u062E\u0644 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0639\u0644\u0645\u064A\u0646 \u0648\u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A \u0648\u0634\u063A\u0651\u0644 \u0627\u0644\u062A\u0648\u0632\u064A\u0639 \u0627\u0644\u0630\u0643\u064A\u060C \u0648\u0633\u062A\u0646\u062A\u0642\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u062A\u0644\u0642\u0627\u0626\u064A\u064B\u0627 \u0625\u0644\u0649 \u062A\u0648\u0632\u064A\u0639 \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629 \u0648\u0627\u0644\u062A\u0642\u0631\u064A\u0631 \u0627\u0644\u064A\u0648\u0645\u064A \u0648\u0645\u062D\u0636\u0631 \u0641\u062A\u062D \u0627\u0644\u0645\u063A\u0644\u0641\u0627\u062A \u0639\u0646\u062F \u0627\u062E\u062A\u064A\u0627\u0631 \u0627\u0644\u062A\u0627\u0631\u064A\u062E."))),
         React.createElement("div", { className: "rounded-2xl overflow-hidden border border-gray-200 shadow bg-white" },
-            React.createElement("iframe", { title: "\u0627\u0644\u0645\u0631\u0627\u0642\u0628 \u0627\u0644\u0630\u0643\u064A", src: (window.currentSchoolId ? ('smart_monitor.html?schoolId=' + encodeURIComponent(window.currentSchoolId)) : SMART_MONITOR_FILE), className: "w-full min-h-[1200px] bg-white", style: { border: '0' }, loading: "lazy", onLoad: (e) => {
+            React.createElement("iframe", { title: "\u0627\u0644\u0645\u0631\u0627\u0642\u0628 \u0627\u0644\u0630\u0643\u064A", src: (window.currentSchoolId ? ('smart_monitor.html?schoolId=' + encodeURIComponent(window.currentSchoolId)) : SMART_MONITOR_FILE), className: "w-full min-h-[1200px] bg-white", style: { border: '0' }, loading: "eager", onLoad: (e) => {
                     try {
                         const w = e.currentTarget.contentWindow;
                         if (!w)
@@ -5697,6 +5701,10 @@ const App = () => {
     }, []);
     const [smartMonitorMounted, setSmartMonitorMounted] = useState(false);
     useEffect(() => {
+        const timer = setTimeout(() => setSmartMonitorMounted(true), 900);
+        return () => clearTimeout(timer);
+    }, []);
+    useEffect(() => {
         if (activeTab === 'smartMonitor')
             setSmartMonitorMounted(true);
     }, [activeTab]);
@@ -5745,7 +5753,7 @@ const App = () => {
         }
     };
     const applyFreshSmartBridge = (freshBridge, options = {}) => {
-        if (!freshBridge || freshBridge.version !== 'monitoring_control_bridge_v1')
+        if (!isSmartMonitorBridgePayload(freshBridge))
             return false;
         const cleanBridge = sanitizeSmartBridgeForControl(freshBridge);
         const fingerprint = getSmartBridgeFingerprint(cleanBridge);
