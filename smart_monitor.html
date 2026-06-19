@@ -4788,6 +4788,10 @@
                                 teacherName: t ? t.name : 'غير محدد',
                                 teacherPhone: t ? t.phone : '',
                                 examId: a.examId,
+                                date: row.date,
+                                subject: (row.subjects || []).join('، '),
+                                subjectText: (row.subjects || []).join('، '),
+                                period: row.period,
                                 className: row.className,
                                 committeeName: row.committeeName
                             };
@@ -5245,6 +5249,33 @@
                     if (!response.ok) throw new Error(`UltraMsg ${response.status}`);
                     return response;
                 },
+                getWhatsAppPeriodLabel(period) {
+                    const minutes = this.parseExamStartMinutes(period);
+                    if (minutes < 10 * 60) return 'الفترة الأولى';
+                    if (minutes < 12 * 60) return 'الفترة الثانية';
+                    return 'الفترة';
+                },
+                formatWhatsAppCommitteeText(committeeName, className) {
+                    const committee = String(committeeName || '').trim();
+                    const room = String(className || '').trim();
+                    if (committee && room) return `${committee} (${room})`;
+                    return committee || room || '';
+                },
+                buildObserverWhatsAppMessage({ teacherName, subject, period, date, committeeName, className }) {
+                    const periodLabel = this.getWhatsAppPeriodLabel(period);
+                    const dayText = this.formatDateArabic(date) || date || 'اليوم';
+                    const committeeText = this.formatWhatsAppCommitteeText(committeeName, className);
+                    return [
+                        `الأستاذ الفاضل/ة: ${teacherName || ''}`,
+                        'نود إبلاغكم بأنه تم تكليفكم بمراقبة اختبار:',
+                        `المادة: ${subject || ''}`,
+                        `${periodLabel}: ${period || ''}`,
+                        `اليوم: ${dayText}`,
+                        `اللجنة: ${committeeText}`,
+                        'بالتوفيق',
+                        'لا يمكن الرد على هذه الرسالة'
+                    ].join('\n');
+                },
 
                 // Global WhatsApp batch sender controller
                 openBatchWhatsAppModal(examIdOrDate) {
@@ -5274,7 +5305,14 @@
                                 teacherPhone: a.teacherPhone,
                                 role: 'regular',
                                 roleText: `${row.subjects.join('، ')} - ${a.committeeName}`,
-                                message: `الأستاذ الفاضل/ة: ${a.teacherName}. نود إبلاغكم بتكليفكم بمراقبة اختبار اليوم (${row.subjects.join('، ')}) فترة ${row.period} في ${a.className} - لجنة: ${a.committeeName}. يرجى التواجد قبل اللجنة بـ 15 دقيقة.`,
+                                message: this.buildObserverWhatsAppMessage({
+                                    teacherName: a.teacherName,
+                                    subject: a.subjectText || a.subject || row.subjects.join('، '),
+                                    period: a.period || row.period,
+                                    date: a.date || targetDate,
+                                    committeeName: a.committeeName,
+                                    className: a.className
+                                }),
                                 status: 'idle'
                             });
                         });
@@ -5397,10 +5435,16 @@
 
                 // Trigger individual WhatsApp message through UltraMsg or WhatsApp Web
                 async sendWhatsAppNotification(assign) {
-                    const exam = this.exams.find(e => e.id == assign.examId) || this.getSelectedDailyExams()[0];
-                    if (!exam) return;
+                    const exam = this.exams.find(e => e.id == assign.examId) || this.getSelectedDailyExams()[0] || {};
 
-                    const msg = `الأستاذ الفاضل/ة: ${assign.teacherName}. نود إبلاغكم بأنه تم تكليفكم بمراقبة اختبار (${exam.subject}) فترة ${exam.period} اليوم في ${assign.className} - لجنة: ${assign.committeeName}. بالتوفيق.`;
+                    const msg = this.buildObserverWhatsAppMessage({
+                        teacherName: assign.teacherName,
+                        subject: assign.subjectText || assign.subject || exam.subject,
+                        period: assign.period || exam.period,
+                        date: assign.date || exam.date || this.getSelectedDailyDate(),
+                        committeeName: assign.committeeName,
+                        className: assign.className
+                    });
                     try {
                         const result = await this.sendWhatsAppMessage(assign.teacherPhone, msg);
                         if (result && result.webFallback) {
