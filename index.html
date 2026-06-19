@@ -463,7 +463,7 @@
             return true;
         }
         async function saveMonitoringStatePayloadNow(payload = {}, options = {}) {
-            const targetSchoolId = window.currentSchoolId;
+            const targetSchoolId = options.schoolId || payload.schoolId || window.currentSchoolId || window.__CONTROL_LAST_OPENED_SCHOOL_ID;
             if (!targetSchoolId) return false;
             let state = payload && payload.state ? payload.state : payload;
             if (!state || typeof state !== 'object') return false;
@@ -492,6 +492,7 @@
                         clientSavedAt: payload.clientSavedAt || Date.now()
                     }, { merge: true });
                 }
+                try { localStorage.setItem(`monitoring_last_cloud_save_ok_${targetSchoolId}`, String(Date.now())); } catch(e) {}
                 // تم حفظ البيانات الأساسية في Firebase بنجاح هنا.
                 // لا نحفظ snapshot مع كل تعديل لأن ذلك كان يسبب بطئًا شديدًا داخل المراقب الذكي.
                 if (options && options.saveSnapshot === true) {
@@ -527,6 +528,29 @@
         window.saveMonitoringStatePayloadNow = saveMonitoringStatePayloadNow;
         window.queueMonitoringStatePayloadSave = queueMonitoringStatePayloadSave;
         window.scheduleMonitoringStatePayloadSave = scheduleMonitoringStatePayloadSave;
+        async function flushPendingMonitoringPayloadSaveNow(options = {}) {
+            clearTimeout(monitoringPayloadDebounceTimer);
+            const next = monitoringPayloadDebounced;
+            monitoringPayloadDebounced = null;
+            if (next && next.payload) {
+                const mergedOptions = { ...(next.options || {}), ...options };
+                return await saveMonitoringStatePayloadNow(
+                    { ...(next.payload || {}), schoolId: mergedOptions.schoolId || next.payload.schoolId },
+                    mergedOptions
+                );
+            }
+            if (monitoringPayloadSaveQueued && monitoringPayloadSaveQueued.payload) {
+                const nextQueued = monitoringPayloadSaveQueued;
+                monitoringPayloadSaveQueued = null;
+                const mergedOptions = { ...(nextQueued.options || {}), ...options };
+                return await saveMonitoringStatePayloadNow(
+                    { ...(nextQueued.payload || {}), schoolId: mergedOptions.schoolId || nextQueued.payload.schoolId },
+                    mergedOptions
+                );
+            }
+            return false;
+        }
+        window.flushPendingMonitoringPayloadSaveNow = flushPendingMonitoringPayloadSaveNow;
         let __LAST_PARENT_MONITORING_MESSAGE_AT = 0;
         window.addEventListener('message', function(event) {
             try {
@@ -649,9 +673,10 @@
                 return false;
             }
         }
-        async function forceSaveMonitoringIframeNow() {
+        async function forceSaveMonitoringIframeNow(options = {}) {
             let ok = false;
             try {
+                const targetSchoolId = options.schoolId || window.currentSchoolId || window.__CONTROL_LAST_OPENED_SCHOOL_ID;
                 const app = getMonitoringIframeApp();
                 if (app) {
                     if (app.cloudSaveTimer) clearTimeout(app.cloudSaveTimer);
@@ -662,11 +687,12 @@
                         try { window.__LAST_MONITORING_STATE_STRING = JSON.stringify(state); } catch(e) {}
                         try {
                             const payloadSaved = await saveMonitoringStatePayloadNow({
+                                schoolId: targetSchoolId,
                                 state,
                                 teachers: Array.isArray(state.teachers) ? state.teachers : [],
                                 reason: 'force_iframe_state_before_logout',
                                 clientSavedAt: Date.now()
-                            }, { reason: 'force_iframe_state_before_logout' });
+                            }, { reason: 'force_iframe_state_before_logout', schoolId: targetSchoolId });
                             ok = ok || !!payloadSaved;
                         } catch(payloadErr) { console.warn('تعذر حفظ حالة iframe المباشرة قبل الخروج', payloadErr); }
                     }
@@ -681,8 +707,9 @@
             return ok;
         }
 
-        function flushMonitoringStateBeforeExit(reason = 'control_page_exit') {
+        async function flushMonitoringStateBeforeExit(reason = 'control_page_exit', options = {}) {
             try {
+                const targetSchoolId = options.schoolId || window.currentSchoolId || window.__CONTROL_LAST_OPENED_SCHOOL_ID;
                 const app = getMonitoringIframeApp();
                 let state = null;
                 if (app && typeof app.flushFastSave === 'function') {
@@ -693,11 +720,11 @@
                 } else if (window.__LAST_MONITORING_STATE_STRING) {
                     try { state = JSON.parse(window.__LAST_MONITORING_STATE_STRING); } catch(e) { state = null; }
                 }
-                if (!state || !window.currentSchoolId) return false;
+                if (!state || !targetSchoolId) return false;
                 const cleaned = cleanFirestoreValue(stripOldControlDerivedFieldsFromState(state));
                 const stateString = JSON.stringify(cleaned);
                 try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
-                try { localStorage.setItem(`monitoring_distribution_full_state_v4_${window.currentSchoolId}`, stateString); } catch(e) {}
+                try { localStorage.setItem(`monitoring_distribution_full_state_v4_${targetSchoolId}`, stateString); } catch(e) {}
                 try { window.__LAST_MONITORING_STATE_STRING = stateString; } catch(e) {}
                 try {
                     if (app && typeof app.syncControlBridgeData === 'function') {
@@ -706,12 +733,18 @@
                     }
                 } catch(e) {}
                 try {
-                    scheduleMonitoringStatePayloadSave({
+                    const payload = {
+                        schoolId: targetSchoolId,
                         state: cleaned,
                         teachers: Array.isArray(cleaned.teachers) ? cleaned.teachers : [],
                         reason,
                         clientSavedAt: Date.now()
-                    }, { reason });
+                    };
+                    if (options.saveCloudNow === true) {
+                        const saved = await saveMonitoringStatePayloadNow(payload, { reason, schoolId: targetSchoolId, throwOnError: !!options.throwOnError });
+                        return !!saved;
+                    }
+                    scheduleMonitoringStatePayloadSave(payload, { reason, schoolId: targetSchoolId });
                 } catch(e) {}
                 return true;
             } catch(e) {
@@ -1351,6 +1384,7 @@ async function openSchoolForUser(user) {
             if (window.__CONTROL_LOGOUT_RUNNING) return;
             window.__CONTROL_LOGOUT_RUNNING = true;
             window.__CONTROL_FAST_LOGOUT = true;
+            const logoutSchoolId = window.currentSchoolId || window.__CONTROL_LAST_OPENED_SCHOOL_ID;
 
             try {
                 localStorage.setItem(CONTROL_LOGOUT_FLAG_KEY, '1');
@@ -1364,12 +1398,23 @@ async function openSchoolForUser(user) {
                 clearTimeout(storageSaveTimer);
                 clearTimeout(monitoringAppSaveTimer);
                 clearTimeout(monitoringPayloadDebounceTimer);
-                try { flushMonitoringStateBeforeExit('control_logout_fast_flush'); } catch(innerErr) {}
+                try {
+                    await Promise.race([
+                        flushPendingMonitoringPayloadSaveNow({ reason: 'control_logout_flush_pending_payload', schoolId: logoutSchoolId }),
+                        new Promise(resolve => setTimeout(() => resolve(false), 1800))
+                    ]);
+                } catch(innerErr) {}
+                try {
+                    await Promise.race([
+                        flushMonitoringStateBeforeExit('control_logout_cloud_save', { saveCloudNow: true, schoolId: logoutSchoolId }),
+                        new Promise(resolve => setTimeout(() => resolve(false), 3500))
+                    ]);
+                } catch(innerErr) {}
                 try { flushMonitoringIframeToLocalStorage({ force: true }); } catch(innerErr) {}
                 try {
                     await Promise.race([
-                        forceSaveMonitoringIframeNow(),
-                        new Promise(resolve => setTimeout(resolve, 900))
+                        forceSaveMonitoringIframeNow({ schoolId: logoutSchoolId }),
+                        new Promise(resolve => setTimeout(resolve, 1800))
                     ]);
                 } catch(innerErr) {}
             } catch(e) {
