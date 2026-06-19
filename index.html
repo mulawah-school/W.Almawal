@@ -199,6 +199,7 @@
                     const key = localStorage.key(i);
                     if (!key) continue;
                     if (isProtectedSchool001StorageKey(key)) continue;
+                    if (/^monitoring_distribution_(full_state_v4|teachers_v2)_/.test(key)) continue;
                     if (patterns.some((p) => key.includes(p))) {
                         try { localStorage.removeItem(key); } catch(e) {}
                     }
@@ -384,10 +385,29 @@
                 }
                 if (!hasData) return false;
                 try {
-                    const stateString = JSON.stringify(stripOldControlDerivedFieldsFromState(data || {}));
+                    const cleanedCloudState = stripOldControlDerivedFieldsFromState(data || {});
+                    const scopedKey = `monitoring_distribution_full_state_v4_${schoolId}`;
+                    try {
+                        const localRaw = localStorage.getItem(scopedKey);
+                        if (localRaw) {
+                            const localState = JSON.parse(localRaw);
+                            const localMs = Number(localState?.clientSavedAt || Date.parse(localState?.updatedAtLocal || '') || 0);
+                            const cloudMs = Number(cleanedCloudState?.clientSavedAt || Date.parse(cleanedCloudState?.updatedAtLocal || '') || 0);
+                            if (localMs > cloudMs + 500) {
+                                Promise.resolve(saveMonitoringStatePayloadNow({
+                                    state: localState,
+                                    teachers: Array.isArray(localState.teachers) ? localState.teachers : [],
+                                    reason: 'restore_local_newer_monitoring_state',
+                                    clientSavedAt: localMs || Date.now()
+                                }, { reason: 'restore_local_newer_monitoring_state' })).catch(function(){});
+                                return true;
+                            }
+                        }
+                    } catch(localCompareErr) {}
+                    const stateString = JSON.stringify(cleanedCloudState);
                     purgeOldControlDerivedDataSmartOnly();
                     try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
-                    try { localStorage.setItem(`monitoring_distribution_full_state_v4_${schoolId}`, stateString); } catch(e) {}
+                    try { localStorage.setItem(scopedKey, stateString); } catch(e) {}
                 } catch(e) { console.warn('تعذر تجهيز بيانات المراقب الذكي محليًا', e); }
                 return true;
             } catch(e) {
@@ -443,7 +463,8 @@
             return true;
         }
         async function saveMonitoringStatePayloadNow(payload = {}, options = {}) {
-            if (!window.currentSchoolId) return false;
+            const targetSchoolId = window.currentSchoolId;
+            if (!targetSchoolId) return false;
             let state = payload && payload.state ? payload.state : payload;
             if (!state || typeof state !== 'object') return false;
             try {
@@ -451,10 +472,10 @@
                 state = cleanFirestoreValue(state);
                 const stateString = JSON.stringify(state);
                 try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
-                try { localStorage.setItem(`monitoring_distribution_full_state_v4_${window.currentSchoolId}`, stateString); } catch(e) {}
+                try { localStorage.setItem(`monitoring_distribution_full_state_v4_${targetSchoolId}`, stateString); } catch(e) {}
                 try { window.__LAST_MONITORING_STATE_STRING = stateString; } catch(e) {}
                 const nowIso = new Date().toISOString();
-                await setDoc(fbDoc(db, 'schools', window.currentSchoolId, 'monitoring', 'appData'), {
+                await setDoc(fbDoc(db, 'schools', targetSchoolId, 'monitoring', 'appData'), {
                     ...state,
                     updatedAt: serverTimestamp(),
                     updatedAtLocal: nowIso,
@@ -463,7 +484,7 @@
                 }, { merge: true });
                 const teachers = Array.isArray(state.teachers) ? state.teachers : (Array.isArray(payload.teachers) ? payload.teachers : null);
                 if (teachers) {
-                    await setDoc(fbDoc(db, 'schools', window.currentSchoolId, 'monitoring', 'teachers'), {
+                    await setDoc(fbDoc(db, 'schools', targetSchoolId, 'monitoring', 'teachers'), {
                         teachers: cleanFirestoreValue(teachers),
                         updatedAt: serverTimestamp(),
                         updatedAtLocal: nowIso,
@@ -659,6 +680,47 @@
             }
             return ok;
         }
+
+        function flushMonitoringStateBeforeExit(reason = 'control_page_exit') {
+            try {
+                const app = getMonitoringIframeApp();
+                let state = null;
+                if (app && typeof app.flushFastSave === 'function') {
+                    app.flushFastSave(reason);
+                }
+                if (app && typeof app.getSerializableState === 'function') {
+                    state = app.getSerializableState();
+                } else if (window.__LAST_MONITORING_STATE_STRING) {
+                    try { state = JSON.parse(window.__LAST_MONITORING_STATE_STRING); } catch(e) { state = null; }
+                }
+                if (!state || !window.currentSchoolId) return false;
+                const cleaned = cleanFirestoreValue(stripOldControlDerivedFieldsFromState(state));
+                const stateString = JSON.stringify(cleaned);
+                try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
+                try { localStorage.setItem(`monitoring_distribution_full_state_v4_${window.currentSchoolId}`, stateString); } catch(e) {}
+                try { window.__LAST_MONITORING_STATE_STRING = stateString; } catch(e) {}
+                try {
+                    if (app && typeof app.syncControlBridgeData === 'function') {
+                        const bridge = app.syncControlBridgeData({ force: true, reason });
+                        if (bridge) window.monitoringDistributionBridge = bridge;
+                    }
+                } catch(e) {}
+                try {
+                    scheduleMonitoringStatePayloadSave({
+                        state: cleaned,
+                        teachers: Array.isArray(cleaned.teachers) ? cleaned.teachers : [],
+                        reason,
+                        clientSavedAt: Date.now()
+                    }, { reason });
+                } catch(e) {}
+                return true;
+            } catch(e) {
+                return false;
+            }
+        }
+        window.flushMonitoringStateBeforeExit = flushMonitoringStateBeforeExit;
+        window.addEventListener('pagehide', () => flushMonitoringStateBeforeExit('control_pagehide'));
+        window.addEventListener('beforeunload', () => flushMonitoringStateBeforeExit('control_beforeunload'));
         async function saveSchoolLocalStorageNow(options = {}) {
             if (!window.currentSchoolId || restoringSchoolStorage) return false;
             if (options.flushIframe) flushMonitoringIframeToLocalStorage({ force: true });
@@ -1285,7 +1347,7 @@ async function openSchoolForUser(user) {
                 setLoginError('تعذر تسجيل الدخول: ' + (error.code || error.message));
             }
         };
-        window.logoutControlSystem = function() {
+        window.logoutControlSystem = async function() {
             if (window.__CONTROL_LOGOUT_RUNNING) return;
             window.__CONTROL_LOGOUT_RUNNING = true;
             window.__CONTROL_FAST_LOGOUT = true;
@@ -1297,13 +1359,19 @@ async function openSchoolForUser(user) {
                 sessionStorage.removeItem(CONTROL_TIMEOUT_FLAG_KEY);
             } catch(e) {}
 
-            try { clearOldControlMonitorData(); } catch(e) {}
-
             try {
                 setAuthStatus('جاري الخروج...', 'loading');
                 clearTimeout(storageSaveTimer);
                 clearTimeout(monitoringAppSaveTimer);
+                clearTimeout(monitoringPayloadDebounceTimer);
+                try { flushMonitoringStateBeforeExit('control_logout_fast_flush'); } catch(innerErr) {}
                 try { flushMonitoringIframeToLocalStorage({ force: true }); } catch(innerErr) {}
+                try {
+                    await Promise.race([
+                        forceSaveMonitoringIframeNow(),
+                        new Promise(resolve => setTimeout(resolve, 900))
+                    ]);
+                } catch(innerErr) {}
             } catch(e) {
                 console.warn('تعذر تجهيز الخروج السريع', e);
             }

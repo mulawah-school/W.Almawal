@@ -1170,13 +1170,13 @@
                         <div>
                             <label class="block text-xs font-bold text-slate-500 mb-2">عدد مراقبي الدور في كل فترة امتحان</label>
                             <div class="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 w-full shadow-sm">
-                                <button type="button" @click="if(smartSettings.floorObservers > 0) { smartSettings.floorObservers--; saveAppData(); runSmartDistribution(true); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
+                                <button type="button" @click="if(smartSettings.floorObservers > 0) { smartSettings.floorObservers--; saveAppData(); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
                                 <div class="flex-1 text-center flex items-center justify-center gap-2">
                                     <i class="fa-solid fa-users-viewfinder text-primary-500 text-lg"></i>
                                     <span class="font-extrabold text-lg text-slate-800 dark:text-white font-mono" x-text="1"></span>
                                     <span class="text-xs text-slate-400">مراقب دور</span>
                                 </div>
-                                <button type="button" @click="if(smartSettings.floorObservers < 5) { smartSettings.floorObservers++; saveAppData(); runSmartDistribution(true); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">+</button>
+                                <button type="button" @click="if(smartSettings.floorObservers < 5) { smartSettings.floorObservers++; saveAppData(); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">+</button>
                             </div>
                         </div>
 
@@ -1184,20 +1184,20 @@
                         <div>
                             <label class="block text-xs font-bold text-slate-500 mb-2">عدد مراقبي الاحتياط العام لكل فترة</label>
                             <div class="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 w-full shadow-sm">
-                                <button type="button" @click="if(smartSettings.backupObservers > 0) { smartSettings.backupObservers--; saveAppData(); runSmartDistribution(true); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
+                                <button type="button" @click="if(smartSettings.backupObservers > 0) { smartSettings.backupObservers--; saveAppData(); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
                                 <div class="flex-1 text-center flex items-center justify-center gap-2">
                                     <i class="fa-solid fa-circle-exclamation text-primary-500 text-lg"></i>
                                     <span class="font-extrabold text-lg text-slate-800 dark:text-white font-mono" x-text="2"></span>
                                     <span class="text-xs text-slate-400">احتياطي</span>
                                 </div>
-                                <button type="button" @click="if(smartSettings.backupObservers < 5) { smartSettings.backupObservers++; saveAppData(); runSmartDistribution(true); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">+</button>
+                                <button type="button" @click="if(smartSettings.backupObservers < 5) { smartSettings.backupObservers++; saveAppData(); }" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">+</button>
                             </div>
                         </div>
                     </div>
 
                     <div class="mt-4 p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
                         <label class="flex items-start gap-3 cursor-pointer select-none">
-                            <input type="checkbox" x-model="smartSettings.preventRepeatSameCommittee" @change="saveAppData(); runSmartDistribution(true)" class="mt-1 w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500">
+                            <input type="checkbox" x-model="smartSettings.preventRepeatSameCommittee" @change="saveAppData()" class="mt-1 w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500">
                             <div>
                                 <div class="text-sm font-extrabold text-slate-800 dark:text-white">عدم تكرار دخول المعلم لنفس اللجنة طوال الامتحانات</div>
                                 <p class="text-[11px] text-slate-500 mt-1 leading-5">عند تفعيل هذا الخيار يحاول النظام ألا يضع المعلم في نفس رقم القاعة/اللجنة أكثر من مرة خلال كل جدول الامتحانات، مع استمرار منع الجمع في نفس الفترة.</p>
@@ -2231,6 +2231,8 @@
                         teacherRestrictions: clone(this.teacherRestrictions),
                         smartSettings: { ...this.smartSettings },
                         whatsappSettings: { ...(this.whatsappSettings || {}) },
+                        clientSavedAt: this.__localLastSavedAt || Date.now(),
+                        updatedAtLocal: new Date(this.__localLastSavedAt || Date.now()).toISOString(),
                         // selectedDailyExamId عرض فقط ولا يحفظ حتى لا يسبب بطء عند تغيير التاريخ
                         selectedDailyExamId: '',
                         grade11OptionalRows: clone(this.grade11OptionalRows),
@@ -2426,6 +2428,17 @@
                     this.safeLocalSet(scopedTeachersKey, JSON.stringify(this.teachers));
                 },
 
+                readLocalSnapshotState() {
+                    try {
+                        const scopedAppKey = this.getScopedStorageKey(this.appStorageKey);
+                        if (!scopedAppKey) return null;
+                        const raw = localStorage.getItem(scopedAppKey);
+                        return raw ? JSON.parse(raw) : null;
+                    } catch(e) {
+                        return null;
+                    }
+                },
+
                 async loadCloudData() {
                     this.ensureParentFirebaseBridge();
                     if (this.isLoadingCloudData || this.cloudDataLoadedOnce) return;
@@ -2455,15 +2468,23 @@
                         const ref = doc(db, 'schools', window.currentSchoolId, 'monitoring', 'appData');
                         const snap = await getDoc(ref);
                         if (snap.exists()) {
-                            this.applyAppState(snap.data());
+                            const cloudState = snap.data() || {};
+                            const localState = this.readLocalSnapshotState();
+                            const localMs = Number(localState?.clientSavedAt || Date.parse(localState?.updatedAtLocal || '') || 0);
+                            const cloudMs = Number(cloudState?.clientSavedAt || Date.parse(cloudState?.updatedAtLocal || '') || 0);
+                            if (localState && localMs > cloudMs + 500) {
+                                this.applyAppState(localState);
+                                this.scheduleCloudSave(false);
+                            } else {
+                                this.applyAppState(cloudState);
+                            }
                             this.migrateLegacySubjectCountsToGrade11Optional();
                             this.ensureAllGrade11OptionalRows();
                             if (this.exams.length > 0 && (!this.selectedDailyExamId || !this.exams.some(e => e.id == this.selectedDailyExamId))) {
                                 this.selectedDailyExamId = this.exams[0].id;
                             }
                             this.safeSaveLocalSnapshot(this.getSerializableState());
-                            this.scheduleControlBridgeSync ? this.scheduleControlBridgeSync('deferred_sync') : this.syncControlBridgeData();
-                            if (this.exams.length > 0 && this.assignments.length === 0) this.runSmartDistribution(true);
+                            this.syncControlBridgeData({ force: true, reason: 'cloud_loaded' });
                             if (typeof window.updateCloudStatus === 'function') window.updateCloudStatus('متصل بالسحابة', 'success');
                         } else {
                             // يوزر/مدرسة جديدة: ننشئ بيانات افتراضية مستقلة لهذه المدرسة فقط.
@@ -2509,6 +2530,7 @@
                         return;
                     }
 
+                    this.__localLastSavedAt = Date.now();
                     this.__bridgeDataRevision = (Number(this.__bridgeDataRevision || 0) + 1);
                     const state = this.getSerializableState();
                     this.safeSaveLocalSnapshot(state);
@@ -2534,10 +2556,10 @@
                             clientSavedAt: Date.now()
                         };
                         try {
-                            if (typeof window.parent.queueMonitoringStatePayloadSave === 'function') {
-                                Promise.resolve(window.parent.queueMonitoringStatePayloadSave(parentPayload, { reason })).catch((err) => console.warn('تعذر حفظ بيانات المراقب الذكي عبر الكنترول', err));
-                            } else if (typeof window.parent.scheduleMonitoringStatePayloadSave === 'function') {
+                            if (typeof window.parent.scheduleMonitoringStatePayloadSave === 'function') {
                                 window.parent.scheduleMonitoringStatePayloadSave(parentPayload, { reason });
+                            } else if (typeof window.parent.queueMonitoringStatePayloadSave === 'function') {
+                                Promise.resolve(window.parent.queueMonitoringStatePayloadSave(parentPayload, { reason })).catch((err) => console.warn('تعذر حفظ بيانات المراقب الذكي عبر الكنترول', err));
                             } else {
                                 this.sendStateToParent(reason, state);
                             }
@@ -2561,6 +2583,50 @@
                     this._teacherSaveDebounceTimer = setTimeout(() => {
                         this.saveAppData({ ...options, immediate: true, reason: 'teachers_direct_edit' });
                     }, 120);
+                },
+
+                flushFastSave(reason = 'smart_monitor_fast_exit') {
+                    try {
+                        this.__localLastSavedAt = Date.now();
+                        this.__bridgeDataRevision = (Number(this.__bridgeDataRevision || 0) + 1);
+                        const state = this.getSerializableState();
+                        this.safeSaveLocalSnapshot(state);
+                        const bridgeData = this.syncControlBridgeData({ force: true, reason });
+                        if (window.parent && window.parent !== window) {
+                            try { window.parent.__LAST_MONITORING_STATE_STRING = JSON.stringify(state); } catch(e) {}
+                            try {
+                                if (bridgeData) {
+                                    window.parent.monitoringDistributionBridge = bridgeData;
+                                    window.parent.postMessage({ type: 'monitoring_control_bridge_v1', payload: bridgeData }, '*');
+                                }
+                            } catch(e) {}
+                            try {
+                                if (typeof window.parent.scheduleMonitoringStatePayloadSave === 'function') {
+                                    window.parent.scheduleMonitoringStatePayloadSave({
+                                        state: this.cleanForFirestore(state),
+                                        teachers: Array.isArray(state.teachers) ? state.teachers : [],
+                                        reason,
+                                        clientSavedAt: Date.now()
+                                    }, { reason });
+                                }
+                            } catch(e) {}
+                        }
+                        return true;
+                    } catch(e) {
+                        console.warn('تعذر تنفيذ الحفظ السريع للمراقب الذكي', e);
+                        return false;
+                    }
+                },
+
+                installFastExitSaveHandlers() {
+                    if (this.__fastExitSaveHandlersInstalled) return;
+                    this.__fastExitSaveHandlersInstalled = true;
+                    const flush = () => this.flushFastSave('smart_monitor_page_exit');
+                    window.addEventListener('pagehide', flush);
+                    window.addEventListener('beforeunload', flush);
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.visibilityState === 'hidden') flush();
+                    });
                 },
 
                 getCorrectionCommitteesForControl() {
@@ -2752,7 +2818,7 @@
                     }
 
                     // لا نشغل التوليد الناقص إلا عند عدم وجود أي توزيع.
-                    if ((!Array.isArray(this.assignments) || this.assignments.length === 0) && typeof this.ensureMissingObserverAssignments === 'function') {
+                    if (options.autoRepair === true && (!Array.isArray(this.assignments) || this.assignments.length === 0) && typeof this.ensureMissingObserverAssignments === 'function') {
                         this.ensureMissingObserverAssignments();
                     }
 
@@ -2803,6 +2869,7 @@
                 init() {
                     window.monitoringDistributionApp = this;
                     this.ensureParentFirebaseBridge();
+                    this.installFastExitSaveHandlers();
                     window.dispatchEvent(new Event('monitoring-app-ready'));
                     if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
                         this.darkMode = true;
@@ -2832,10 +2899,8 @@
                         }
 
                         // لا نعيد تشغيل التوزيع الذكي ولا الجسر الثقيل عند كل فتح أو تغيير تاريخ.
-                        if (!Array.isArray(this.assignments) || this.assignments.length === 0) {
-                            this.runSmartDistribution(true);
-                        } else if (typeof this.scheduleControlBridgeSync === 'function') {
-                            this.scheduleControlBridgeSync('init_existing_assignments');
+                        if (typeof this.syncControlBridgeData === 'function') {
+                            this.syncControlBridgeData({ force: true, reason: 'init_existing_data' });
                         }
                     }
                     if (!window.__SMART_CLOUD_LOAD_REQUESTED) {
@@ -3161,8 +3226,7 @@
                     this.ensureParentFirebaseBridge();
                     this.ensureAllGrade11OptionalRows();
                     this.saveAppData();
-                    const saved = await this.saveCloudDataNow(showMessage);
-                    if (this.exams && this.exams.length > 0) this.runSmartDistribution(true);
+                    if (showMessage) this.requestImmediateCloudSave(false);
                     if (showMessage) {
                         this.showToast(saved ? 'تم حفظ بيانات المواد الاختيارية في Firebase. الآن انتقل إلى جدول الاختبارات واختر المادة ثم الصف الحادي عشر.' : 'تم حفظ بيانات المواد الاختيارية محليًا وسيتم مزامنتها مع Firebase عند توفر الاتصال.');
                     }
@@ -3171,7 +3235,6 @@
                     this.grade11OptionalRows = {};
                     this.ensureAllGrade11OptionalRows();
                     this.saveAppData();
-                    if (this.exams && this.exams.length > 0) this.runSmartDistribution(true);
                     this.showToast('تم مسح أعداد المواد الاختيارية للصف الحادي عشر.', 'error');
                 },
                 getGrade11OptionalCount(classId, subject) {
@@ -3239,25 +3302,11 @@
                     this.ensureAllGrade12OptionalRows();
                     // حفظ سريع أثناء الكتابة: نحفظ محليًا ونحدث الجسر فورًا، ثم نؤجل الرفع السحابي حتى لا تتعطل الواجهة.
                     this.saveAppData();
-                    try { if (typeof this.syncControlBridgeData === 'function') this.scheduleControlBridgeSync ? this.scheduleControlBridgeSync('deferred_sync') : this.syncControlBridgeData(); } catch(e) {}
                     if (!showMessage) {
-                        try {
-                            const state = (typeof this.getSerializableState === 'function') ? this.getSerializableState() : null;
-                            if (window.parent && typeof window.parent.scheduleMonitoringStatePayloadSave === 'function' && state) {
-                                window.parent.scheduleMonitoringStatePayloadSave({
-                                    state,
-                                    teachers: Array.isArray(this.teachers) ? this.teachers : [],
-                                    reason: 'grade12_optional_fast_save',
-                                    clientSavedAt: Date.now()
-                                }, { reason: 'grade12_optional_fast_save' });
-                            } else if (window.parent && typeof window.parent.scheduleMonitoringAppDataSave === 'function') {
-                                window.parent.scheduleMonitoringAppDataSave();
-                            }
-                        } catch(e) {}
                         return true;
                     }
-                    const saved = await this.saveCloudDataNow(true);
-                    if (this.exams && this.exams.length > 0) this.runSmartDistribution(true);
+                    this.requestImmediateCloudSave(false);
+                    const saved = true;
                     this.showToast(saved ? 'تم حفظ بيانات المواد الاختيارية للصف الثاني عشر في Firebase. الآن انتقل إلى جدول الاختبارات واختر المادة ثم الصف الثاني عشر.' : 'تم حفظ بيانات مواد الصف الثاني عشر محليًا وسيتم مزامنتها مع Firebase عند توفر الاتصال.');
                     return !!saved;
                 },
@@ -3265,7 +3314,6 @@
                     this.grade12OptionalRows = {};
                     this.ensureAllGrade12OptionalRows();
                     this.saveAppData();
-                    if (this.exams && this.exams.length > 0) this.runSmartDistribution(true);
                     this.showToast('تم مسح أعداد المواد الاختيارية للصف الثاني عشر.', 'error');
                 },
                 getGrade12OptionalCount(classId, subject) {
@@ -3344,7 +3392,6 @@
                                 subjectCounts: JSON.parse(JSON.stringify(this.classForm.subjectCounts || {}))
                             };
                             this.saveAppData();
-                            this.runSmartDistribution(true);
                             this.showToast('تم تعديل الصف واللجنة بنجاح.');
                         }
                     } else {
@@ -3358,7 +3405,6 @@
                             subjectCounts: JSON.parse(JSON.stringify(this.classForm.subjectCounts || {}))
                         });
                         this.saveAppData();
-                        this.runSmartDistribution(true);
                         this.showToast('تم تسجيل الصف واللجنة المقابلة.');
                     }
                     this.resetClassForm();
@@ -3371,7 +3417,6 @@
                     this.exams = this.exams.map(e => ({ ...e, selectedClasses: e.selectedClasses.filter(clsId => clsId != id) }));
                     this.assignments = this.assignments.filter(a => a.classId != id);
                     this.saveAppData();
-                    this.runSmartDistribution(true);
                     this.showToast('تم حذف الصف واللجنة.', 'error');
                 },
                 startClassDrag(id) {
@@ -3397,7 +3442,6 @@
                     this.ensureAllGrade11OptionalRows();
                     this.saveAppData();
                     this.prepareControlBridgeData();
-                    this.runSmartDistribution(true);
                     this.showToast('تم تحديث ترتيب اللجان وحفظه بنجاح.');
                 },
                 endClassDrag() {
@@ -3861,7 +3905,6 @@
                         });
                     } catch (e) {}
                     this.saveAppData();
-                    this.runSmartDistribution(true);
                 },
                 deleteExam(id) {
                     if (this.examForm && this.examForm.id == id) this.resetExamForm();
@@ -3870,7 +3913,6 @@
                     this.refreshStatsExamSchedule();
                     if (this.selectedDailyExamId == id) this.selectedDailyExamId = this.exams.length ? this.exams[0].id : null;
                     this.saveAppData();
-                    this.runSmartDistribution(true);
                     this.showToast('تم حذف يوم الامتحان المستهدف.', 'error');
                 },
                 clearExams() {
@@ -4001,13 +4043,11 @@
                     });
                     this.subjectRestForm = { date: '', specialities: [] };
                     this.saveAppData();
-                    this.runSmartDistribution(true);
                     this.showToast('تمت إضافة استبعاد التخصصات المختارة بنجاح.');
                 },
                 deleteSubjectRestriction(id) {
                     this.subjectRestrictions = this.subjectRestrictions.filter(r => r.id !== id);
                     this.saveAppData();
-                    this.runSmartDistribution(true);
                     this.showToast('تم إزالة استبعاد التخصص.', 'error');
                 },
                 getSubjectRestrictionsGroupedByDate() {
@@ -4027,7 +4067,6 @@
                 deleteSubjectRestrictionsByDate(date) {
                     this.subjectRestrictions = (this.subjectRestrictions || []).filter(r => r.date !== date);
                     this.saveAppData();
-                    this.runSmartDistribution(true);
                     this.showToast('تم حذف جميع استثناءات المواد لهذا التاريخ.', 'error');
                 },
                 addTeacherRestriction() {
@@ -4051,13 +4090,11 @@
                     });
                     this.teacherRestForm = { date: '', teacherIds: [], reason: '' };
                     this.saveAppData();
-                    this.runSmartDistribution(true);
                     this.showToast('تم استبعاد المعلمين المختارين بالتاريخ بنجاح.');
                 },
                 deleteTeacherRestriction(id) {
                     this.teacherRestrictions = this.teacherRestrictions.filter(r => r.id !== id);
                     this.saveAppData();
-                    this.runSmartDistribution(true);
                     this.showToast('تم إزالة شرط الاستبعاد للفرد.', 'error');
                 },
 
