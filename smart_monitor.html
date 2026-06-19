@@ -1791,6 +1791,10 @@
                     <i class="fa-solid fa-unlock-keyhole"></i>
                     <span>فتح الإعدادات</span>
                 </button>
+                <button type="button" x-show="whatsappSettingsUnlocked && hasWhatsAppSettings()" @click="clearWhatsAppSettings()" class="px-4 py-2 rounded-lg text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:text-red-300 dark:hover:bg-red-950/40 flex items-center gap-2">
+                    <i class="fa-solid fa-trash-can"></i>
+                    <span>حذف الإعدادات</span>
+                </button>
                 <button type="button" x-show="whatsappSettingsUnlocked" @click="saveWhatsAppSettings()" class="bg-gradient-to-r from-green-600 to-emerald-500 text-white px-5 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
                     <i class="fa-solid fa-floppy-disk"></i>
                     <span>حفظ إعدادات الواتساب</span>
@@ -5194,12 +5198,35 @@
                     this.showToast('تم حفظ إعدادات الواتساب بنجاح.');
                     this.closeWhatsAppSettingsModal();
                 },
+                clearWhatsAppSettings() {
+                    this.whatsappSettings = { instanceId: '', token: '' };
+                    this.saveAppData({ silent: true, reason: 'whatsapp_settings_cleared' });
+                    this.showToast('تم حذف إعدادات UltraMsg. سيتم استخدام واتساب ويب.');
+                    this.closeWhatsAppSettingsModal();
+                },
                 cleanWhatsAppPhone(phone) {
                     return String(phone || '').replace(/[^\d]/g, '');
                 },
+                openWhatsAppWeb(phone, message) {
+                    const cleanedPhone = this.cleanWhatsAppPhone(phone);
+                    if (!cleanedPhone) {
+                        this.showToast('رقم الهاتف غير صالح للإرسال عبر واتساب.', 'error');
+                        return false;
+                    }
+                    const waUrl = `https://api.whatsapp.com/send?phone=${cleanedPhone}&text=${encodeURIComponent(message || '')}`;
+                    const openedWindow = window.open(waUrl, '_blank');
+                    return !!openedWindow;
+                },
+                async sendWhatsAppMessage(phone, message) {
+                    if (this.hasWhatsAppSettings()) {
+                        return this.sendUltraMsgWhatsApp(phone, message);
+                    }
+                    const opened = this.openWhatsAppWeb(phone, message);
+                    if (!opened) throw new Error('missing_phone');
+                    return { webFallback: true };
+                },
                 async sendUltraMsgWhatsApp(phone, message) {
                     if (!this.hasWhatsAppSettings()) {
-                        this.openWhatsAppSettingsModal();
                         throw new Error('whatsapp_settings_missing');
                     }
                     const to = this.cleanWhatsAppPhone(phone);
@@ -5221,11 +5248,6 @@
 
                 // Global WhatsApp batch sender controller
                 openBatchWhatsAppModal(examIdOrDate) {
-                    if (!this.hasWhatsAppSettings()) {
-                        this.showToast('يرجى حفظ إعدادات الواتساب أولاً.', 'error');
-                        this.openWhatsAppSettingsModal();
-                        return;
-                    }
                     const date = this.getSelectedDailyDate() || String(examIdOrDate || '');
                     if (!date) {
                         this.showToast('الرجاء تحديد يوم اختبار أولاً', 'error');
@@ -5288,11 +5310,7 @@
                 // Batch sequential processor
                 async startBatchWhatsAppProcess() {
                     if (this.batchQueue.length === 0) return;
-                    if (!this.hasWhatsAppSettings()) {
-                        this.showToast('يرجى حفظ إعدادات الواتساب أولاً.', 'error');
-                        this.openWhatsAppSettingsModal();
-                        return;
-                    }
+                    const usingWhatsAppWeb = !this.hasWhatsAppSettings();
 
                     this.batchSending = true;
                     this.batchProgress = 0;
@@ -5301,15 +5319,42 @@
                     let successCount = 0;
                     let failedCount = 0;
 
+                    if (usingWhatsAppWeb) {
+                        for (let currentIndex = 0; currentIndex < total; currentIndex++) {
+                            const currentItem = this.batchQueue[currentIndex];
+                            currentItem.status = 'sending';
+                            try {
+                                const opened = this.openWhatsAppWeb(currentItem.teacherPhone, currentItem.message);
+                                if (!opened) throw new Error('whatsapp_web_popup_blocked');
+                                currentItem.status = 'success';
+                                successCount++;
+                            } catch (error) {
+                                console.warn('WhatsApp Web send failed', error);
+                                currentItem.status = 'failed';
+                                failedCount++;
+                            }
+                            this.batchProgress = ((currentIndex + 1) / total) * 100;
+                        }
+
+                        this.batchSending = false;
+                        this.batchProgress = 100;
+                        if (failedCount) {
+                            this.showToast(`تم فتح ${successCount} رسالة وتعذر فتح ${failedCount}.`, 'error');
+                        } else {
+                            this.showToast('تم فتح واتساب ويب لرسائل المراقبين. أرسل كل رسالة من النوافذ المفتوحة.');
+                        }
+                        return;
+                    }
+
                     for (let currentIndex = 0; currentIndex < total; currentIndex++) {
                         const currentItem = this.batchQueue[currentIndex];
                         currentItem.status = 'sending';
                         try {
-                            await this.sendUltraMsgWhatsApp(currentItem.teacherPhone, currentItem.message);
+                            await this.sendWhatsAppMessage(currentItem.teacherPhone, currentItem.message);
                             currentItem.status = 'success';
                             successCount++;
                         } catch (error) {
-                            console.warn('UltraMsg send failed', error);
+                            console.warn('WhatsApp send failed', error);
                             currentItem.status = 'failed';
                             failedCount++;
                         }
@@ -5350,23 +5395,22 @@
                     });
                 },
 
-                // Trigger individual WhatsApp message through UltraMsg
+                // Trigger individual WhatsApp message through UltraMsg or WhatsApp Web
                 async sendWhatsAppNotification(assign) {
-                    if (!this.hasWhatsAppSettings()) {
-                        this.showToast('يرجى حفظ إعدادات الواتساب أولاً.', 'error');
-                        this.openWhatsAppSettingsModal();
-                        return;
-                    }
                     const exam = this.exams.find(e => e.id == assign.examId) || this.getSelectedDailyExams()[0];
                     if (!exam) return;
 
                     const msg = `الأستاذ الفاضل/ة: ${assign.teacherName}. نود إبلاغكم بأنه تم تكليفكم بمراقبة اختبار (${exam.subject}) فترة ${exam.period} اليوم في ${assign.className} - لجنة: ${assign.committeeName}. بالتوفيق.`;
                     try {
-                        await this.sendUltraMsgWhatsApp(assign.teacherPhone, msg);
-                        this.showToast(`تم إرسال رسالة واتساب للمعلم ${assign.teacherName}.`);
+                        const result = await this.sendWhatsAppMessage(assign.teacherPhone, msg);
+                        if (result && result.webFallback) {
+                            this.showToast(`تم فتح واتساب ويب للمعلم ${assign.teacherName}.`);
+                        } else {
+                            this.showToast(`تم إرسال رسالة واتساب للمعلم ${assign.teacherName}.`);
+                        }
                     } catch (error) {
-                        console.warn('UltraMsg individual send failed', error);
-                        this.showToast(`تعذر إرسال واتساب للمعلم ${assign.teacherName}. راجع إعدادات الواتساب أو رقم الهاتف.`, 'error');
+                        console.warn('WhatsApp individual send failed', error);
+                        this.showToast(`تعذر إرسال واتساب للمعلم ${assign.teacherName}. راجع رقم الهاتف أو إعدادات الواتساب.`, 'error');
                     }
                 },
 
