@@ -2428,8 +2428,23 @@
                 safeSaveLocalSnapshot(state) {
                     const scopedAppKey = this.getScopedStorageKey(this.appStorageKey);
                     const scopedTeachersKey = this.getScopedStorageKey(this.teachersStorageKey);
-                    this.safeLocalSet(scopedAppKey, JSON.stringify(state || this.getSerializableState()));
+                    const snapshot = state || this.getSerializableState();
+                    const snapshotString = JSON.stringify(snapshot);
+                    this.safeLocalSet(scopedAppKey, snapshotString);
                     this.safeLocalSet(scopedTeachersKey, JSON.stringify(this.teachers));
+                    if (window.currentSchoolId) {
+                        this.safeLocalSet(`monitoring_pending_cloud_state_${window.currentSchoolId}`, snapshotString);
+                    }
+                    try { window.__LAST_MONITORING_STATE_STRING = snapshotString; } catch(e) {}
+                    try {
+                        if (window.parent && window.parent !== window) {
+                            window.parent.__LAST_MONITORING_STATE_STRING = snapshotString;
+                            if (window.currentSchoolId && window.parent.localStorage) {
+                                window.parent.localStorage.setItem(`monitoring_distribution_full_state_v4_${window.currentSchoolId}`, snapshotString);
+                                window.parent.localStorage.setItem(`monitoring_pending_cloud_state_${window.currentSchoolId}`, snapshotString);
+                            }
+                        }
+                    } catch(e) {}
                 },
 
                 readLocalSnapshotState() {
@@ -2561,10 +2576,10 @@
                             clientSavedAt: Date.now()
                         };
                         try {
-                            if (typeof window.parent.scheduleMonitoringStatePayloadSave === 'function') {
-                                window.parent.scheduleMonitoringStatePayloadSave(parentPayload, { reason, schoolId: window.currentSchoolId || '' });
-                            } else if (typeof window.parent.queueMonitoringStatePayloadSave === 'function') {
+                            if (typeof window.parent.queueMonitoringStatePayloadSave === 'function') {
                                 Promise.resolve(window.parent.queueMonitoringStatePayloadSave(parentPayload, { reason, schoolId: window.currentSchoolId || '' })).catch((err) => console.warn('تعذر حفظ بيانات المراقب الذكي عبر الكنترول', err));
+                            } else if (typeof window.parent.scheduleMonitoringStatePayloadSave === 'function') {
+                                window.parent.scheduleMonitoringStatePayloadSave(parentPayload, { reason, schoolId: window.currentSchoolId || '' });
                             } else {
                                 this.sendStateToParent(reason, state);
                             }
@@ -2585,9 +2600,7 @@
                 saveTeachers(options = {}) {
                     // حفظ معلمي المراقب الذكي بعد آخر تغيير فقط، بدلاً من ثلاث عمليات حفظ كاملة متتابعة.
                     clearTimeout(this._teacherSaveDebounceTimer);
-                    this._teacherSaveDebounceTimer = setTimeout(() => {
-                        this.saveAppData({ ...options, immediate: true, reason: 'teachers_direct_edit' });
-                    }, 120);
+                    this.saveAppData({ ...options, immediate: true, reason: 'teachers_direct_edit' });
                 },
 
                 flushFastSave(reason = 'smart_monitor_fast_exit') {
@@ -2606,14 +2619,17 @@
                                 }
                             } catch(e) {}
                             try {
-                                if (typeof window.parent.scheduleMonitoringStatePayloadSave === 'function') {
-                                    window.parent.scheduleMonitoringStatePayloadSave({
+                                const fastPayload = {
                                         schoolId: window.currentSchoolId || '',
                                         state: this.cleanForFirestore(state),
                                         teachers: Array.isArray(state.teachers) ? state.teachers : [],
                                         reason,
                                         clientSavedAt: Date.now()
-                                    }, { reason, schoolId: window.currentSchoolId || '' });
+                                    };
+                                if (typeof window.parent.queueMonitoringStatePayloadSave === 'function') {
+                                    Promise.resolve(window.parent.queueMonitoringStatePayloadSave(fastPayload, { reason, schoolId: window.currentSchoolId || '' })).catch(function(){});
+                                } else if (typeof window.parent.scheduleMonitoringStatePayloadSave === 'function') {
+                                    window.parent.scheduleMonitoringStatePayloadSave(fastPayload, { reason, schoolId: window.currentSchoolId || '' });
                                 }
                             } catch(e) {}
                         }
@@ -3231,11 +3247,14 @@
                 async saveGrade11OptionalData(showMessage = true) {
                     this.ensureParentFirebaseBridge();
                     this.ensureAllGrade11OptionalRows();
-                    this.saveAppData();
-                    if (showMessage) this.requestImmediateCloudSave(false);
+                    this.saveAppData({ reason: 'grade11_optional_saved' });
+                    if (!showMessage) return true;
+                    this.requestImmediateCloudSave(false);
+                    const saved = true;
                     if (showMessage) {
                         this.showToast(saved ? 'تم حفظ بيانات المواد الاختيارية في Firebase. الآن انتقل إلى جدول الاختبارات واختر المادة ثم الصف الحادي عشر.' : 'تم حفظ بيانات المواد الاختيارية محليًا وسيتم مزامنتها مع Firebase عند توفر الاتصال.');
                     }
+                    return !!saved;
                 },
                 clearGrade11OptionalData() {
                     this.grade11OptionalRows = {};
