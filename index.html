@@ -200,6 +200,7 @@
                     if (!key) continue;
                     if (isProtectedSchool001StorageKey(key)) continue;
                     if (/^monitoring_distribution_(full_state_v4|teachers_v2)_/.test(key)) continue;
+                    if (/^monitoring_pending_cloud_state_/.test(key)) continue;
                     if (patterns.some((p) => key.includes(p))) {
                         try { localStorage.removeItem(key); } catch(e) {}
                     }
@@ -327,6 +328,7 @@
                 for (let i = 0; i < localStorage.length; i++) {
                     const k = localStorage.key(i);
                     if (isProtectedSchool001StorageKey(k) || String(k || '').startsWith(CONTROL_LOCAL_BACKUP_PREFIX)) continue;
+                    if (/^monitoring_pending_cloud_state_/.test(String(k || ''))) continue;
                     if (/^(monitoring_|savedExamDate$|control_bridge_|exam_sessions_|exam_envelopes_|exam_daily_notes_|exam_proctoring_extra_|exam_second_period_proctoring_|exam_individual_absentee_|exam_violation_|exam_signatures_|exam_signature_deletes_)/.test(k || '') || k === 'exam_control_committee_signatures_global' || k === 'monitoring_control_bridge_v1' || k === 'control_proctoring_clean_version') keys.push(k);
                 }
                 keys.forEach(k => localStorage.removeItem(k));
@@ -356,6 +358,23 @@
             return restored;
         }
 
+        function getMonitoringStateTimeFromRaw(raw) {
+            try {
+                if (!raw) return 0;
+                const parsed = JSON.parse(raw);
+                return Number(parsed?.clientSavedAt || Date.parse(parsed?.updatedAtLocal || '') || 0);
+            } catch(e) {
+                return 0;
+            }
+        }
+
+        function chooseNewestMonitoringStateRaw(...rawValues) {
+            return rawValues
+                .filter(Boolean)
+                .map(raw => ({ raw, time: getMonitoringStateTimeFromRaw(raw) }))
+                .sort((a, b) => b.time - a.time)[0]?.raw || null;
+        }
+
         async function restoreMonitoringAppDataFromCloud(schoolId) {
             if (!schoolId) return false;
             if (CONTROL_DEFAULT_ONLY_SCHOOL_IDS.has(normalizeSchoolUserId(schoolId))) return false;
@@ -383,12 +402,42 @@
                 } catch(innerTeachersErr) {
                     console.warn('تعذر قراءة نسخة المعلمين المباشرة من Firebase', innerTeachersErr);
                 }
-                if (!hasData) return false;
+                if (!hasData) {
+                    try {
+                        const scopedKey = `monitoring_distribution_full_state_v4_${schoolId}`;
+                        const pendingKey = `monitoring_pending_cloud_state_${schoolId}`;
+                        const localRaw = chooseNewestMonitoringStateRaw(
+                            localStorage.getItem(pendingKey),
+                            localStorage.getItem(scopedKey)
+                        );
+                        if (localRaw) {
+                            const localState = stripOldControlDerivedFieldsFromState(JSON.parse(localRaw));
+                            const stateString = JSON.stringify(localState);
+                            try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
+                            try { localStorage.setItem(scopedKey, stateString); } catch(e) {}
+                            try { window.__LAST_MONITORING_STATE_STRING = stateString; } catch(e) {}
+                            Promise.resolve(saveMonitoringStatePayloadNow({
+                                schoolId,
+                                state: localState,
+                                teachers: Array.isArray(localState.teachers) ? localState.teachers : [],
+                                reason: 'restore_pending_local_monitoring_state_without_cloud',
+                                clientSavedAt: Number(localState?.clientSavedAt || Date.now())
+                            }, { reason: 'restore_pending_local_monitoring_state_without_cloud', schoolId })).catch(function(){});
+                            return true;
+                        }
+                    } catch(localOnlyRestoreErr) {
+                        console.warn('تعذر استرجاع نسخة المراقب الذكي المحلية عند عدم وجود بيانات سحابية', localOnlyRestoreErr);
+                    }
+                    return false;
+                }
                 try {
                     const cleanedCloudState = stripOldControlDerivedFieldsFromState(data || {});
                     const scopedKey = `monitoring_distribution_full_state_v4_${schoolId}`;
                     try {
-                        const localRaw = localStorage.getItem(scopedKey);
+                        const localRaw = chooseNewestMonitoringStateRaw(
+                            localStorage.getItem(`monitoring_pending_cloud_state_${schoolId}`),
+                            localStorage.getItem(scopedKey)
+                        );
                         if (localRaw) {
                             const localState = JSON.parse(localRaw);
                             const localMs = Number(localState?.clientSavedAt || Date.parse(localState?.updatedAtLocal || '') || 0);
@@ -438,6 +487,32 @@
             return String(value || '');
         }
 
+        async function saveMonitoringSnapshotForState(targetSchoolId, stateString, state = {}, options = {}) {
+            if (!targetSchoolId || !stateString) return false;
+            try {
+                const nowIso = options.updatedAtLocal || new Date().toISOString();
+                const items = {
+                    [`monitoring_distribution_full_state_v4_${targetSchoolId}`]: stateString,
+                    [`monitoring_pending_cloud_state_${targetSchoolId}`]: stateString
+                };
+                if (Array.isArray(state.teachers)) {
+                    items[`monitoring_distribution_teachers_v2_${targetSchoolId}`] = JSON.stringify(cleanFirestoreValue(state.teachers));
+                }
+                await setDoc(fbDoc(db, 'schools', targetSchoolId, 'controlLocalStorage', 'snapshot'), {
+                    items,
+                    updatedAt: serverTimestamp(),
+                    updatedAtLocal: nowIso,
+                    monitoringAppDataPath: `schools/${targetSchoolId}/monitoring/appData`,
+                    monitoringSnapshotSyncedAtLocal: nowIso,
+                    monitoringSnapshotClientSavedAt: Number(options.clientSavedAt || state?.clientSavedAt || Date.now())
+                }, { merge: true });
+                return true;
+            } catch(e) {
+                console.warn('تعذر تحديث نسخة snapshot الخاصة ببيانات المراقب الذكي في Firebase', e);
+                return false;
+            }
+        }
+
         let monitoringAppSaveTimer = null;
         let monitoringImmediateSaveInFlight = false;
         let monitoringImmediateSaveQueued = false;
@@ -463,7 +538,7 @@
                 const next = monitoringPayloadDebounced;
                 monitoringPayloadDebounced = null;
                 if (next) queueMonitoringStatePayloadSave(next.payload, next.options || {});
-            }, 1000);
+            }, 250);
             return true;
         }
         async function saveMonitoringStatePayloadNow(payload = {}, options = {}) {
@@ -477,6 +552,7 @@
                 const stateString = JSON.stringify(state);
                 try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
                 try { localStorage.setItem(`monitoring_distribution_full_state_v4_${targetSchoolId}`, stateString); } catch(e) {}
+                try { localStorage.setItem(`monitoring_pending_cloud_state_${targetSchoolId}`, stateString); } catch(e) {}
                 try { window.__LAST_MONITORING_STATE_STRING = stateString; } catch(e) {}
                 const nowIso = new Date().toISOString();
                 await setDoc(fbDoc(db, 'schools', targetSchoolId, 'monitoring', 'appData'), {
@@ -497,7 +573,12 @@
                         clientSavedAt: payload.clientSavedAt || Date.now()
                     }, { merge: true });
                 }
+                await saveMonitoringSnapshotForState(targetSchoolId, stateString, state, {
+                    updatedAtLocal: nowIso,
+                    clientSavedAt: payload.clientSavedAt || state?.clientSavedAt || Date.now()
+                });
                 try { localStorage.setItem(`monitoring_last_cloud_save_ok_${targetSchoolId}`, String(Date.now())); } catch(e) {}
+                try { localStorage.removeItem(`monitoring_pending_cloud_state_${targetSchoolId}`); } catch(e) {}
                 // تم حفظ البيانات الأساسية في Firebase بنجاح هنا.
                 // لا نحفظ snapshot مع كل تعديل لأن ذلك كان يسبب بطئًا شديدًا داخل المراقب الذكي.
                 if (options && options.saveSnapshot === true) {
@@ -643,7 +724,7 @@
             // حفظ سريع لكن غير مزعج: نؤجل الرفع ثانية واحدة ونحفظ آخر نسخة فقط.
             if (!window.currentSchoolId) return;
             clearTimeout(monitoringAppSaveTimer);
-            monitoringAppSaveTimer = setTimeout(() => runImmediateMonitoringSave('debounced_scheduled_from_smart_monitor'), 1000);
+            monitoringAppSaveTimer = setTimeout(() => runImmediateMonitoringSave('debounced_scheduled_from_smart_monitor'), 300);
         };
         window.saveMonitoringAppDataNow = saveMonitoringAppDataNow;
         window.runImmediateMonitoringSave = runImmediateMonitoringSave;
@@ -1052,6 +1133,7 @@
         function clearMonitoringKeysForFreshUser(currentSchoolId) {
             try {
                 const keepKey = currentSchoolId ? ('monitoring_distribution_full_state_v4_' + currentSchoolId) : '';
+                const keepPendingKey = currentSchoolId ? ('monitoring_pending_cloud_state_' + currentSchoolId) : '';
                 const removePatterns = [
                     /^monitoring_distribution_full_state_v4$/,
                     /^monitoring_distribution_full_state_v4_/,
@@ -1076,7 +1158,12 @@
                 for (let i = 0; i < localStorage.length; i++) {
                     const key = localStorage.key(i) || '';
                     if (keepKey && key === keepKey) continue;
+                    if (keepPendingKey && key === keepPendingKey) continue;
                     if (isProtectedSchool001StorageKey(key)) continue;
+                    if (/^monitoring_pending_cloud_state_/.test(key)) {
+                        toRemove.push(key);
+                        continue;
+                    }
                     if (removePatterns.some((r) => r.test(key))) toRemove.push(key);
                 }
 
@@ -1133,6 +1220,7 @@
                 try { localStorage.removeItem('monitoring_distribution_full_state_v4'); } catch(e) {}
                 try { localStorage.removeItem('monitoring_distribution_full_state_v4_' + currentSchoolId); } catch(e) {}
                 try { localStorage.removeItem('monitoring_distribution_teachers_v2_' + currentSchoolId); } catch(e) {}
+                try { localStorage.removeItem('monitoring_pending_cloud_state_' + currentSchoolId); } catch(e) {}
                 clearMonitoringKeysForFreshUser(currentSchoolId);
                 return prepareCleanDefaultMonitoringStateForNewUser(currentSchoolId, true);
             } catch(e) {
@@ -1171,6 +1259,7 @@
                 const currentSchoolId = window.currentSchoolId || '';
                 const allowedSmartKey = currentSchoolId ? ('monitoring_distribution_full_state_v4_' + currentSchoolId) : '';
                 const allowedDemoKey = currentSchoolId === 'demo_school' ? 'monitoring_distribution_full_state_v4_demo_school' : '';
+                const allowedPendingKey = currentSchoolId ? ('monitoring_pending_cloud_state_' + currentSchoolId) : '';
 
                 const oldControlPatterns = [
                     /^monitoring_distribution_full_state_v4$/,
@@ -1206,8 +1295,14 @@
                 for (let i = 0; i < localStorage.length; i++) {
                     const key = localStorage.key(i) || '';
                     if (key === allowedSmartKey || key === allowedDemoKey) continue;
+                    if (allowedPendingKey && key === allowedPendingKey) continue;
                     if (isProtectedSchool001StorageKey(key)) continue;
                     if (key.startsWith(CONTROL_LOCAL_BACKUP_PREFIX)) continue;
+
+                    if (/^monitoring_pending_cloud_state_/.test(key)) {
+                        toRemove.push(key);
+                        continue;
+                    }
 
                     if (/^monitoring_distribution_full_state_v4_/.test(key) && key !== allowedSmartKey && key !== allowedDemoKey) {
                         toRemove.push(key);
@@ -3676,6 +3771,87 @@ const getAllTeacherNamesFromSmartBridge = () => {
     });
     return names;
 };
+const normalizeReceivingSubjectText = (value) => normalizeArabicText(value)
+    .replace(/[\u064B-\u0652]/g, '')
+    .replace(/[إأآٱ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/ـ/g, '')
+    .replace(/\b(معلم|معلمه|معلمة|اول|أول|رئيس|تخصص|ماده|مادة)\b/g, ' ')
+    .replace(/[^\u0600-\u06FFa-zA-Z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+const getReceivingSubjectGroupKey = (value) => {
+    const text = normalizeReceivingSubjectText(value);
+    if (!text)
+        return '';
+    if (text.includes('رياضيات'))
+        return 'math';
+    if (text.includes('اسلام'))
+        return 'islamic';
+    if (text.includes('عربي') || text.includes('اللغه العربيه'))
+        return 'arabic';
+    if (text.includes('انجليزي') || text.includes('انكليزي') || text.includes('english'))
+        return 'english';
+    if (text.includes('كيمياء'))
+        return 'chemistry';
+    if (text.includes('فيزياء'))
+        return 'physics';
+    if (text.includes('احياء') || text.includes('بيولوج'))
+        return 'biology';
+    if (text.includes('علوم'))
+        return 'science';
+    if (text.includes('دراسات') || text.includes('اجتماعي') || text.includes('تاريخ') || text.includes('جغرافيا'))
+        return 'social';
+    return text;
+};
+const getSubjectTeacherNamesFromSmartBridge = (subject, currentValue = '') => {
+    const bridge = getStoredSmartBridge();
+    const teachers = Array.isArray(bridge === null || bridge === void 0 ? void 0 : bridge.teachers) ? bridge.teachers : [];
+    const subjectText = normalizeReceivingSubjectText(subject);
+    const subjectGroup = getReceivingSubjectGroupKey(subject);
+    const selected = String(currentValue || '').trim();
+    const names = [];
+    const seen = new Set();
+    const addName = (name) => {
+        const clean = String(name || '').trim();
+        const key = normalizeControlMemberNameKey(clean);
+        if (!key || seen.has(key))
+            return;
+        seen.add(key);
+        names.push(clean);
+    };
+    teachers.forEach((teacher) => {
+        const name = String((teacher === null || teacher === void 0 ? void 0 : teacher.name) || '').trim();
+        if (!name)
+            return;
+        if (teacher && teacher.inControl && !teacher.isFirstTeacher)
+            return;
+        const teacherSubject = [
+            teacher === null || teacher === void 0 ? void 0 : teacher.correctionSpeciality,
+            teacher === null || teacher === void 0 ? void 0 : teacher.correctionSubject,
+            teacher === null || teacher === void 0 ? void 0 : teacher.speciality,
+            teacher === null || teacher === void 0 ? void 0 : teacher.specialization,
+            teacher === null || teacher === void 0 ? void 0 : teacher.subject,
+            teacher === null || teacher === void 0 ? void 0 : teacher.major
+        ].filter(Boolean).join(' ');
+        const teacherText = normalizeReceivingSubjectText(teacherSubject);
+        const teacherGroup = getReceivingSubjectGroupKey(teacherSubject);
+        if (!subjectText || !teacherText)
+            return;
+        const directMatch = teacherText.includes(subjectText) || subjectText.includes(teacherText);
+        const groupMatch = subjectGroup && teacherGroup && (
+            subjectGroup === teacherGroup ||
+            (['chemistry', 'physics', 'biology'].includes(subjectGroup) && teacherGroup === 'science')
+        );
+        if (directMatch || groupMatch)
+            addName(name);
+    });
+    if (selected)
+        addName(selected);
+    return names.sort((a, b) => String(a).localeCompare(String(b), 'ar'));
+};
 const getUniqueControlMembers = (count = 5, excludeNames = []) => {
     const excluded = new Set((excludeNames || []).map(normalizeControlMemberNameKey).filter(Boolean));
     const names = [];
@@ -4726,7 +4902,6 @@ const ReceivingForm = ({ mode = 'current', filteredSessions, sessionsData, updat
     const firstPeriodRows = (filteredSessions || []).filter(row => row.period !== "الفترة الثانية");
     const secondPeriodRows = (filteredSessions || []).filter(row => row.period === "الفترة الثانية");
     const correctionRows = [...firstPeriodRows, ...secondPeriodRows];
-    const teacherNames = getAllTeacherNamesFromSmartBridge();
     const controlMemberNames = getControlMemberNames();
     const getSessionIndex = (row) => sessionsData.findIndex(s => s.id === row.id);
     const getSessionValue = (row, field, fallback = '') => {
@@ -4797,7 +4972,7 @@ const ReceivingForm = ({ mode = 'current', filteredSessions, sessionsData, updat
                     React.createElement("td", { className: "border-r border-black p-0 w-16" },
                         React.createElement("input", { type: "text", value: getReceivingAbsentAdults(sessionsData[origIdx]), onChange: (e) => updateSessionField(origIdx, 'absentAdults', e.target.value), className: "w-full p-2 outline-none text-center bg-transparent border-none text-rose-600 " })),
                     React.createElement("td", { className: "border-r border-black p-0" },
-                        React.createElement("select", { value: getSessionValue(row, 'receiver', ''), onChange: (e) => setSessionValue(row, 'receiver', e.target.value), className: "w-full p-2 outline-none text-right bg-transparent border-none" },
+                        React.createElement("select", { value: getSessionValue(row, 'receiver', ''), onMouseDown: (e) => e.stopPropagation(), onClick: (e) => e.stopPropagation(), onChange: (e) => setSessionValue(row, 'receiver', e.target.value), className: "w-full p-2 outline-none text-right bg-transparent border-none" },
                             React.createElement("option", { value: "" }, "\u0627\u062E\u062A\u0631 \u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u0644\u0645"),
                             controlMemberNames.map((memberName) => React.createElement("option", { key: memberName, value: memberName }, memberName)))),
                     React.createElement("td", { className: "p-1 w-28" }, (() => {
@@ -4832,6 +5007,8 @@ const ReceivingForm = ({ mode = 'current', filteredSessions, sessionsData, updat
                 const normalAbs = getReceivingAbsentNormal(getSessionIndex(row) >= 0 ? sessionsData[getSessionIndex(row)] : row);
                 const adultAbs = getReceivingAbsentAdults(getSessionIndex(row) >= 0 ? sessionsData[getSessionIndex(row)] : row);
                 const subjectValue = getSessionValue(row, 'subject', '');
+                const correctionTeacherValue = getSessionValue(row, 'correctionTeacherReceiver', '');
+                const subjectTeacherNames = getSubjectTeacherNamesFromSmartBridge(subjectValue, correctionTeacherValue);
                 return (React.createElement("tr", { key: `correction-${row.id}`, className: "border-b border-black" },
                     React.createElement("td", { className: "border-r border-black p-2 font-bold bg-gray-50/50" }, row.grade),
                     React.createElement("td", { className: "border-r border-black p-0" },
@@ -4845,13 +5022,14 @@ const ReceivingForm = ({ mode = 'current', filteredSessions, sessionsData, updat
                     React.createElement("td", { className: "border-r border-black p-0 w-16" },
                         React.createElement("input", { type: "text", value: adultAbs, onChange: (e) => setSessionValue(row, 'absentAdults', e.target.value), className: "w-full p-2 outline-none text-center bg-transparent border-none text-rose-600" })),
                     React.createElement("td", { className: "border-r border-black p-0" },
-                        React.createElement("select", { value: getSessionValue(row, 'correctionTeacherReceiver', ''), onChange: (e) => setSessionValue(row, 'correctionTeacherReceiver', e.target.value), className: "w-full p-2 outline-none text-right bg-transparent border-none" },
+                        React.createElement("select", { value: correctionTeacherValue, onMouseDown: (e) => e.stopPropagation(), onClick: (e) => e.stopPropagation(), onChange: (e) => setSessionValue(row, 'correctionTeacherReceiver', e.target.value), className: "w-full p-2 outline-none text-right bg-transparent border-none" },
                             React.createElement("option", { value: "" }, "\u0627\u062E\u062A\u0631 \u0627\u0644\u0645\u0639\u0644\u0645"),
-                            teacherNames.map((name) => React.createElement("option", { key: name, value: name }, name)))),
+                            subjectTeacherNames.length === 0 && React.createElement("option", { value: "", disabled: true }, "\u0644\u0627 \u064A\u0648\u062C\u062F \u0645\u0639\u0644\u0645 \u0644\u0647\u0630\u0647 \u0627\u0644\u0645\u0627\u062F\u0629"),
+                            subjectTeacherNames.map((name) => React.createElement("option", { key: name, value: name }, name)))),
                     React.createElement("td", { className: "border-r border-black p-1 w-28" },
                         React.createElement(SignatureArea, { id: getCorrectionSignatureId(row, 'teacher-delivery'), signatures: signatures, onSignClick: onSignClick, onClearSig: onClearSig, label: "\u062A\u0648\u0642\u064A\u0639 \u0627\u0644\u0645\u0639\u0644\u0645" })),
                     React.createElement("td", { className: "border-r border-black p-0" },
-                        React.createElement("select", { value: getSessionValue(row, 'afterCorrectionReceiver', ''), onChange: (e) => setSessionValue(row, 'afterCorrectionReceiver', e.target.value), className: "w-full p-2 outline-none text-right bg-transparent border-none" },
+                        React.createElement("select", { value: getSessionValue(row, 'afterCorrectionReceiver', ''), onMouseDown: (e) => e.stopPropagation(), onClick: (e) => e.stopPropagation(), onChange: (e) => setSessionValue(row, 'afterCorrectionReceiver', e.target.value), className: "w-full p-2 outline-none text-right bg-transparent border-none" },
                             React.createElement("option", { value: "" }, "\u0627\u062E\u062A\u0631 \u0639\u0636\u0648 \u0627\u0644\u0644\u062C\u0646\u0629"),
                             controlMemberNames.map((name) => React.createElement("option", { key: name, value: name }, name)))),
                     React.createElement("td", { className: "p-1 w-28" },
