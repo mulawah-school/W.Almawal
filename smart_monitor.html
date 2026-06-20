@@ -1185,30 +1185,28 @@
                         <div>
                             <label class="block text-xs font-bold text-slate-500 mb-2">عدد مراقبي الدور في كل فترة امتحان</label>
                             <div class="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 w-full shadow-sm">
-                                <button type="button" @click="smartSettings.floorObservers = Math.max(0, Number(smartSettings.floorObservers || 0) - 1); saveAppData();" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
+                                <button type="button" @click="smartSettings.floorObservers = Math.max(0, Number(smartSettings.floorObservers || 0) - 1); saveAppData();" title="إنقاص العدد" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
                                 <div class="flex-1 text-center flex items-center justify-center gap-2">
                                     <i class="fa-solid fa-users-viewfinder text-primary-500 text-lg"></i>
                                     <span class="font-extrabold text-lg text-slate-800 dark:text-white font-mono" x-text="Number(smartSettings.floorObservers || 0)"></span>
                                     <span class="text-xs text-slate-400">مراقب دور</span>
                                 </div>
-                                <button type="button" @click="smartSettings.floorObservers = Math.min(20, Number(smartSettings.floorObservers || 0) + 1); saveAppData();" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">+</button>
+                                <button type="button" @click="smartSettings.floorObservers = Math.min(20, Number(smartSettings.floorObservers || 0) + 1); saveAppData();" title="زيادة العدد" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">+</button>
                             </div>
-                            <input type="number" min="0" max="20" x-model.number="smartSettings.floorObservers" @change="smartSettings.floorObservers = Math.max(0, Math.min(20, Number(smartSettings.floorObservers || 0))); saveAppData();" class="mt-2 w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-center font-bold focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="عدد مراقبي الدور">
                         </div>
 
                         <!-- Unified Standby Observers Counter Selector -->
                         <div>
                             <label class="block text-xs font-bold text-slate-500 mb-2">عدد مراقبي الاحتياط العام لكل فترة</label>
                             <div class="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 w-full shadow-sm">
-                                <button type="button" @click="smartSettings.backupObservers = Math.max(0, Number(smartSettings.backupObservers || 0) - 1); saveAppData();" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
+                                <button type="button" @click="smartSettings.backupObservers = Math.max(0, Number(smartSettings.backupObservers || 0) - 1); saveAppData();" title="إنقاص العدد" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">-</button>
                                 <div class="flex-1 text-center flex items-center justify-center gap-2">
                                     <i class="fa-solid fa-circle-exclamation text-primary-500 text-lg"></i>
                                     <span class="font-extrabold text-lg text-slate-800 dark:text-white font-mono" x-text="Number(smartSettings.backupObservers || 0)"></span>
                                     <span class="text-xs text-slate-400">احتياطي</span>
                                 </div>
-                                <button type="button" @click="smartSettings.backupObservers = Math.min(20, Number(smartSettings.backupObservers || 0) + 1); saveAppData();" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">+</button>
+                                <button type="button" @click="smartSettings.backupObservers = Math.min(20, Number(smartSettings.backupObservers || 0) + 1); saveAppData();" title="زيادة العدد" class="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg transition-colors font-bold text-lg select-none">+</button>
                             </div>
-                            <input type="number" min="0" max="20" x-model.number="smartSettings.backupObservers" @change="smartSettings.backupObservers = Math.max(0, Math.min(20, Number(smartSettings.backupObservers || 0))); saveAppData();" class="mt-2 w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-center font-bold focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="عدد الاحتياط">
                         </div>
                     </div>
 
