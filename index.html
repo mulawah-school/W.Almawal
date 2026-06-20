@@ -573,10 +573,11 @@
                         clientSavedAt: payload.clientSavedAt || Date.now()
                     }, { merge: true });
                 }
-                await saveMonitoringSnapshotForState(targetSchoolId, stateString, state, {
+                // snapshot احتياطي فقط: لا نوقف حفظ appData إذا فشل أو تأخر.
+                Promise.resolve(saveMonitoringSnapshotForState(targetSchoolId, stateString, state, {
                     updatedAtLocal: nowIso,
                     clientSavedAt: payload.clientSavedAt || state?.clientSavedAt || Date.now()
-                });
+                })).catch(e => console.warn('تعذر تحديث snapshot الاحتياطي بعد حفظ appData', e));
                 try { localStorage.setItem(`monitoring_last_cloud_save_ok_${targetSchoolId}`, String(Date.now())); } catch(e) {}
                 try { localStorage.removeItem(`monitoring_pending_cloud_state_${targetSchoolId}`); } catch(e) {}
                 // تم حفظ البيانات الأساسية في Firebase بنجاح هنا.
@@ -647,20 +648,33 @@
                 const now = Date.now();
                 const messageSchoolId = data.schoolId || window.currentSchoolId || window.__CONTROL_LAST_OPENED_SCHOOL_ID || '';
 
-                // تغيير التاريخ داخل المراقب لا يحتاج حفظ سحابي كامل؛ كان سبب البطء.
+                // تغيير التاريخ داخل المراقب عرض فقط ولا يحتاج حفظ سحابي كامل.
                 if (/date|daily|selectedDailyExamId|view_only/i.test(reason)) return;
+                if (!messageSchoolId || !data.state) return;
 
-                // تجميع الرسائل المتتابعة من iframe حتى لا نحفظ الحالة الكبيرة أكثر من مرة.
-                if (now - __LAST_PARENT_MONITORING_MESSAGE_AT < 1800) {
+                const payload = { ...data, schoolId: messageSchoolId };
+
+                // التعديلات الصريحة في المراقب تحفظ فوراً ثم تبقى آلية التجميع كاحتياط.
+                const shouldSaveNow = /teacher|teachers|exam|class|committee|restriction|availability|distribution|smart_monitor_direct_edit|whatsapp_settings|iframe_direct_state_save/i.test(reason);
+                if (shouldSaveNow) {
+                    saveMonitoringStatePayloadNow(payload, { reason: reason || data.type, schoolId: messageSchoolId })
+                        .catch(err => {
+                            console.warn('تعذر الحفظ الفوري من رسالة المراقب، سيتم وضعها في قائمة الحفظ', err);
+                            scheduleMonitoringStatePayloadSave(payload, { reason: reason || data.type, schoolId: messageSchoolId });
+                        });
+                    return;
+                }
+
+                if (now - __LAST_PARENT_MONITORING_MESSAGE_AT < 900) {
                     clearTimeout(window.__PARENT_MONITORING_MESSAGE_TIMER);
                     window.__PARENT_MONITORING_MESSAGE_TIMER = setTimeout(() => {
-                        scheduleMonitoringStatePayloadSave({ ...data, schoolId: messageSchoolId }, { reason: reason || data.type, schoolId: messageSchoolId });
-                    }, 1800);
+                        scheduleMonitoringStatePayloadSave(payload, { reason: reason || data.type, schoolId: messageSchoolId });
+                    }, 900);
                     return;
                 }
 
                 __LAST_PARENT_MONITORING_MESSAGE_AT = now;
-                scheduleMonitoringStatePayloadSave({ ...data, schoolId: messageSchoolId }, { reason: reason || data.type, schoolId: messageSchoolId });
+                scheduleMonitoringStatePayloadSave(payload, { reason: reason || data.type, schoolId: messageSchoolId });
             } catch(e) {
                 console.warn('تعذر استقبال رسالة حفظ المراقب الذكي', e);
             }
@@ -3631,6 +3645,11 @@ const SmartMonitorSection = React.memo(() => {
                         if (!w)
                             return;
                         w.currentSchoolId = window.currentSchoolId;
+                        w.__CONTROL_PARENT_BRIDGE_READY = true;
+                        w.monitoringFirebase = window.monitoringFirebase || window.cloudDB || null;
+                        w.cloudDB = window.monitoringFirebase || window.cloudDB || null;
+                        try { w.sessionStorage.setItem('control_current_uid_scope', window.currentSchoolId || ''); } catch(e) {}
+                        try { if (w.monitoringDistributionApp && typeof w.monitoringDistributionApp.ensureParentFirebaseBridge === 'function') w.monitoringDistributionApp.ensureParentFirebaseBridge(); } catch(e) {}
                         w.monitoringFirebase = window.monitoringFirebase || window.cloudDB || null;
                         w.cloudDB = window.monitoringFirebase || window.cloudDB || null;
                         try { if (typeof w.updateCloudStatus === 'function' && (window.monitoringFirebase || window.cloudDB)) w.updateCloudStatus('متصل بالسحابة', 'success'); } catch(e) {}

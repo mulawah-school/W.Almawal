@@ -1,6 +1,21 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
+<!-- SMART_SAVE_BRIDGE_PATCH_V1 -->
+
+<script>
+(function(){
+  try {
+    var params = new URLSearchParams(location.search);
+    var sid = params.get('schoolId') || params.get('uid') || sessionStorage.getItem('control_current_uid_scope') || '';
+    if (sid) {
+      window.currentSchoolId = sid;
+      try { sessionStorage.setItem('control_current_uid_scope', sid); } catch(e) {}
+    }
+  } catch(e) {}
+})();
+</script>
+
 
 <script>
 (function(){
@@ -2329,13 +2344,23 @@
 
                 ensureParentFirebaseBridge() {
                     try {
-                        if (!window.currentSchoolId && window.parent && window.parent !== window && window.parent.currentSchoolId) {
-                            window.currentSchoolId = window.parent.currentSchoolId;
+                        const params = new URLSearchParams(location.search);
+                        const urlSchoolId = params.get('schoolId') || params.get('uid') || '';
+                        const sessionSchoolId = sessionStorage.getItem('control_current_uid_scope') || '';
+                        const parentSchoolId = (window.parent && window.parent !== window && window.parent.currentSchoolId) ? window.parent.currentSchoolId : '';
+                        const resolvedSchoolId = window.currentSchoolId || urlSchoolId || sessionSchoolId || parentSchoolId || '';
+                        if (resolvedSchoolId) {
+                            window.currentSchoolId = resolvedSchoolId;
+                            try { sessionStorage.setItem('control_current_uid_scope', resolvedSchoolId); } catch(e) {}
                         }
                         if (!window.monitoringFirebase && window.parent && window.parent !== window) {
                             window.monitoringFirebase = window.parent.monitoringFirebase || window.parent.cloudDB || null;
                         }
-                    } catch (e) {}
+                        if (!window.cloudDB && window.monitoringFirebase) window.cloudDB = window.monitoringFirebase;
+                        return !!window.currentSchoolId;
+                    } catch (e) {
+                        return false;
+                    }
                 },
 
                 scheduleCloudSave(showStatus = true) {
@@ -2379,7 +2404,9 @@
 
                 async flushSmartMonitorPayloadToCloud(payload = {}, options = {}) {
                     this.ensureParentFirebaseBridge();
-                    const targetSchoolId = options.schoolId || payload.schoolId || window.currentSchoolId || '';
+                    const targetSchoolId = options.schoolId || payload.schoolId || window.currentSchoolId ||
+                        (() => { try { return new URLSearchParams(location.search).get('schoolId') || new URLSearchParams(location.search).get('uid') || ''; } catch(e) { return ''; } })() ||
+                        ((window.parent && window.parent !== window && window.parent.currentSchoolId) ? window.parent.currentSchoolId : '');
                     const reason = options.reason || payload.reason || 'smart_monitor_direct_edit';
                     if (!targetSchoolId || !payload || !payload.state) return false;
                     const savePayload = { ...payload, schoolId: targetSchoolId, reason };
@@ -2431,6 +2458,12 @@
                 queueSmartMonitorSave(payload = {}, options = {}) {
                     if (!payload || !payload.state) return false;
                     this.__smartMonitorPendingSave = { payload, options };
+                    try {
+                        const sid = (options && options.schoolId) || payload.schoolId || window.currentSchoolId || '';
+                        if (sid && payload.state) {
+                            localStorage.setItem(`monitoring_pending_cloud_state_${sid}`, JSON.stringify(payload.state));
+                        }
+                    } catch(e) {}
                     if (this.__smartMonitorSaveInFlight) return true;
                     this.__smartMonitorSaveInFlight = true;
                     Promise.resolve().then(async () => {
@@ -2666,16 +2699,49 @@
                         return;
                     }
 
+                    this.ensureParentFirebaseBridge();
+
+                    const resolvedSchoolId =
+                        window.currentSchoolId ||
+                        (window.parent && window.parent !== window && window.parent.currentSchoolId) ||
+                        (() => { try { return new URLSearchParams(location.search).get('schoolId') || new URLSearchParams(location.search).get('uid') || ''; } catch(e) { return ''; } })();
+
+                    if (resolvedSchoolId) {
+                        window.currentSchoolId = resolvedSchoolId;
+                        try { sessionStorage.setItem('control_current_uid_scope', resolvedSchoolId); } catch(e) {}
+                    }
+
                     this.__localLastSavedAt = Date.now();
                     this.__bridgeDataRevision = (Number(this.__bridgeDataRevision || 0) + 1);
-                    const state = this.getSerializableState();
+
+                    const state = this.cleanForFirestore(this.getSerializableState());
+                    state.schoolId = window.currentSchoolId || resolvedSchoolId || state.schoolId || '';
+                    state.clientSavedAt = Date.now();
+                    state.updatedAtLocal = new Date().toISOString();
+
                     this.safeSaveLocalSnapshot(state);
                     const bridgeData = this.syncControlBridgeData({ force: true, reason });
                     const showStatus = !(options && options.silent === true);
-                    if (showStatus && typeof window.updateCloudStatus === 'function') window.updateCloudStatus('جاري الحفظ...', 'loading');
 
-                    // داخل ملف الكنترول: نرسل نسخة واحدة للصفحة الرئيسية، والصفحة الرئيسية تجمع التعديلات وتحفظ آخر حالة في Firebase.
-                    // إلغاء الحفظ المباشر المكرر هنا هو سبب تسريع المراقب الذكي.
+                    if (showStatus && typeof window.updateCloudStatus === 'function') {
+                        window.updateCloudStatus('جاري الحفظ...', 'loading');
+                    }
+
+                    const payload = {
+                        schoolId: state.schoolId,
+                        state,
+                        teachers: Array.isArray(state.teachers) ? state.teachers : [],
+                        reason,
+                        clientSavedAt: state.clientSavedAt
+                    };
+
+                    try {
+                        if (payload.schoolId) {
+                            localStorage.setItem(`monitoring_distribution_full_state_v4_${payload.schoolId}`, JSON.stringify(state));
+                            localStorage.setItem(`monitoring_pending_cloud_state_${payload.schoolId}`, JSON.stringify(state));
+                        }
+                    } catch(e) {}
+
                     if (window.parent && window.parent !== window) {
                         try { window.parent.__LAST_MONITORING_STATE_STRING = JSON.stringify(state); } catch(e) {}
                         try {
@@ -2685,25 +2751,55 @@
                                 window.parent.dispatchEvent(new window.parent.Event('smart-data-refreshed'));
                             }
                         } catch(e) {}
-                        const parentPayload = {
-                            schoolId: window.currentSchoolId || '',
-                            state: this.cleanForFirestore(state),
-                            teachers: Array.isArray(state.teachers) ? state.teachers : [],
-                            reason,
-                            clientSavedAt: Date.now()
-                        };
+
+                        let sentToParent = false;
                         try {
-                            this.queueSmartMonitorSave(parentPayload, { reason, schoolId: window.currentSchoolId || '', silent: !showStatus });
-                        } catch(e) {
-                            this.sendStateToParent(reason, state);
+                            if (window.parent.saveMonitoringStatePayloadNow && payload.schoolId) {
+                                sentToParent = true;
+                                Promise.resolve(
+                                    window.parent.saveMonitoringStatePayloadNow(payload, {
+                                        reason,
+                                        schoolId: payload.schoolId
+                                    })
+                                ).then((ok) => {
+                                    if (ok) {
+                                        try { localStorage.removeItem(`monitoring_pending_cloud_state_${payload.schoolId}`); } catch(e) {}
+                                        if (showStatus && typeof window.updateCloudStatus === 'function') window.updateCloudStatus('تم الحفظ في Firebase', 'success');
+                                    } else {
+                                        this.queueSmartMonitorSave(payload, { reason, schoolId: payload.schoolId, silent: !showStatus });
+                                    }
+                                }).catch(() => {
+                                    this.queueSmartMonitorSave(payload, { reason, schoolId: payload.schoolId, silent: !showStatus });
+                                });
+                            } else if (window.parent.queueMonitoringStatePayloadSave && payload.schoolId) {
+                                sentToParent = true;
+                                window.parent.queueMonitoringStatePayloadSave(payload, { reason, schoolId: payload.schoolId });
+                            } else if (window.parent.scheduleMonitoringStatePayloadSave && payload.schoolId) {
+                                sentToParent = true;
+                                window.parent.scheduleMonitoringStatePayloadSave(payload, { reason, schoolId: payload.schoolId });
+                            }
+                        } catch(e) {}
+
+                        try {
+                            window.parent.postMessage({
+                                type: 'monitoring_immediate_save_v2',
+                                schoolId: payload.schoolId,
+                                reason,
+                                state,
+                                teachers: payload.teachers,
+                                clientSavedAt: payload.clientSavedAt
+                            }, '*');
+                        } catch(e) {}
+
+                        if (!sentToParent) {
+                            this.queueSmartMonitorSave(payload, { reason, schoolId: payload.schoolId, silent: !showStatus });
                         }
-                        if (showStatus && typeof window.updateCloudStatus === 'function') {
-                            clearTimeout(this._parentSaveStatusTimer);
-                        }
+
                         return;
                     }
 
-                    // تشغيل مستقل خارج الكنترول: نحفظ بسحابة Firebase بمؤقت خفيف.
+                    // تشغيل مستقل خارج الكنترول
+                    this.queueSmartMonitorSave(payload, { reason, schoolId: payload.schoolId, silent: !showStatus });
                     this.scheduleCloudSave(showStatus);
                 },
 
