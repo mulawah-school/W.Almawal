@@ -3718,6 +3718,87 @@ const getAllTeacherNamesFromSmartBridge = () => {
     });
     return names;
 };
+const normalizeReceivingSubjectText = (value) => normalizeArabicText(value)
+    .replace(/[\u064B-\u0652]/g, '')
+    .replace(/[إأآٱ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/ـ/g, '')
+    .replace(/\b(معلم|معلمه|معلمة|اول|أول|رئيس|تخصص|ماده|مادة)\b/g, ' ')
+    .replace(/[^\u0600-\u06FFa-zA-Z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+const getReceivingSubjectGroupKey = (value) => {
+    const text = normalizeReceivingSubjectText(value);
+    if (!text)
+        return '';
+    if (text.includes('رياضيات'))
+        return 'math';
+    if (text.includes('اسلام'))
+        return 'islamic';
+    if (text.includes('عربي') || text.includes('اللغه العربيه'))
+        return 'arabic';
+    if (text.includes('انجليزي') || text.includes('انكليزي') || text.includes('english'))
+        return 'english';
+    if (text.includes('كيمياء'))
+        return 'chemistry';
+    if (text.includes('فيزياء'))
+        return 'physics';
+    if (text.includes('احياء') || text.includes('بيولوج'))
+        return 'biology';
+    if (text.includes('علوم'))
+        return 'science';
+    if (text.includes('دراسات') || text.includes('اجتماعي') || text.includes('تاريخ') || text.includes('جغرافيا'))
+        return 'social';
+    return text;
+};
+const getSubjectTeacherNamesFromSmartBridge = (subject, currentValue = '') => {
+    const bridge = getStoredSmartBridge();
+    const teachers = Array.isArray(bridge === null || bridge === void 0 ? void 0 : bridge.teachers) ? bridge.teachers : [];
+    const subjectText = normalizeReceivingSubjectText(subject);
+    const subjectGroup = getReceivingSubjectGroupKey(subject);
+    const selected = String(currentValue || '').trim();
+    const names = [];
+    const seen = new Set();
+    const addName = (name) => {
+        const clean = String(name || '').trim();
+        const key = normalizeControlMemberNameKey(clean);
+        if (!key || seen.has(key))
+            return;
+        seen.add(key);
+        names.push(clean);
+    };
+    teachers.forEach((teacher) => {
+        const name = String((teacher === null || teacher === void 0 ? void 0 : teacher.name) || '').trim();
+        if (!name)
+            return;
+        if (teacher && teacher.inControl && !teacher.isFirstTeacher)
+            return;
+        const teacherSubject = [
+            teacher === null || teacher === void 0 ? void 0 : teacher.correctionSpeciality,
+            teacher === null || teacher === void 0 ? void 0 : teacher.correctionSubject,
+            teacher === null || teacher === void 0 ? void 0 : teacher.speciality,
+            teacher === null || teacher === void 0 ? void 0 : teacher.specialization,
+            teacher === null || teacher === void 0 ? void 0 : teacher.subject,
+            teacher === null || teacher === void 0 ? void 0 : teacher.major
+        ].filter(Boolean).join(' ');
+        const teacherText = normalizeReceivingSubjectText(teacherSubject);
+        const teacherGroup = getReceivingSubjectGroupKey(teacherSubject);
+        if (!subjectText || !teacherText)
+            return;
+        const directMatch = teacherText.includes(subjectText) || subjectText.includes(teacherText);
+        const groupMatch = subjectGroup && teacherGroup && (
+            subjectGroup === teacherGroup ||
+            (['chemistry', 'physics', 'biology'].includes(subjectGroup) && teacherGroup === 'science')
+        );
+        if (directMatch || groupMatch)
+            addName(name);
+    });
+    if (selected)
+        addName(selected);
+    return names.sort((a, b) => String(a).localeCompare(String(b), 'ar'));
+};
 const getUniqueControlMembers = (count = 5, excludeNames = []) => {
     const excluded = new Set((excludeNames || []).map(normalizeControlMemberNameKey).filter(Boolean));
     const names = [];
@@ -4768,7 +4849,6 @@ const ReceivingForm = ({ mode = 'current', filteredSessions, sessionsData, updat
     const firstPeriodRows = (filteredSessions || []).filter(row => row.period !== "الفترة الثانية");
     const secondPeriodRows = (filteredSessions || []).filter(row => row.period === "الفترة الثانية");
     const correctionRows = [...firstPeriodRows, ...secondPeriodRows];
-    const teacherNames = getAllTeacherNamesFromSmartBridge();
     const controlMemberNames = getControlMemberNames();
     const getSessionIndex = (row) => sessionsData.findIndex(s => s.id === row.id);
     const getSessionValue = (row, field, fallback = '') => {
@@ -4839,7 +4919,7 @@ const ReceivingForm = ({ mode = 'current', filteredSessions, sessionsData, updat
                     React.createElement("td", { className: "border-r border-black p-0 w-16" },
                         React.createElement("input", { type: "text", value: getReceivingAbsentAdults(sessionsData[origIdx]), onChange: (e) => updateSessionField(origIdx, 'absentAdults', e.target.value), className: "w-full p-2 outline-none text-center bg-transparent border-none text-rose-600 " })),
                     React.createElement("td", { className: "border-r border-black p-0" },
-                        React.createElement("select", { value: getSessionValue(row, 'receiver', ''), onChange: (e) => setSessionValue(row, 'receiver', e.target.value), className: "w-full p-2 outline-none text-right bg-transparent border-none" },
+                        React.createElement("select", { value: getSessionValue(row, 'receiver', ''), onMouseDown: (e) => e.stopPropagation(), onClick: (e) => e.stopPropagation(), onChange: (e) => setSessionValue(row, 'receiver', e.target.value), className: "w-full p-2 outline-none text-right bg-transparent border-none" },
                             React.createElement("option", { value: "" }, "\u0627\u062E\u062A\u0631 \u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u0644\u0645"),
                             controlMemberNames.map((memberName) => React.createElement("option", { key: memberName, value: memberName }, memberName)))),
                     React.createElement("td", { className: "p-1 w-28" }, (() => {
@@ -4874,6 +4954,8 @@ const ReceivingForm = ({ mode = 'current', filteredSessions, sessionsData, updat
                 const normalAbs = getReceivingAbsentNormal(getSessionIndex(row) >= 0 ? sessionsData[getSessionIndex(row)] : row);
                 const adultAbs = getReceivingAbsentAdults(getSessionIndex(row) >= 0 ? sessionsData[getSessionIndex(row)] : row);
                 const subjectValue = getSessionValue(row, 'subject', '');
+                const correctionTeacherValue = getSessionValue(row, 'correctionTeacherReceiver', '');
+                const subjectTeacherNames = getSubjectTeacherNamesFromSmartBridge(subjectValue, correctionTeacherValue);
                 return (React.createElement("tr", { key: `correction-${row.id}`, className: "border-b border-black" },
                     React.createElement("td", { className: "border-r border-black p-2 font-bold bg-gray-50/50" }, row.grade),
                     React.createElement("td", { className: "border-r border-black p-0" },
@@ -4887,13 +4969,14 @@ const ReceivingForm = ({ mode = 'current', filteredSessions, sessionsData, updat
                     React.createElement("td", { className: "border-r border-black p-0 w-16" },
                         React.createElement("input", { type: "text", value: adultAbs, onChange: (e) => setSessionValue(row, 'absentAdults', e.target.value), className: "w-full p-2 outline-none text-center bg-transparent border-none text-rose-600" })),
                     React.createElement("td", { className: "border-r border-black p-0" },
-                        React.createElement("select", { value: getSessionValue(row, 'correctionTeacherReceiver', ''), onChange: (e) => setSessionValue(row, 'correctionTeacherReceiver', e.target.value), className: "w-full p-2 outline-none text-right bg-transparent border-none" },
+                        React.createElement("select", { value: correctionTeacherValue, onMouseDown: (e) => e.stopPropagation(), onClick: (e) => e.stopPropagation(), onChange: (e) => setSessionValue(row, 'correctionTeacherReceiver', e.target.value), className: "w-full p-2 outline-none text-right bg-transparent border-none" },
                             React.createElement("option", { value: "" }, "\u0627\u062E\u062A\u0631 \u0627\u0644\u0645\u0639\u0644\u0645"),
-                            teacherNames.map((name) => React.createElement("option", { key: name, value: name }, name)))),
+                            subjectTeacherNames.length === 0 && React.createElement("option", { value: "", disabled: true }, "\u0644\u0627 \u064A\u0648\u062C\u062F \u0645\u0639\u0644\u0645 \u0644\u0647\u0630\u0647 \u0627\u0644\u0645\u0627\u062F\u0629"),
+                            subjectTeacherNames.map((name) => React.createElement("option", { key: name, value: name }, name)))),
                     React.createElement("td", { className: "border-r border-black p-1 w-28" },
                         React.createElement(SignatureArea, { id: getCorrectionSignatureId(row, 'teacher-delivery'), signatures: signatures, onSignClick: onSignClick, onClearSig: onClearSig, label: "\u062A\u0648\u0642\u064A\u0639 \u0627\u0644\u0645\u0639\u0644\u0645" })),
                     React.createElement("td", { className: "border-r border-black p-0" },
-                        React.createElement("select", { value: getSessionValue(row, 'afterCorrectionReceiver', ''), onChange: (e) => setSessionValue(row, 'afterCorrectionReceiver', e.target.value), className: "w-full p-2 outline-none text-right bg-transparent border-none" },
+                        React.createElement("select", { value: getSessionValue(row, 'afterCorrectionReceiver', ''), onMouseDown: (e) => e.stopPropagation(), onClick: (e) => e.stopPropagation(), onChange: (e) => setSessionValue(row, 'afterCorrectionReceiver', e.target.value), className: "w-full p-2 outline-none text-right bg-transparent border-none" },
                             React.createElement("option", { value: "" }, "\u0627\u062E\u062A\u0631 \u0639\u0636\u0648 \u0627\u0644\u0644\u062C\u0646\u0629"),
                             controlMemberNames.map((name) => React.createElement("option", { key: name, value: name }, name)))),
                     React.createElement("td", { className: "p-1 w-28" },
