@@ -3908,7 +3908,33 @@ const getControlMemberSignatureIdByName = (name) => {
 const getEnvelopeMemberSignatureId = (memberName, index) => {
     return getControlMemberSignatureIdByName(memberName) || `envelope-member-${index}`;
 };
-const getRandomControlMembers = (count = 5) => getUniqueControlMembers(count);
+const shuffleControlMemberNames = (names = []) => {
+    const arr = [...names];
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+};
+const getRandomControlMembers = (count = 5, excludeNames = []) => {
+    const excluded = new Set((excludeNames || []).map(normalizeControlMemberNameKey).filter(Boolean));
+    const seen = new Set();
+    const pool = [];
+    getControlMemberNames().forEach((name) => {
+        const clean = String(name || '').trim();
+        const key = normalizeControlMemberNameKey(clean);
+        if (!key || excluded.has(key) || seen.has(key))
+            return;
+        seen.add(key);
+        pool.push(clean);
+    });
+    const selected = shuffleControlMemberNames(pool).slice(0, count);
+    return [...selected, ...Array.from({ length: Math.max(0, count - selected.length) }, () => '')];
+};
+const getRandomEnvelopeMembersForDate = (dateKey = '', count = 5) => {
+    // اختيار عشوائي جديد في كل تحديث للمحضر، مع منع تكرار الاسم داخل نفس اليوم.
+    return getRandomControlMembers(count);
+};
 const STATS_DETAIL_ROWS = [];
 const STATS_DAY_SUMMARY = [];
 const STUDENT_BASE_ROWS = [
@@ -7736,6 +7762,11 @@ const App = () => {
     const updateEnvelopeMember = (index, value) => {
         setEnvelopeData(prev => {
             const updatedMembers = normalizeEnvelopeMembersForDisplay(prev.members, 5);
+            const cleanValue = String(value || '').trim();
+            const cleanKey = normalizeControlMemberNameKey(cleanValue);
+            if (cleanKey && updatedMembers.some((name, i) => i !== index && normalizeControlMemberNameKey(name) === cleanKey)) {
+                return prev; // منع تكرار نفس العضو في نفس اليوم
+            }
             updatedMembers[index] = value;
             return { ...prev, members: normalizeEnvelopeMembersForDisplay(updatedMembers, 5) };
         });
@@ -7903,7 +7934,7 @@ const App = () => {
             meetingHour: firstOpenTime.hour,
             meetingMinute: firstOpenTime.minute,
             rows: updatedRows,
-            members: getUniqueControlMembers(5)
+            members: getRandomEnvelopeMembersForDate(safeDate, 5)
         });
     };
     const applyScheduleToEnvelopes = (silent = false) => {
@@ -8149,7 +8180,7 @@ const App = () => {
                 meetingHour: firstOpenTime.hour,
                 meetingMinute: firstOpenTime.minute,
                 rows: nextEnvelopeRows,
-                members: getUniqueControlMembers(5)
+                members: getRandomEnvelopeMembersForDate(safeDate, 5)
             });
             if (nextEnvelope.rows.some(row => String(row.subject || '').trim())) {
                 setEnvelopeData(nextEnvelope);
