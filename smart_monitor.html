@@ -2381,10 +2381,10 @@
                             }
                             if (typeof window.parent.scheduleMonitoringStatePayloadSave === 'function') {
                                 window.parent.scheduleMonitoringStatePayloadSave(savePayload, { reason, schoolId: targetSchoolId });
-                                return true;
+                                return false;
                             }
                             this.sendStateToParent(reason, savePayload.state);
-                            return true;
+                            return false;
                         }
                     } catch (parentErr) {
                         console.warn('تعذر حفظ تعديل المراقب الذكي عبر الكنترول', parentErr);
@@ -2979,6 +2979,39 @@
                     } catch(e) {}
                 },
 
+                scheduleSmartAutoSave(reason = 'smart_monitor_auto_change') {
+                    try {
+                        if (this.isLoadingCloudData || this.__suspendSmartAutoSave) return;
+                        clearTimeout(this.__smartAutoSaveTimer);
+                        this.__smartAutoSaveTimer = setTimeout(() => {
+                            if (this.isLoadingCloudData || this.__suspendSmartAutoSave) return;
+                            this.saveAppData({ silent: true, reason });
+                        }, 500);
+                    } catch(e) {}
+                },
+
+                installSmartAutoSaveWatchers() {
+                    if (this.__smartAutoSaveWatchersInstalled || typeof this.$watch !== 'function') return;
+                    this.__smartAutoSaveWatchersInstalled = true;
+                    [
+                        'schoolSettings',
+                        'teachers',
+                        'schoolClasses',
+                        'exams',
+                        'assignments',
+                        'subjectRestrictions',
+                        'teacherRestrictions',
+                        'smartSettings',
+                        'whatsappSettings',
+                        'grade11OptionalRows',
+                        'grade12OptionalRows'
+                    ].forEach((field) => {
+                        try {
+                            this.$watch(field, () => this.scheduleSmartAutoSave(`autosave_${field}`));
+                        } catch(e) {}
+                    });
+                },
+
                 init() {
                     window.monitoringDistributionApp = this;
                     this.ensureParentFirebaseBridge();
@@ -3016,6 +3049,7 @@
                             this.syncControlBridgeData({ force: true, reason: 'init_existing_data' });
                         }
                     }
+                    this.installSmartAutoSaveWatchers();
                     if (!window.__SMART_CLOUD_LOAD_REQUESTED) {
                         window.__SMART_CLOUD_LOAD_REQUESTED = true;
                         const loadCloudWhenIdle = () => {
