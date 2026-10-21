@@ -907,19 +907,17 @@
 
     <div id="control-login-screen" class="no-print" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#eff6ff,#f8fafc 55%,#ecfdf5);font-family:Cairo,Arial,sans-serif;direction:rtl;padding:20px;">
         <div style="width:410px;max-width:100%;background:white;padding:30px;border-radius:26px;box-shadow:0 22px 55px rgba(15,23,42,.18);border:1px solid #e2e8f0;">
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+            <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px;margin-bottom:16px;">
                 <div style="width:54px;height:54px;border-radius:18px;background:linear-gradient(135deg,#1d4ed8,#059669);color:white;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 12px 24px rgba(29,78,216,.22);">🏫</div>
                 <div>
                     <h2 id="control-link-title" style="font-size:22px;font-weight:900;margin:0;color:#0f172a;">جاري فتح المدرسة...</h2>
                     <p style="font-size:12px;color:#64748b;margin:4px 0 0;">نظام الكنترول والمراقب الذكي</p>
                 </div>
             </div>
-            <div id="control-auth-status" style="display:inline-block;font-size:11px;font-weight:800;border-radius:999px;padding:5px 10px;margin-bottom:16px;background:#dbeafe;color:#1e40af;">جاري التحقق من الرابط...</div>
-            <div id="control-login-error" style="min-height:20px;color:#dc2626;font-size:13px;margin-bottom:12px;font-weight:700;"></div>
-            <button onclick="location.reload()" style="width:100%;padding:13px;border:none;border-radius:13px;background:linear-gradient(135deg,#1d4ed8,#059669);color:white;font-weight:900;font-size:15px;cursor:pointer;box-shadow:0 10px 22px rgba(29,78,216,.22);">
-                إعادة المحاولة
-            </button>
-            <p style="font-size:11px;color:#64748b;line-height:1.7;margin:14px 0 0;text-align:center;">الدخول يتم عبر الرابط الخاص بالمدرسة فقط، ولا يحتاج اسم مستخدم أو كلمة مرور.</p>
+            <div id="control-auth-status" style="display:table;margin-left:auto;margin-right:auto;font-size:11px;font-weight:800;border-radius:999px;padding:5px 10px;margin-bottom:0;background:#dbeafe;color:#1e40af;">جاري التحقق من الرابط...</div>
+            <style>#control-login-error:empty{display:none}</style>
+            <div id="control-login-error" style="margin-top:14px;color:#dc2626;font-size:13px;font-weight:700;text-align:center;line-height:1.8;"></div>
+
         </div>
     </div>
     <div id="root" style="display:none;"></div>
@@ -6067,13 +6065,13 @@
                     if (window.cloudDB) {
                         setCloudDB(window.cloudDB);
                         setIsCloudConnected(true);
-                        setAlertMessage({ text: "تم الاتصال بالسحابة بنجاح" });
+                        console.info("تم الاتصال بالسحابة بنجاح");
                         setTimeout(() => setAlertMessage(null), 3000);
                     }
                 };
                 const handleError = () => {
                     setIsCloudConnected(false);
-                    setAlertMessage({ text: "تعذر الاتصال بالسحابة. تأكد من الإنترنت ورابط السكربت." });
+                    console.info("تعذر الاتصال بالسحابة. تأكد من الإنترنت ورابط السكربت.");
                     setTimeout(() => setAlertMessage(null), 4000);
                 };
 
@@ -6934,7 +6932,7 @@
                         const safeSignatures = sanitizeSignaturesMap(mergedSignatures);
                         localStorage.setItem(`exam_signatures_${safeDateToLoad}`, JSON.stringify(safeSignatures));
                         saveSignatureDeletesForDate(safeDateToLoad, asPlainObject(mergedDeletes, {}));
-                        setAlertMessage({ text: "تم تحميل بيانات هذا التاريخ من السحابة بأمان." });
+                        console.info("تم تحميل بيانات هذا التاريخ من السحابة بأمان.");
                         setTimeout(() => setAlertMessage(null), 2500);
                         return true;
                     }
@@ -6952,7 +6950,7 @@
                     return false;
                 } catch (error) {
                     console.error("Cloud load error:", error);
-                    setAlertMessage({ text: "تعذر تحميل البيانات السحابية لهذا التاريخ، تم فتح نسخة آمنة محلياً بدون صفحة بيضاء." });
+                    console.info("تعذر تحميل البيانات السحابية لهذا التاريخ، تم فتح نسخة آمنة محلياً بدون صفحة بيضاء.");
                     setTimeout(() => setAlertMessage(null), 4000);
                     return false;
                 } finally {
@@ -7126,7 +7124,7 @@
                     applySignatureSnapshot(snapshot, 'onSnapshot-live');
                 }, (error) => {
                     console.error("Realtime signatures collection sync error:", error);
-                    setAlertMessage({ text: "تعذر تنزيل التواقيع من السحابة. تأكد من الاتصال بالسكربت." });
+                    console.info("تعذر تنزيل التواقيع من السحابة. تأكد من الاتصال بالسكربت.");
                     setTimeout(() => setAlertMessage(null), 4000);
                 });
 
@@ -7208,7 +7206,7 @@
                     }, 700);
                 }, (error) => {
                     console.error("Realtime sync error:", error);
-                    setAlertMessage({ text: "تعذر تشغيل المزامنة المباشرة بين الأجهزة. تأكد من الاتصال بالسكربت." });
+                    console.info("تعذر تشغيل المزامنة المباشرة بين الأجهزة. تأكد من الاتصال بالسكربت.");
                     setTimeout(() => setAlertMessage(null), 4000);
                 });
 
@@ -7862,13 +7860,6 @@ const applyScheduleToEnvelopes = (silent = false) => {
                             </div>
                             
                             <div className="flex items-center gap-4">
-                                <button
-                                    onClick={() => { if (window.logoutControlSystem) window.logoutControlSystem(); }}
-                                    className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-3.5 py-1.5 rounded-xl text-xs transition duration-200 shadow-md border border-red-500"
-                                    title="تسجيل الخروج"
-                                >
-                                    <Icon name="lock" size={14} /> خروج
-                                </button>
                                 <button
                                     onClick={() => fastSetActiveTab('exportSave')}
                                     className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white px-3.5 py-1.5 rounded-xl text-xs transition duration-200 shadow-md border border-white/10"
