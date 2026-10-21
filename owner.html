@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>لوحة مالك المراقب الذكي</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&family=Reem+Kufi:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script>
+  tailwind.config = { theme: { extend: { fontFamily: { sans: ['Tajawal', 'sans-serif'] } } } }
+</script>
+<style>
+  body { font-family: 'Tajawal', sans-serif; }
+  .glass-panel { background: rgba(255,255,255,.95); backdrop-filter: blur(10px); border: 1px solid rgba(226,232,240,.8); }
+  .transition-all-custom { transition: all .3s cubic-bezier(.4,0,.2,1); }
+  body{
+    background:
+      radial-gradient(circle at 10% 10%,rgba(99,102,241,.20),transparent 28%),
+      radial-gradient(circle at 90% 20%,rgba(20,184,166,.16),transparent 30%),
+      linear-gradient(135deg,#07111f,#111827 55%,#0b1220)!important;
+  }
+  .glass-panel{ box-shadow:0 18px 50px rgba(0,0,0,.20)!important; border-color:rgba(255,255,255,.12)!important; }
+  #panel .glass-panel{ border-radius:28px!important; }
+  button{transition:transform .18s ease,box-shadow .18s ease,background .18s ease!important}
+  button:hover{transform:translateY(-1px)}
+  button:disabled{opacity:.6;cursor:wait;transform:none}
+  table{overflow:hidden;border-radius:18px!important}
+</style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-slate-100 min-h-screen">
+
+<!-- نافذة التنبيه والتأكيد -->
+<div id="customModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm hidden">
+  <div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl text-center transform scale-95 transition-all-custom" id="modalBox">
+    <div id="modalIcon" class="text-4xl mb-3 text-indigo-400"><i class="fa-solid fa-circle-info"></i></div>
+    <h3 id="modalTitle" class="text-xl font-bold text-white mb-2">تنبيه النظام</h3>
+    <p id="modalMessage" class="text-slate-300 text-sm mb-6 leading-relaxed whitespace-pre-line">رسالة التنبيه هنا</p>
+    <div id="modalActions" class="flex gap-3 justify-center"></div>
+  </div>
+</div>
+
+<!-- نافذة تعديل بيانات المدرسة -->
+<div id="editModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm hidden">
+  <div class="bg-white text-slate-900 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
+    <h3 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-pen text-amber-500"></i> تعديل بيانات المدرسة</h3>
+    <label class="block text-sm font-semibold text-slate-700 mb-2">اسم المدرسة</label>
+    <input id="editName" class="w-full px-4 py-3 mb-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+    <label class="block text-sm font-semibold text-slate-700 mb-2">المديرية (اختياري)</label>
+    <input id="editDirectorate" class="w-full px-4 py-3 mb-6 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+    <div class="flex gap-3 justify-end">
+      <button onclick="closeEdit()" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium rounded-xl">إلغاء</button>
+      <button id="editSaveBtn" onclick="saveEdit()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl shadow-lg shadow-indigo-600/30">حفظ</button>
+    </div>
+  </div>
+</div>
+
+<div class="max-w-6xl mx-auto px-4 py-8 sm:py-12">
+
+  <!-- الترويسة -->
+  <div class="glass-panel text-slate-900 rounded-3xl p-6 sm:p-8 shadow-2xl mb-8 flex flex-col md:flex-row justify-between items-center gap-6 border-t-4 border-indigo-500">
+    <div class="flex items-center gap-4">
+      <div class="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-2xl shadow-lg shadow-indigo-600/30">
+        <i class="fa-solid fa-shield-halved"></i>
+      </div>
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">لوحة مالك <span style="font-family:'Reem Kufi',Tajawal,sans-serif" class="text-emerald-600 text-3xl sm:text-4xl">المراقب الذكي</span></h1>
+        <p class="text-slate-500 text-sm mt-1">إدارة مدارس «نظام الكنترول والمراقب الذكي» وروابطها الخاصة.</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <div id="statusBadge" class="hidden px-4 py-2 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        متصل بالنظام
+      </div>
+      <button id="logoutBtn" onclick="ownerLogout()" class="hidden px-4 py-2 bg-slate-100 hover:bg-rose-100 text-slate-600 hover:text-rose-700 rounded-full text-xs font-bold">
+        <i class="fa-solid fa-right-from-bracket"></i> خروج
+      </button>
+    </div>
+  </div>
+
+  <!-- دخول المالك -->
+  <div id="login" class="glass-panel text-slate-900 rounded-3xl p-8 shadow-2xl max-w-md mx-auto text-center">
+    <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 shadow-inner">
+      <i class="fa-solid fa-key"></i>
+    </div>
+    <h2 class="text-2xl font-bold text-slate-900 mb-2">تسجيل دخول المالك</h2>
+    <p class="text-slate-500 text-sm mb-6">أدخل رمز المالك الخاص للوصول إلى لوحة التحكم الإدارية.</p>
+    <div class="space-y-4">
+      <div class="relative">
+        <span class="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400"><i class="fa-solid fa-lock"></i></span>
+        <input id="ownerPin" type="password" maxlength="40" placeholder="رمز المالك السري" onkeydown="if(event.key==='Enter') login()"
+          class="w-full pr-12 pl-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 placeholder-slate-400 font-medium">
+      </div>
+      <button id="loginBtn" onclick="login()" class="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold rounded-2xl shadow-lg shadow-indigo-600/30 transition-all-custom flex items-center justify-center gap-2">
+        <i class="fa-solid fa-arrow-right-to-bracket"></i>
+        <span>دخول اللوحة</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- اللوحة -->
+  <div id="panel" class="hidden space-y-6">
+
+    <!-- إضافة مدرسة -->
+    <div class="glass-panel text-slate-900 rounded-3xl p-6 sm:p-8 shadow-2xl">
+      <div class="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+        <div class="w-10 h-10 rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center text-lg"><i class="fa-solid fa-school-circle-plus"></i></div>
+        <h2 class="text-xl font-bold text-slate-900">إضافة مدرسة جديدة</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-2">اسم المدرسة</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400"><i class="fa-solid fa-graduation-cap"></i></span>
+            <input id="schoolName" placeholder="مثال: مدرسة معولة بن شمس" class="w-full pr-11 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-2">المديرية (اختياري)</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400"><i class="fa-solid fa-building"></i></span>
+            <input id="schoolDirectorate" placeholder="مثال: المديرية العامة للتربية والتعليم بمحافظة ..." class="w-full pr-11 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800">
+          </div>
+        </div>
+      </div>
+      <button id="createBtn" onclick="createSchool()" class="px-6 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-2xl shadow-lg shadow-emerald-600/20 transition-all-custom flex items-center gap-2">
+        <i class="fa-solid fa-plus-circle"></i>
+        <span>إنشاء وتوليد الرابط</span>
+      </button>
+      <div id="created" class="hidden mt-6 p-5 bg-amber-50/80 border border-amber-200 rounded-2xl text-amber-900"></div>
+    </div>
+
+    <!-- سجل المدارس -->
+    <div class="glass-panel text-slate-900 rounded-3xl p-6 sm:p-8 shadow-2xl">
+      <div class="flex justify-between items-center mb-6 pb-4 border-b border-slate-100 flex-wrap gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-lg"><i class="fa-solid fa-building-columns"></i></div>
+          <h2 class="text-xl font-bold text-slate-900">سجل المدارس المسجلة <span id="schoolsCount" class="text-sm text-slate-400 font-medium"></span></h2>
+        </div>
+        <button onclick="loadSchools()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition flex items-center gap-2 text-sm shadow-sm">
+          <i class="fa-solid fa-rotate"></i><span>تحديث القائمة</span>
+        </button>
+      </div>
+      <div id="tableWrap" class="overflow-x-auto">
+        <div class="flex items-center justify-center p-12 text-slate-400 gap-3">
+          <i class="fa-solid fa-spinner animate-spin text-xl text-indigo-600"></i><span>جاري التحميل...</span>
+        </div>
+      </div>
+      <div id="linkArea" class="hidden mt-6 p-6 bg-slate-50 border border-slate-200 rounded-2xl"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+// ⚙️ ضع هنا رابط تطبيق الويب الخاص بسكربت المراقب الذكي (Apps Script ← نشر ← رابط ينتهي بـ /exec)
+// يجب أن يكون نفس الرابط الموجود في index.html
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz3oOr7QYd1M0B9P2ZvsNeD3xJzRSo2ZtQNIdnFlVoPN9omAIiHtSkly-t1U8sCS7IFiQ/exec';
+// اسم ملف البرنامج الذي تفتحه المدارس (في نفس مجلد هذه اللوحة)
+const APP_FILE = 'index.html';
+
+let pin = '';
+let schoolsCache = [];
+
+async function apiPost(data) {
+  if (!SCRIPT_URL) throw new Error('ضع رابط السكربت داخل SCRIPT_URL في هذا الملف أولاً.');
+  const r = await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(data), cache: 'no-store' });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || 'حدث خطأ غير متوقع');
+  return j;
+}
+
+// ===== نوافذ التنبيه =====
+function showModal(title, message, iconClass='fa-solid fa-circle-info', callback=null) {
+  document.getElementById('modalTitle').innerText = title;
+  document.getElementById('modalMessage').innerText = message;
+  document.getElementById('modalIcon').innerHTML = `<i class="${iconClass}"></i>`;
+  const actions = document.getElementById('modalActions');
+  if (callback) {
+    actions.innerHTML = `
+      <button onclick="closeModal()" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium rounded-xl transition">إلغاء</button>
+      <button id="modalConfirmBtn" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl transition shadow-lg shadow-indigo-600/30">تأكيد</button>`;
+    document.getElementById('modalConfirmBtn').onclick = () => { closeModal(); callback(); };
+  } else {
+    actions.innerHTML = `<button onclick="closeModal()" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl transition shadow-lg shadow-indigo-600/30">حسناً</button>`;
+  }
+  const modal = document.getElementById('customModal');
+  modal.classList.remove('hidden');
+  setTimeout(() => { const b = document.getElementById('modalBox'); b.classList.remove('scale-95'); b.classList.add('scale-100'); }, 10);
+}
+function closeModal() {
+  const b = document.getElementById('modalBox');
+  b.classList.remove('scale-100'); b.classList.add('scale-95');
+  setTimeout(() => document.getElementById('customModal').classList.add('hidden'), 200);
+}
+const err = (title, e) => showModal(title, '❌ ' + friendlyError(e), 'fa-solid fa-circle-xmark text-rose-500');
+function friendlyError(e) {
+  const m = (e && e.message) || '';
+  if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'تعذر الاتصال بالسكربت. تأكد من الإنترنت ومن رابط SCRIPT_URL ونشر السكربت للجميع.';
+  return m || 'حدث خطأ غير متوقع';
+}
+async function busy(btnId, fn) {
+  const b = document.getElementById(btnId);
+  if (b) b.disabled = true;
+  try { return await fn(); } finally { if (b) b.disabled = false; }
+}
+
+// ===== الدخول =====
+async function login() {
+  const value = document.getElementById('ownerPin').value.trim();
+  if (!value) { showModal('تنبيه هام', 'الرجاء إدخال رمز المالك الصحيح.', 'fa-solid fa-triangle-exclamation text-amber-500'); return; }
+  await busy('loginBtn', async () => {
+    try {
+      const r = await apiPost({ action: 'ownerSchools', pin: value });
+      pin = value;
+      document.getElementById('login').classList.add('hidden');
+      document.getElementById('panel').classList.remove('hidden');
+      document.getElementById('statusBadge').classList.remove('hidden');
+      document.getElementById('logoutBtn').classList.remove('hidden');
+      renderSchools(r.schools || []);
+    } catch (e) {
+      err('خطأ في المصادقة', e);
+      document.getElementById('ownerPin').value = '';
+    }
+  });
+}
+function ownerLogout() { pin = ''; location.reload(); }
+
+// ===== الروابط =====
+function makePublicLink(school) {
+  const base = location.href.split('#')[0].split('?')[0].replace(/[^\/]*$/, '') + APP_FILE;
+  return base + '?s=' + encodeURIComponent(school.schoolId);
+}
+
+// ===== إنشاء مدرسة =====
+async function createSchool() {
+  const name = document.getElementById('schoolName').value.trim();
+  const directorate = document.getElementById('schoolDirectorate').value.trim();
+  if (!name) { showModal('حقل مفقود', 'الرجاء إدخال اسم المدرسة.', 'fa-solid fa-circle-exclamation text-amber-500'); return; }
+  await busy('createBtn', async () => {
+    try {
+      const r = await apiPost({ action: 'ownerCreateSchool', pin, name, directorate });
+      const school = r.school;
+      const link = makePublicLink(school);
+      const box = document.getElementById('created');
+      box.classList.remove('hidden');
+      box.innerHTML = `
+        <div class="flex items-center gap-2 font-bold text-emerald-800 text-lg mb-3">
+          <i class="fa-solid fa-circle-check text-emerald-600"></i><span>تم إنشاء المدرسة بنجاح!</span>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-2 items-center mb-3">
+          <input id="newLink" readonly value="${escapeHtml(link)}" class="w-full p-3 bg-white border border-amber-200 rounded-xl text-xs font-mono text-left" dir="ltr">
+          <button onclick="copyLink(document.getElementById('newLink').value)" class="w-full sm:w-auto px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl transition shadow text-sm whitespace-nowrap">
+            <i class="fa-solid fa-copy ml-1"></i> نسخ الرابط
+          </button>
+        </div>
+        <div class="text-xs text-amber-800/80 flex items-center justify-between flex-wrap gap-2">
+          <span>المدرسة: <b class="text-slate-900">${escapeHtml(name)}</b></span>
+          <span class="italic">امتلاك الرابط هو وسيلة الدخول الوحيدة للمدرسة، فلا تشاركه إلا مع المدرسة نفسها.</span>
+        </div>`;
+      document.getElementById('schoolName').value = '';
+      document.getElementById('schoolDirectorate').value = '';
+      loadSchools();
+    } catch (e) { err('خطأ في الإنشاء', e); }
+  });
+}
+
+// ===== قائمة المدارس =====
+function fmtDate(ts) {
+  try {
+    if (!ts) return '—';
+    const d = new Date(ts);
+    if (isNaN(d)) return '—';
+    return d.toLocaleDateString('ar-OM', { year: 'numeric', month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('ar-OM', { hour: '2-digit', minute: '2-digit' });
+  } catch(e) { return '—'; }
+}
+async function loadSchools() {
+  try {
+    const r = await apiPost({ action: 'ownerSchools', pin });
+    renderSchools(r.schools || []);
+  } catch (e) {
+    document.getElementById('tableWrap').innerHTML = '<div class="p-6 bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl flex items-center gap-3"><i class="fa-solid fa-triangle-exclamation text-xl"></i><span>❌ ' + escapeHtml(friendlyError(e)) + '</span></div>';
+  }
+}
+function renderSchools(rows) {
+  {
+    schoolsCache = rows;
+    document.getElementById('schoolsCount').textContent = rows.length ? `(${rows.length})` : '';
+    if (!rows.length) {
+      document.getElementById('tableWrap').innerHTML = '<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-school text-3xl mb-2"></i><p>لا توجد مدارس مضافة بعد.</p></div>';
+      return;
+    }
+    document.getElementById('tableWrap').innerHTML = `
+      <table class="w-full border-collapse text-right">
+        <thead>
+          <tr class="border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider bg-slate-50/50">
+            <th class="p-4 font-bold">اسم المدرسة</th>
+            <th class="p-4 font-bold">المديرية</th>
+            <th class="p-4 font-bold">الحالة</th>
+            <th class="p-4 font-bold">آخر فتح</th>
+            <th class="p-4 font-bold text-center">الإجراءات</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 text-sm">
+          ${rows.map(s => `
+            <tr class="hover:bg-slate-50/80 transition">
+              <td class="p-4 font-bold text-slate-800">${escapeHtml(s.name)}<div class="text-[10px] text-slate-400 font-mono font-normal mt-0.5" dir="ltr">${escapeHtml(s.schoolId)}</div></td>
+              <td class="p-4 text-slate-500 text-xs">${escapeHtml(s.directorate || '—')}</td>
+              <td class="p-4">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${s.active ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+                  <span class="w-1.5 h-1.5 rounded-full ${s.active ? 'bg-emerald-500' : 'bg-rose-500'}"></span>
+                  ${s.active ? 'مفعّل' : 'معطّل'}
+                </span>
+              </td>
+              <td class="p-4 text-slate-500 text-xs whitespace-nowrap">${escapeHtml(fmtDate(s.lastOpenAt))}</td>
+              <td class="p-4 text-center">
+                <div class="flex items-center justify-center gap-2 flex-wrap">
+                  <button onclick="showLink('${escapeJs(s.schoolId)}')" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium rounded-xl transition text-xs shadow-sm flex items-center gap-1">
+                    <i class="fa-solid fa-link"></i> الرابط
+                  </button>
+                  <button class="px-3 py-1.5 font-medium rounded-xl transition text-xs shadow-sm flex items-center gap-1 ${s.active ? 'bg-rose-50 hover:bg-rose-100 text-rose-700' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'}" onclick="toggleSchool('${escapeJs(s.schoolId)}',${!s.active})">
+                    <i class="fa-solid ${s.active ? 'fa-ban' : 'fa-check'}"></i> ${s.active ? 'تعطيل' : 'تفعيل'}
+                  </button>
+                  <button class="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-medium rounded-xl transition text-xs shadow-sm flex items-center gap-1" onclick="editSchool('${escapeJs(s.schoolId)}')">
+                    <i class="fa-solid fa-pen"></i> تعديل
+                  </button>
+                  <button class="px-3 py-1.5 bg-slate-100 hover:bg-rose-100 text-slate-600 hover:text-rose-700 font-medium rounded-xl transition text-xs shadow-sm flex items-center gap-1" onclick="deleteSchool('${escapeJs(s.schoolId)}')">
+                    <i class="fa-solid fa-trash-can"></i> حذف الرابط
+                  </button>
+                </div>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+}
+
+// ===== تفعيل / تعطيل =====
+function toggleSchool(id, active) {
+  showModal(
+    active ? 'تفعيل المدرسة' : 'تعطيل المدرسة',
+    active ? 'هل أنت متأكد من رغبتك في تفعيل رابط المدرسة؟' : 'هل أنت متأكد من رغبتك في تعطيل رابط المدرسة؟\n\nلن تتمكن المدرسة من فتح البرنامج حتى تعيد تفعيله، وتبقى بياناتها محفوظة.',
+    'fa-solid fa-circle-question text-indigo-500',
+    async () => {
+      try { await apiPost({ action: 'ownerToggleSchool', pin, schoolId: id, active }); loadSchools(); }
+      catch (e) { err('خطأ', e); }
+    });
+}
+
+// ===== تعديل =====
+let editingId = null;
+function editSchool(id) {
+  const s = schoolsCache.find(x => String(x.schoolId) === String(id));
+  if (!s) return;
+  editingId = id;
+  document.getElementById('editName').value = s.name || '';
+  document.getElementById('editDirectorate').value = s.directorate || '';
+  document.getElementById('editModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('editName').focus(), 50);
+}
+function closeEdit() { document.getElementById('editModal').classList.add('hidden'); editingId = null; }
+async function saveEdit() {
+  const name = document.getElementById('editName').value.trim();
+  const directorate = document.getElementById('editDirectorate').value.trim();
+  if (!name) { showModal('اسم غير صالح', 'يرجى إدخال اسم مدرسة صحيح.', 'fa-solid fa-triangle-exclamation text-amber-500'); return; }
+  const id = editingId;
+  await busy('editSaveBtn', async () => {
+    try {
+      await apiPost({ action: 'ownerUpdateSchool', pin, schoolId: id, name, directorate });
+      closeEdit();
+      await loadSchools();
+      showModal('تم التحديث', 'تم تحديث بيانات المدرسة.\n\nستظهر البيانات الجديدة عند فتح المدرسة للبرنامج.', 'fa-solid fa-circle-check text-emerald-500');
+    } catch (e) { err('تعذر التعديل', e); }
+  });
+}
+
+// ===== حذف الرابط =====
+function deleteSchool(id) {
+  const s = schoolsCache.find(x => String(x.schoolId) === String(id));
+  const name = s ? s.name : 'المدرسة';
+  showModal('حذف رابط المدرسة',
+    'هل أنت متأكد من حذف رابط «' + name + '»؟\n\nسيتم إلغاء الرابط نهائياً، لكن لن يتم حذف بيانات المدرسة المحفوظة.',
+    'fa-solid fa-trash-can text-rose-500',
+    async () => {
+      try {
+        await apiPost({ action: 'ownerDeleteSchool', pin, schoolId: id });
+        document.getElementById('linkArea').classList.add('hidden');
+        document.getElementById('created').classList.add('hidden');
+        await loadSchools();
+        showModal('تم حذف الرابط', 'تم إلغاء رابط المدرسة بنجاح. البيانات المحفوظة لم تُحذف.', 'fa-solid fa-circle-check text-emerald-500');
+      } catch (e) { err('تعذر حذف الرابط', e); }
+    });
+}
+
+// ===== عرض الرابط و QR =====
+function showLink(id) {
+  const s = schoolsCache.find(x => String(x.schoolId) === String(id));
+  const area = document.getElementById('linkArea');
+  area.classList.remove('hidden');
+  if (!s) { area.innerHTML = '<div class="text-rose-600 font-semibold">تعذر استرجاع رابط المدرسة المطلوبة.</div>'; return; }
+  const link = makePublicLink(s);
+  area.innerHTML = `
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+      <h3 class="font-bold text-slate-900 flex items-center gap-2">
+        <i class="fa-solid fa-qrcode text-indigo-600"></i>
+        <span>رابط الوصول لمدرسة: <span class="text-indigo-600">${escapeHtml(s.name)}</span></span>
+      </h3>
+      <button onclick="document.getElementById('linkArea').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-sm"><i class="fa-solid fa-xmark text-lg"></i></button>
+    </div>
+    ${s.active ? '' : '<div class="mb-3 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold"><i class="fa-solid fa-ban"></i> هذا الرابط معطّل حاليًا ولن يفتح البرنامج حتى تفعيله.</div>'}
+    <div class="flex flex-col sm:flex-row gap-2 items-center mb-4">
+      <input id="existingLink" readonly value="${escapeHtml(link)}" class="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-mono text-left" dir="ltr">
+      <button onclick="copyLink(document.getElementById('existingLink').value)" class="w-full sm:w-auto px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl transition shadow text-sm whitespace-nowrap">
+        <i class="fa-solid fa-copy ml-1"></i> نسخ الرابط
+      </button>
+    </div>
+    <div class="flex justify-center bg-white p-4 rounded-2xl border border-slate-200 shadow-inner w-full"><div id="qr" class="flex justify-center"></div></div>`;
+  if (window.QRCode) {
+    new QRCode(document.getElementById('qr'), { text: link, width: 180, height: 180, colorDark: '#0f172a', colorLight: '#ffffff' });
+  }
+}
+async function copyLink(v) {
+  try { await navigator.clipboard.writeText(v); showModal('تم النسخ', '✅ تم نسخ الرابط بنجاح إلى الحافظة.', 'fa-solid fa-circle-check text-emerald-500'); }
+  catch (e) { showModal('رابط الوصول', 'الرجاء نسخ الرابط يدوياً:\n\n' + v, 'fa-solid fa-link text-indigo-500'); }
+}
+
+function escapeHtml(v) { return String(v || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function escapeJs(v) { return String(v || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
+</script>
+</body>
+</html>
