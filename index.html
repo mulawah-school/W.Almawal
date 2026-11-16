@@ -4983,7 +4983,10 @@
                     const nonSubject = /مدير|مساعد|[اأإ]خصائ|معلم|معلمين|[اإ]دار[يه]|سكرتير|مشرف|منسق|فني|محضر|مختبر|موظف/;
                     all.forEach(spec => {
                         if (!spec) return;
-                        if (nonSubject.test(String(spec))) return;
+                        const plain = String(spec).replace(/[\u064B-\u0652\u0640]/g, '').trim();
+                        if (nonSubject.test(plain) || /معاون|خدم|حارس|سائق|عامل|مراسل|ممرض/.test(plain)) return;
+                        const isListed = (this.specialities || []).some(x => this.specialityGroupKey(x) === this.specialityGroupKey(plain));
+                        if (!isListed && !/لغ[ةه]|تربي[ةه]|رياضيات|رياض[ةه]|علوم|فيزياء|كيمياء|[اأ]حياء|دراسات|تاريخ|جغرافيا|فنون|موسيق|مهارات|تقني|حاسب|هذا وطني/.test(plain)) return;
                         const key = this.specialityGroupKey(spec);
                         if (!key || seen.has(key)) return;
                         seen.add(key);
