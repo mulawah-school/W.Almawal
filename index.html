@@ -2343,7 +2343,7 @@
                                         </div>
                                     </div>
                                 </template>
-                                <div x-show="subjectRestrictions.length === 0" class="text-xs text-slate-400 py-3 text-center">لا توجد استثناءات تخصص نشطة.</div>
+                                <div x-show="getSubjectRestrictionsGroupedByDate().length === 0" class="text-xs text-slate-400 py-3 text-center">لا توجد استثناءات تخصص نشطة.</div>
                             </div>
                         </div>
 
@@ -3494,7 +3494,7 @@
                     if (Object.prototype.hasOwnProperty.call(parsed, 'schoolClasses')) this.schoolClasses = this.normalizeSchoolClasses(parsed.schoolClasses);
                     if (Object.prototype.hasOwnProperty.call(parsed, 'exams')) this.exams = Array.isArray(parsed.exams) ? parsed.exams.map(ex => ({ ...ex, subject: this.canonicalSubjectName(ex.subject) })) : [];
                     if (Object.prototype.hasOwnProperty.call(parsed, 'assignments')) this.assignments = Array.isArray(parsed.assignments) ? parsed.assignments : [];
-                    if (Object.prototype.hasOwnProperty.call(parsed, 'subjectRestrictions')) this.subjectRestrictions = Array.isArray(parsed.subjectRestrictions) ? parsed.subjectRestrictions.map(r => ({ ...r, speciality: this.canonicalSubjectName(r.speciality) })) : [];
+                    if (Object.prototype.hasOwnProperty.call(parsed, 'subjectRestrictions')) this.subjectRestrictions = Array.isArray(parsed.subjectRestrictions) ? parsed.subjectRestrictions.map(r => ({ ...r, speciality: this.canonicalSubjectName(r.speciality) })).filter(r => r && this.isSubjectSpeciality(r.speciality)) : [];
                     if (Object.prototype.hasOwnProperty.call(parsed, 'teacherRestrictions')) this.teacherRestrictions = Array.isArray(parsed.teacherRestrictions) ? parsed.teacherRestrictions : [];
                     if (parsed.smartSettings && typeof parsed.smartSettings === 'object') {
                         this.smartSettings = {
@@ -4977,16 +4977,18 @@
                     };
                     return labels[key] || key;
                 },
+                isSubjectSpeciality(spec) {
+                    const plain = String(spec || '').replace(/[\u064B-\u0652\u0640]/g, '').replace(/\s+/g, ' ').trim();
+                    if (!plain) return false;
+                    if (/مدير|مساعد|[اأإ]خصائ|معلم|معلمين|[اإ]دار[يه]|سكرتير|مشرف|منسق|فني|محضر|مختبر|موظف|معاون|خدم|حارس|سائق|عامل|مراسل|ممرض/.test(plain)) return false;
+                    const isListed = (this.specialities || []).some(x => this.specialityGroupKey(x) === this.specialityGroupKey(plain));
+                    return isListed || /لغ[ةه]|تربي[ةه]|رياضيات|رياض[ةه]|علوم|فيزياء|كيمياء|[اأ]حياء|دراسات|تاريخ|جغرافيا|فنون|موسيق|مهارات|تقني|حاسب|هذا وطني/.test(plain);
+                },
                 get restrictionSpecialityOptions() {
                     const seen = new Set(); const out = [];
                     const all = [...(this.specialities || []), ...((this.teachers || []).map(t => t && t.speciality))];
-                    const nonSubject = /مدير|مساعد|[اأإ]خصائ|معلم|معلمين|[اإ]دار[يه]|سكرتير|مشرف|منسق|فني|محضر|مختبر|موظف/;
                     all.forEach(spec => {
-                        if (!spec) return;
-                        const plain = String(spec).replace(/[\u064B-\u0652\u0640]/g, '').trim();
-                        if (nonSubject.test(plain) || /معاون|خدم|حارس|سائق|عامل|مراسل|ممرض/.test(plain)) return;
-                        const isListed = (this.specialities || []).some(x => this.specialityGroupKey(x) === this.specialityGroupKey(plain));
-                        if (!isListed && !/لغ[ةه]|تربي[ةه]|رياضيات|رياض[ةه]|علوم|فيزياء|كيمياء|[اأ]حياء|دراسات|تاريخ|جغرافيا|فنون|موسيق|مهارات|تقني|حاسب|هذا وطني/.test(plain)) return;
+                        if (!this.isSubjectSpeciality(spec)) return;
                         const key = this.specialityGroupKey(spec);
                         if (!key || seen.has(key)) return;
                         seen.add(key);
@@ -4996,7 +4998,10 @@
                     return out;
                 },
                 isSpecialityRestricted(teacherSpec, restrictionSpec) {
-                    return !!teacherSpec && this.specialityGroupKey(teacherSpec) === this.specialityGroupKey(restrictionSpec);
+                    return !!teacherSpec && this.isSubjectSpeciality(restrictionSpec) && this.specialityMatchKey(teacherSpec) === this.specialityMatchKey(restrictionSpec);
+                },
+                specialityMatchKey(spec) {
+                    return String(this.specialityGroupKey(spec) || '').split(' ').map(w => w.replace(/^ال/, '')).join(' ').replace(/ة/g, 'ه').trim();
                 },
                 addSubjectRestriction() {
                     const selectedSpecialities = Array.isArray(this.subjectRestForm.specialities) ? this.subjectRestForm.specialities : [];
@@ -5029,7 +5034,7 @@
                 getSubjectRestrictionsGroupedByDate() {
                     const groups = {};
                     (this.subjectRestrictions || []).forEach(rest => {
-                        if (!rest || !rest.date) return;
+                        if (!rest || !rest.date || !this.isSubjectSpeciality(rest.speciality)) return;
                         if (!groups[rest.date]) groups[rest.date] = [];
                         groups[rest.date].push(rest);
                     });
@@ -5038,6 +5043,7 @@
                         .map(date => {
                             const byKey = new Map();
                             groups[date].forEach(r => {
+                                if (!this.isSubjectSpeciality(r.speciality)) return;
                                 const key = this.specialityGroupKey(r.speciality);
                                 if (!byKey.has(key)) byKey.set(key, { key, id: r.id, speciality: key, ids: [] });
                                 byKey.get(key).ids.push(r.id);
