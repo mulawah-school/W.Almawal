@@ -4967,7 +4967,7 @@
                     if (/رياضيات/.test(s)) return 'الرياضيات';
                     if (/علوم|فيزياء|كيمياء|احياء/.test(s)) return 'العلوم';
                     if (/دراسات|هذا وطني|تاريخ|جغرافيا/.test(s)) return 'الدراسات الاجتماعية';
-                    return raw;
+                    return s.replace(/\s+/g, ' ');
                 },
                 specialityGroupLabel(key) {
                     const labels = {
@@ -4980,12 +4980,15 @@
                 get restrictionSpecialityOptions() {
                     const seen = new Set(); const out = [];
                     const all = [...(this.specialities || []), ...((this.teachers || []).map(t => t && t.speciality))];
+                    const nonSubject = /مدير|مساعد|[اأإ]خصائ|معلم|معلمين|[اإ]دار[يه]|سكرتير|مشرف|منسق|فني|محضر|مختبر|موظف/;
                     all.forEach(spec => {
                         if (!spec) return;
+                        if (nonSubject.test(String(spec))) return;
                         const key = this.specialityGroupKey(spec);
                         if (!key || seen.has(key)) return;
                         seen.add(key);
-                        out.push({ value: key, label: this.specialityGroupLabel(key) });
+                        const isGroup = ['العلوم', 'الدراسات الاجتماعية', 'الرياضيات'].includes(key);
+                        out.push({ value: key, label: isGroup ? this.specialityGroupLabel(key) : String(spec).trim() });
                     });
                     return out;
                 },
